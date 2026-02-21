@@ -1,0 +1,66 @@
+'use client';
+
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { Sidebar } from '@/components/layout/sidebar';
+import { MobileNav } from '@/components/layout/mobile-nav';
+import { Header } from '@/components/layout/header';
+import { useMe } from '@/lib/queries/auth';
+import { useAuthStore } from '@/lib/stores/auth';
+import { Skeleton } from '@/components/ui/skeleton';
+
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const router = useRouter();
+  const { data: user, isLoading, error } = useMe();
+  const setCurrentOrgId = useAuthStore((s) => s.setCurrentOrgId);
+  const currentOrgId = useAuthStore((s) => s.currentOrgId);
+
+  useEffect(() => {
+    if (error) {
+      router.push('/login');
+    }
+  }, [error, router]);
+
+  useEffect(() => {
+    if (user && !currentOrgId && user.memberships.length > 0) {
+      setCurrentOrgId(user.memberships[0].orgId);
+    }
+  }, [user, currentOrgId, setCurrentOrgId]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="space-y-4 w-full max-w-md px-4">
+          <Skeleton className="h-8 w-32" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-3/4" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !user) {
+    return null;
+  }
+
+  // If user has no organizations, show onboarding
+  if (user.memberships.length === 0) {
+    router.push('/onboarding');
+    return null;
+  }
+
+  return (
+    <div className="min-h-screen">
+      <Sidebar />
+      <Header />
+      <main className="md:pl-64 pb-20 md:pb-0">
+        <div className="container max-w-6xl py-6 px-4 md:px-6">{children}</div>
+      </main>
+      <MobileNav />
+    </div>
+  );
+}

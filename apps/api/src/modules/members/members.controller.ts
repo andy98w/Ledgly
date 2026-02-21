@@ -1,0 +1,109 @@
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { IsString, IsEmail, IsOptional, IsEnum, IsArray, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
+import { MembershipRole, MembershipStatus } from '@prisma/client';
+import { MembersService } from './members.service';
+import { CurrentUser, CurrentUserData, Roles } from '../../common/decorators';
+import { RolesGuard } from '../../common/guards';
+
+class CreateMemberDto {
+  @IsEmail()
+  @IsOptional()
+  email?: string;
+
+  @IsString()
+  name: string;
+
+  @IsEnum(MembershipRole)
+  @IsOptional()
+  role?: MembershipRole;
+}
+
+class CreateMembersBulkDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateMemberDto)
+  members: CreateMemberDto[];
+}
+
+class UpdateMemberDto {
+  @IsString()
+  @IsOptional()
+  name?: string;
+
+  @IsEnum(MembershipRole)
+  @IsOptional()
+  role?: MembershipRole;
+
+  @IsEnum(MembershipStatus)
+  @IsOptional()
+  status?: MembershipStatus;
+}
+
+class MemberFiltersDto {
+  @IsOptional()
+  status?: MembershipStatus;
+
+  @IsOptional()
+  hasBalance?: string;
+
+  @IsOptional()
+  search?: string;
+
+  @IsOptional()
+  page?: string;
+
+  @IsOptional()
+  limit?: string;
+}
+
+@Controller('organizations/:orgId/members')
+@UseGuards(AuthGuard('jwt'), RolesGuard)
+export class MembersController {
+  constructor(private membersService: MembersService) {}
+
+  @Get()
+  async findAll(@Param('orgId') orgId: string, @Query() query: MemberFiltersDto) {
+    return this.membersService.findAll(orgId, {
+      status: query.status,
+      hasBalance: query.hasBalance ? query.hasBalance === 'true' : undefined,
+      search: query.search,
+      page: query.page ? parseInt(query.page, 10) : 1,
+      limit: query.limit ? parseInt(query.limit, 10) : 50,
+    });
+  }
+
+  @Get(':id')
+  async findOne(@Param('orgId') orgId: string, @Param('id') id: string) {
+    return this.membersService.findOne(orgId, id);
+  }
+
+  @Post()
+  @Roles('ADMIN', 'TREASURER')
+  async create(@Param('orgId') orgId: string, @Body() dto: CreateMembersBulkDto) {
+    return this.membersService.createMany(orgId, dto.members);
+  }
+
+  @Patch(':id')
+  @Roles('ADMIN', 'TREASURER')
+  async update(
+    @Param('orgId') orgId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateMemberDto,
+  ) {
+    return this.membersService.update(orgId, id, dto);
+  }
+
+  @Delete(':id')
+  @Roles('ADMIN')
+  async remove(@Param('orgId') orgId: string, @Param('id') id: string) {
+    return this.membersService.remove(orgId, id);
+  }
+
+  @Post(':id/restore')
+  @Roles('ADMIN')
+  async restore(@Param('orgId') orgId: string, @Param('id') id: string) {
+    return this.membersService.restore(orgId, id);
+  }
+}

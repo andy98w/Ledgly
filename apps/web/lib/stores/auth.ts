@@ -1,0 +1,34 @@
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import type { AuthUser } from '@ledgly/shared';
+
+interface AuthState {
+  user: AuthUser | null;
+  currentOrgId: string | null;
+  setUser: (user: AuthUser | null) => void;
+  setCurrentOrgId: (orgId: string | null) => void;
+  logout: () => void;
+}
+
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
+      user: null,
+      currentOrgId: null,
+      setUser: (user) => set({ user }),
+      setCurrentOrgId: (currentOrgId) => set({ currentOrgId }),
+      logout: () => {
+        set({ user: null, currentOrgId: null });
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('auth_token');
+        }
+      },
+    }),
+    {
+      name: 'ledgly-auth',
+      partialize: (state) => ({
+        currentOrgId: state.currentOrgId,
+      }),
+    },
+  ),
+);
