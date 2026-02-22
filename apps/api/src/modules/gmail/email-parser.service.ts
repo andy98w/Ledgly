@@ -16,6 +16,7 @@ export class EmailParserService {
     from: string,
     subject: string,
     body: string,
+    snippet?: string,
   ): ParsedPayment | null {
     // Try each parser in order
     const parsers = [
@@ -28,6 +29,10 @@ export class EmailParserService {
     for (const parser of parsers) {
       const result = parser(from, subject, body);
       if (result) {
+        // If no memo found in body, try extracting from snippet
+        if (!result.memo && snippet) {
+          result.memo = this.extractMemo(snippet);
+        }
         return result;
       }
     }
@@ -441,6 +446,11 @@ export class EmailParserService {
 
     // Venmo-specific patterns - Venmo puts the note in specific formats
     const venmoPatterns = [
+      // Venmo snippet format: "paid you $ 60 . 00 gym See transaction"
+      // The memo appears between the spaced-out amount and "See transaction"
+      /\$ [\d,]+ \. \d{2} (.+?) See transaction/i,
+      // Also try without spaced amount
+      /\$[\d,]+\.?\d* (.+?) See transaction/i,
       // Venmo HTML format: note often in a span or div after "Note:" or before emojis
       /[""]([^""]{3,80})[""](?:\s*[-–—]|\s*$)/,
       // Venmo puts notes in quotes sometimes

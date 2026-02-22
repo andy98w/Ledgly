@@ -3,7 +3,9 @@
 import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Plus, CreditCard, AlertCircle, TrendingUp, Wallet, Search, MoreHorizontal, Pencil, Trash2, Loader2, ChevronLeft, ChevronRight, Link2, Receipt } from 'lucide-react';
+import { Plus, CreditCard, AlertCircle, TrendingUp, Wallet, Search, MoreHorizontal, Pencil, Trash2, Loader2, ChevronLeft, ChevronRight, Link2, Receipt, Check, Users, Info, Circle, CheckCircle2 } from 'lucide-react';
+import { useAutoAllocateToCharge } from '@/lib/queries/payments';
+import { cn } from '@/lib/utils';
 import { usePayments, useUpdatePayment, useDeletePayment, useRestorePayment, useAllocatePayment } from '@/lib/queries/payments';
 import { useCharges, useCreateCharge } from '@/lib/queries/charges';
 import { useMembers } from '@/lib/queries/members';
@@ -42,6 +44,12 @@ import { AvatarGradient } from '@/components/ui/avatar-gradient';
 import { StatCard } from '@/components/ui/stat-card';
 import { MotionCard, MotionCardContent } from '@/components/ui/motion-card';
 import { FadeIn, StaggerChildren, StaggerItem } from '@/components/ui/page-transition';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface EditPaymentData {
   id: string;
@@ -53,7 +61,6 @@ interface EditPaymentData {
 
 interface CreateChargeFromPayment {
   payment: any;
-  membershipId: string;
   category: string;
   title: string;
   amountCents: number;
@@ -67,6 +74,8 @@ function PaymentCard({
   onAllocate,
   onCreateCharge,
   isAdmin = false,
+  isSelected = false,
+  onToggleSelect,
 }: {
   payment: any;
   onEdit: (payment: any) => void;
@@ -74,6 +83,8 @@ function PaymentCard({
   onAllocate: (payment: any) => void;
   onCreateCharge: (payment: any) => void;
   isAdmin?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: () => void;
 }) {
   const hasUnallocated = payment.unallocatedCents > 0;
 
@@ -81,46 +92,59 @@ function PaymentCard({
     <StaggerItem>
       <MotionCard>
         <MotionCardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <AvatarGradient
-                name={payment.rawPayerName || 'Unknown'}
-                size="md"
-              />
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <p className="font-medium">
-                    {payment.rawPayerName || 'Unknown Payer'}
-                  </p>
-                  {hasUnallocated && (
-                    <Badge variant="warning" className="text-xs">
-                      <AlertCircle className="w-3 h-3 mr-1" />
-                      Unallocated
-                    </Badge>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span>{formatDate(payment.paidAt)}</span>
-                  <span className="opacity-30">•</span>
-                  <Badge variant="outline" className="text-xs">{payment.source}</Badge>
-                  {payment.memo && (
-                    <>
-                      <span className="opacity-30">•</span>
-                      <span className="truncate max-w-[200px]">"{payment.memo}"</span>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-3">
-                <Money cents={payment.amountCents} size="sm" />
-                {hasUnallocated ? (
-                  <Badge variant="warning" className="text-xs">Unallocated</Badge>
+          <div className="flex items-start gap-4">
+            {isAdmin && onToggleSelect && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleSelect();
+                }}
+                className="mt-1 flex items-center justify-center transition-colors shrink-0"
+                title={isSelected ? "Deselect" : "Select"}
+              >
+                {isSelected ? (
+                  <CheckCircle2 className="w-5 h-5 text-primary" />
                 ) : (
-                  <Badge variant="success" className="text-xs">Allocated</Badge>
+                  <Circle className="w-5 h-5 text-muted-foreground hover:text-primary" />
+                )}
+              </button>
+            )}
+            <AvatarGradient
+              name={payment.rawPayerName || 'Unknown'}
+              size="md"
+              className="shrink-0"
+            />
+            <div className="flex-1 min-w-0 space-y-1">
+              <div className="flex items-center gap-2">
+                <p className="font-medium">
+                  {payment.rawPayerName || 'Unknown Payer'}
+                </p>
+                {hasUnallocated && (
+                  <Badge variant="warning" className="text-xs">
+                    <AlertCircle className="w-3 h-3 mr-1" />
+                    Unallocated
+                  </Badge>
                 )}
               </div>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span>{formatDate(payment.paidAt)}</span>
+                <span className="opacity-30">•</span>
+                <Badge variant="outline" className="text-xs">{payment.source}</Badge>
+                {payment.memo && (
+                  <>
+                    <span className="opacity-30">•</span>
+                    <span className="truncate max-w-[200px]">"{payment.memo}"</span>
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <Money cents={payment.amountCents} size="sm" />
+              {hasUnallocated ? (
+                <Badge variant="warning" className="text-xs">Unallocated</Badge>
+              ) : (
+                <Badge variant="success" className="text-xs">Allocated</Badge>
+              )}
               {isAdmin && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -206,6 +230,19 @@ export default function PaymentsPage() {
   const [selectedChargeId, setSelectedChargeId] = useState<string>('');
   const [allocationAmount, setAllocationAmount] = useState<number>(0);
   const [creatingChargeFromPayment, setCreatingChargeFromPayment] = useState<CreateChargeFromPayment | null>(null);
+  const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set());
+  const [selectAll, setSelectAll] = useState(false);
+  const [memberSearch, setMemberSearch] = useState('');
+  const [selectedPayments, setSelectedPayments] = useState<Set<string>>(new Set());
+
+  // State for similar payments allocation flow
+  const [similarPaymentsDialog, setSimilarPaymentsDialog] = useState<{
+    chargeId: string;
+    chargeTitle: string;
+    sourcePaymentId: string;
+    similarPayments: any[];
+  } | null>(null);
+  const [selectedSimilarPayments, setSelectedSimilarPayments] = useState<Set<string>>(new Set());
 
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
   const user = useAuthStore((s) => s.user);
@@ -221,6 +258,7 @@ export default function PaymentsPage() {
   const restorePayment = useRestorePayment();
   const allocatePayment = useAllocatePayment();
   const createCharge = useCreateCharge();
+  const autoAllocate = useAutoAllocateToCharge();
 
   // Fetch charges for allocation and members for creating charges
   const { data: chargesData } = useCharges(currentOrgId, { status: 'OPEN' });
@@ -393,15 +431,48 @@ export default function PaymentsPage() {
     );
   };
 
+  // Filtered members for create charge dialog
+  const filteredMembers = useMemo(() => {
+    if (!memberSearch.trim()) return members;
+    const query = memberSearch.toLowerCase();
+    return members.filter((m) =>
+      (m.displayName || m.name || m.user?.name || '').toLowerCase().includes(query)
+    );
+  }, [members, memberSearch]);
+
+  const toggleMember = (memberId: string) => {
+    const newSelected = new Set(selectedMembers);
+    if (newSelected.has(memberId)) {
+      newSelected.delete(memberId);
+    } else {
+      newSelected.add(memberId);
+    }
+    setSelectedMembers(newSelected);
+    setSelectAll(newSelected.size === members.length);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectAll) {
+      setSelectedMembers(new Set());
+      setSelectAll(false);
+    } else {
+      setSelectedMembers(new Set(members.map((m) => m.id)));
+      setSelectAll(true);
+    }
+  };
+
   const handleCreateChargeFromPayment = (payment: any) => {
-    // Find member from membershipId if available
-    const member = payment.membershipId
-      ? members.find((m) => m.id === payment.membershipId)
-      : null;
+    // Pre-select the member if payment has membershipId
+    if (payment.membershipId) {
+      setSelectedMembers(new Set([payment.membershipId]));
+    } else {
+      setSelectedMembers(new Set());
+    }
+    setSelectAll(false);
+    setMemberSearch('');
 
     setCreatingChargeFromPayment({
       payment,
-      membershipId: payment.membershipId || '',
       category: 'DUES',
       title: payment.memo || 'Charge from payment',
       amountCents: payment.unallocatedCents,
@@ -409,18 +480,29 @@ export default function PaymentsPage() {
     });
   };
 
+  const resetCreateChargeDialog = () => {
+    setCreatingChargeFromPayment(null);
+    setSelectedMembers(new Set());
+    setSelectAll(false);
+    setMemberSearch('');
+  };
+
   const handleConfirmCreateCharge = async () => {
-    if (!creatingChargeFromPayment || !currentOrgId || !creatingChargeFromPayment.membershipId) {
-      toast({ title: 'Please select a member', variant: 'destructive' });
+    if (!creatingChargeFromPayment || !currentOrgId) return;
+
+    if (selectedMembers.size === 0) {
+      toast({ title: 'Please select at least one member', variant: 'destructive' });
       return;
     }
 
     try {
-      // Create the charge
+      const sourcePayment = creatingChargeFromPayment.payment;
+
+      // Create charges for all selected members
       const charges = await createCharge.mutateAsync({
         orgId: currentOrgId,
         data: {
-          membershipIds: [creatingChargeFromPayment.membershipId],
+          membershipIds: Array.from(selectedMembers),
           category: creatingChargeFromPayment.category as any,
           title: creatingChargeFromPayment.title,
           amountCents: creatingChargeFromPayment.amountCents,
@@ -430,24 +512,54 @@ export default function PaymentsPage() {
         },
       });
 
-      // Allocate the payment to the new charge
       const chargeArray = Array.isArray(charges) ? charges : [charges];
-      if (chargeArray[0]) {
-        await allocatePayment.mutateAsync({
-          orgId: currentOrgId,
-          paymentId: creatingChargeFromPayment.payment.id,
-          allocations: [{
-            chargeId: chargeArray[0].id,
-            amountCents: Math.min(
-              creatingChargeFromPayment.amountCents,
-              creatingChargeFromPayment.payment.unallocatedCents
-            ),
-          }],
-        });
+      const createdCharge = chargeArray[0]; // Use the first charge for allocation
+
+      // Immediately allocate the source payment to the created charge
+      if (sourcePayment && sourcePayment.unallocatedCents > 0) {
+        try {
+          const allocationAmount = Math.min(sourcePayment.unallocatedCents, creatingChargeFromPayment.amountCents);
+          await allocatePayment.mutateAsync({
+            orgId: currentOrgId,
+            paymentId: sourcePayment.id,
+            allocations: [{ chargeId: createdCharge.id, amountCents: allocationAmount }],
+          });
+        } catch {
+          // Ignore allocation error for source payment
+        }
       }
 
-      toast({ title: 'Charge created and payment allocated' });
-      setCreatingChargeFromPayment(null);
+      // Find similar unallocated payments (sorted by amount similarity)
+      const allPayments = data?.data || [];
+      const similarPayments = allPayments
+        .filter((p) =>
+          p.id !== sourcePayment.id &&
+          p.unallocatedCents > 0
+        )
+        .map((p) => ({
+          ...p,
+          amountDiff: Math.abs(p.unallocatedCents - creatingChargeFromPayment.amountCents),
+        }))
+        .sort((a, b) => a.amountDiff - b.amountDiff)
+        .slice(0, 10); // Show top 10 similar payments
+
+      toast({
+        title: `Charge created`,
+        description: `Payment from ${sourcePayment.rawPayerName || 'Unknown'} has been allocated.`,
+      });
+
+      resetCreateChargeDialog();
+
+      // If there are similar payments, show the dialog
+      if (similarPayments.length > 0) {
+        setSimilarPaymentsDialog({
+          chargeId: createdCharge.id,
+          chargeTitle: creatingChargeFromPayment.title,
+          sourcePaymentId: sourcePayment.id,
+          similarPayments,
+        });
+        setSelectedSimilarPayments(new Set());
+      }
     } catch (error: any) {
       toast({
         title: 'Error creating charge',
@@ -457,14 +569,142 @@ export default function PaymentsPage() {
     }
   };
 
+  const handleAllocateSimilarPayments = async () => {
+    if (!similarPaymentsDialog || !currentOrgId || selectedSimilarPayments.size === 0) return;
+
+    let allocatedCount = 0;
+    let totalAllocated = 0;
+
+    for (const paymentId of Array.from(selectedSimilarPayments)) {
+      const payment = similarPaymentsDialog.similarPayments.find((p) => p.id === paymentId);
+      if (!payment) continue;
+
+      try {
+        const allocationAmount = Math.min(payment.unallocatedCents, payment.unallocatedCents);
+        await allocatePayment.mutateAsync({
+          orgId: currentOrgId,
+          paymentId,
+          allocations: [{ chargeId: similarPaymentsDialog.chargeId, amountCents: allocationAmount }],
+        });
+        allocatedCount++;
+        totalAllocated += allocationAmount;
+      } catch {
+        // Continue with other allocations
+      }
+    }
+
+    if (allocatedCount > 0) {
+      toast({
+        title: `Allocated ${allocatedCount} payment${allocatedCount > 1 ? 's' : ''}`,
+        description: `Total: $${(totalAllocated / 100).toFixed(2)} allocated to "${similarPaymentsDialog.chargeTitle}"`,
+      });
+    }
+
+    setSimilarPaymentsDialog(null);
+    setSelectedSimilarPayments(new Set());
+  };
+
+  const toggleSimilarPayment = (paymentId: string) => {
+    setSelectedSimilarPayments((prev) => {
+      const next = new Set(prev);
+      if (next.has(paymentId)) {
+        next.delete(paymentId);
+      } else {
+        next.add(paymentId);
+      }
+      return next;
+    });
+  };
+
+  const togglePaymentSelection = (paymentId: string) => {
+    setSelectedPayments((prev) => {
+      const next = new Set(prev);
+      if (next.has(paymentId)) {
+        next.delete(paymentId);
+      } else {
+        next.add(paymentId);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAllPayments = () => {
+    if (selectedPayments.size === paginatedPayments.length) {
+      setSelectedPayments(new Set());
+    } else {
+      setSelectedPayments(new Set(paginatedPayments.map((p) => p.id)));
+    }
+  };
+
+  const isAllPaymentsSelected = paginatedPayments.length > 0 && selectedPayments.size === paginatedPayments.length;
+
+  const handleBulkDeletePayments = async () => {
+    if (!currentOrgId || selectedPayments.size === 0) return;
+
+    const paymentIds = Array.from(selectedPayments);
+    const deletedPaymentIds: string[] = [];
+
+    for (const paymentId of paymentIds) {
+      try {
+        await deletePayment.mutateAsync({ orgId: currentOrgId, paymentId });
+        deletedPaymentIds.push(paymentId);
+      } catch (error) {
+        // Continue with other deletions
+      }
+    }
+
+    setSelectedPayments(new Set());
+
+    const handleUndo = async () => {
+      let restoredCount = 0;
+      for (const paymentId of deletedPaymentIds) {
+        try {
+          await restorePayment.mutateAsync({ orgId: currentOrgId, paymentId });
+          restoredCount++;
+        } catch (error) {
+          // Continue with other restorations
+        }
+      }
+      toast({ title: `Restored ${restoredCount} payment${restoredCount !== 1 ? 's' : ''}` });
+    };
+
+    toast({
+      title: `Deleted ${deletedPaymentIds.length} payment${deletedPaymentIds.length !== 1 ? 's' : ''}`,
+      action: (
+        <button
+          onClick={handleUndo}
+          className="text-xs font-medium text-primary hover:underline"
+        >
+          Undo
+        </button>
+      ),
+    });
+  };
+
+  // Reset selection when filters change
+  useEffect(() => {
+    setSelectedPayments(new Set());
+  }, [showUnallocated, searchQuery, page]);
+
   return (
     <div className="space-y-8">
       {/* Header */}
       <FadeIn>
         <div className="flex items-center justify-between">
-          <div>
+          <div className="flex items-center gap-2">
             <h1 className="text-3xl font-bold tracking-tight">Payments</h1>
-            <p className="text-muted-foreground mt-1">Track and allocate payments</p>
+            <TooltipProvider delayDuration={0}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button className="text-muted-foreground hover:text-foreground transition-colors">
+                    <Info className="w-4 h-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="max-w-xs">
+                  <p className="text-sm">View and manage payments. Allocate payments to charges or create new charges from unallocated payments. Use selection checkboxes for bulk actions.</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
           <Button asChild className="bg-gradient-to-r from-primary to-blue-400 hover:opacity-90 transition-opacity">
             <Link href="/payments/new">
@@ -614,19 +854,51 @@ export default function PaymentsPage() {
         </FadeIn>
       ) : (
         <>
-          <StaggerChildren className="space-y-3">
-            {paginatedPayments.map((payment) => (
-              <PaymentCard
-                key={payment.id}
-                payment={payment}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                onAllocate={handleAllocate}
-                onCreateCharge={handleCreateChargeFromPayment}
-                isAdmin={isAdmin}
-              />
-            ))}
-          </StaggerChildren>
+          <div className="space-y-3">
+            {/* Select All Row */}
+            {isAdmin && paginatedPayments.length > 0 && (
+              <div className="rounded-xl border border-border/50 bg-secondary/20 p-4 flex items-center justify-between">
+                <button
+                  onClick={toggleSelectAllPayments}
+                  className="flex items-center gap-3 transition-colors"
+                  title={isAllPaymentsSelected ? "Deselect all" : "Select all"}
+                >
+                  {isAllPaymentsSelected ? (
+                    <CheckCircle2 className="w-5 h-5 text-primary" />
+                  ) : (
+                    <Circle className="w-5 h-5 text-muted-foreground hover:text-primary" />
+                  )}
+                  <span className="text-sm text-muted-foreground">
+                    {isAllPaymentsSelected ? 'Deselect all' : 'Select all'}
+                  </span>
+                </button>
+                {selectedPayments.size > 0 && (
+                  <button
+                    onClick={handleBulkDeletePayments}
+                    className="w-7 h-7 flex items-center justify-center transition-colors hover:text-destructive"
+                    title={`Delete ${selectedPayments.size} selected`}
+                  >
+                    <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
+                  </button>
+                )}
+              </div>
+            )}
+            <StaggerChildren className="space-y-3">
+              {paginatedPayments.map((payment) => (
+                <PaymentCard
+                  key={payment.id}
+                  payment={payment}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  onAllocate={handleAllocate}
+                  onCreateCharge={handleCreateChargeFromPayment}
+                  isAdmin={isAdmin}
+                  isSelected={selectedPayments.has(payment.id)}
+                  onToggleSelect={() => togglePaymentSelection(payment.id)}
+                />
+              ))}
+            </StaggerChildren>
+          </div>
 
           {/* Pagination Controls - Bottom */}
           {filteredPayments.length > pageSize && (
@@ -791,23 +1063,23 @@ export default function PaymentsPage() {
               </div>
               <div className="space-y-2">
                 <Label>Select Charge</Label>
-                <Select value={selectedChargeId} onValueChange={setSelectedChargeId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a charge" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {openCharges.length === 0 ? (
-                      <SelectItem value="" disabled>No open charges available</SelectItem>
-                    ) : (
-                      openCharges.map((charge) => (
+{openCharges.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-2">No open charges available</p>
+                ) : (
+                  <Select value={selectedChargeId} onValueChange={setSelectedChargeId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a charge" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {openCharges.map((charge) => (
                         <SelectItem key={charge.id} value={charge.id}>
-                          {charge.title} - {charge.membership?.displayName || 'Unknown'} (
+                          {charge.title} - {charge.membership?.name || charge.membership?.user?.name || 'Unknown'} (
                           <Money cents={charge.balanceDueCents} size="xs" inline /> due)
                         </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Amount to Allocate ($)</Label>
@@ -847,9 +1119,9 @@ export default function PaymentsPage() {
       {/* Create Charge from Payment Dialog */}
       <Dialog
         open={!!creatingChargeFromPayment}
-        onOpenChange={(open) => !open && setCreatingChargeFromPayment(null)}
+        onOpenChange={(open) => !open && resetCreateChargeDialog()}
       >
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Create Charge from Payment</DialogTitle>
             <DialogDescription>
@@ -857,95 +1129,167 @@ export default function PaymentsPage() {
             </DialogDescription>
           </DialogHeader>
           {creatingChargeFromPayment && (
-            <div className="space-y-4 py-4">
-              <div className="p-4 rounded-lg bg-secondary/30">
-                <p className="font-medium">{creatingChargeFromPayment.payment.rawPayerName || 'Unknown Payer'}</p>
-                <p className="text-sm text-muted-foreground">
-                  Payment: <Money cents={creatingChargeFromPayment.payment.unallocatedCents} size="xs" inline />
-                </p>
+            <div className="space-y-6 py-4">
+              {/* Payment Info Banner */}
+              <div className="p-4 rounded-xl bg-success/10 border border-success/20">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Payment from</p>
+                    <p className="font-medium">{creatingChargeFromPayment.payment.rawPayerName || 'Unknown Payer'}</p>
+                  </div>
+                  <Money cents={creatingChargeFromPayment.payment.unallocatedCents} size="lg" className="text-success" />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Member</Label>
-                <Select
-                  value={creatingChargeFromPayment.membershipId}
-                  onValueChange={(v) =>
-                    setCreatingChargeFromPayment({ ...creatingChargeFromPayment, membershipId: v })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select member" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {members.map((m) => (
-                      <SelectItem key={m.id} value={m.id}>
-                        {m.displayName || m.name || m.user?.name || 'Unknown'}
-                      </SelectItem>
+
+              {/* Charge Details */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium">Charge Details</h3>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Category</Label>
+                    <Select
+                      value={creatingChargeFromPayment.category}
+                      onValueChange={(v) =>
+                        setCreatingChargeFromPayment({ ...creatingChargeFromPayment, category: v })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CHARGE_CATEGORIES.map((cat) => (
+                          <SelectItem key={cat} value={cat}>
+                            {CHARGE_CATEGORY_LABELS[cat]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Title</Label>
+                    <Input
+                      placeholder="e.g., Spring 2025 Dues"
+                      value={creatingChargeFromPayment.title}
+                      onChange={(e) =>
+                        setCreatingChargeFromPayment({ ...creatingChargeFromPayment, title: e.target.value })
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Amount ($)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={(creatingChargeFromPayment.amountCents / 100).toFixed(2)}
+                      disabled
+                      className="bg-muted cursor-not-allowed"
+                    />
+                    <p className="text-xs text-muted-foreground">Amount is locked to match the payment</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Due Date (optional)</Label>
+                    <Input
+                      type="date"
+                      value={creatingChargeFromPayment.dueDate}
+                      onChange={(e) =>
+                        setCreatingChargeFromPayment({ ...creatingChargeFromPayment, dueDate: e.target.value })
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Member Selection */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium">
+                  Select Members
+                  <span className="ml-2 text-muted-foreground font-normal">
+                    ({selectedMembers.size} selected)
+                  </span>
+                </h3>
+                {/* Search */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search members..."
+                    value={memberSearch}
+                    onChange={(e) => setMemberSearch(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+                {members.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No active members. Add members first.
+                  </p>
+                ) : (
+                  <div className="space-y-1 max-h-[200px] overflow-y-auto">
+                    {/* Select All Row */}
+                    <button
+                      type="button"
+                      onClick={toggleSelectAll}
+                      className={cn(
+                        'flex items-center gap-3 p-3 rounded-xl border text-left transition-all w-full',
+                        selectAll
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border/50 hover:bg-secondary/50',
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors',
+                          selectAll
+                            ? 'bg-gradient-to-br from-primary to-blue-400 border-transparent'
+                            : 'border-muted-foreground/30',
+                        )}
+                      >
+                        {selectAll && <Check className="w-3 h-3 text-primary-foreground" />}
+                      </div>
+                      <Users className="w-4 h-4 text-muted-foreground" />
+                      <span className="font-medium text-muted-foreground">All Members</span>
+                      <span className="text-xs text-muted-foreground ml-auto">{members.length}</span>
+                    </button>
+
+                    {/* Member List */}
+                    {filteredMembers.filter((m) => m.id).map((member) => (
+                      <button
+                        key={member.id}
+                        type="button"
+                        onClick={() => toggleMember(member.id)}
+                        className={cn(
+                          'flex items-center gap-3 p-3 rounded-xl border text-left transition-all w-full',
+                          selectedMembers.has(member.id)
+                            ? 'border-primary bg-primary/10'
+                            : 'border-border/50 hover:bg-secondary/50',
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors',
+                            selectedMembers.has(member.id)
+                              ? 'bg-gradient-to-br from-primary to-blue-400 border-transparent'
+                              : 'border-muted-foreground/30',
+                          )}
+                        >
+                          {selectedMembers.has(member.id) && <Check className="w-3 h-3 text-primary-foreground" />}
+                        </div>
+                        <AvatarGradient name={member.displayName || member.name || 'Unknown'} size="sm" />
+                        <span className="font-medium">{member.displayName || member.name || member.user?.name || 'Unknown'}</span>
+                      </button>
                     ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Category</Label>
-                <Select
-                  value={creatingChargeFromPayment.category}
-                  onValueChange={(v) =>
-                    setCreatingChargeFromPayment({ ...creatingChargeFromPayment, category: v })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CHARGE_CATEGORIES.map((cat) => (
-                      <SelectItem key={cat} value={cat}>
-                        {CHARGE_CATEGORY_LABELS[cat]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Title</Label>
-                <Input
-                  value={creatingChargeFromPayment.title}
-                  onChange={(e) =>
-                    setCreatingChargeFromPayment({ ...creatingChargeFromPayment, title: e.target.value })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Amount ($)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={(creatingChargeFromPayment.amountCents / 100).toFixed(2)}
-                  onChange={(e) =>
-                    setCreatingChargeFromPayment({
-                      ...creatingChargeFromPayment,
-                      amountCents: Math.round(parseFloat(e.target.value || '0') * 100),
-                    })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Due Date</Label>
-                <Input
-                  type="date"
-                  value={creatingChargeFromPayment.dueDate}
-                  onChange={(e) =>
-                    setCreatingChargeFromPayment({ ...creatingChargeFromPayment, dueDate: e.target.value })
-                  }
-                />
+                  </div>
+                )}
               </div>
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreatingChargeFromPayment(null)}>
+            <Button variant="outline" onClick={resetCreateChargeDialog}>
               Cancel
             </Button>
             <Button
               onClick={handleConfirmCreateCharge}
-              disabled={createCharge.isPending || allocatePayment.isPending}
+              disabled={createCharge.isPending || allocatePayment.isPending || selectedMembers.size === 0}
               className="bg-gradient-to-r from-primary to-blue-400"
             >
               {(createCharge.isPending || allocatePayment.isPending) ? (
@@ -954,7 +1298,90 @@ export default function PaymentsPage() {
                   Creating...
                 </>
               ) : (
-                'Create Charge & Allocate'
+                `Create Charge${selectedMembers.size > 1 ? 's' : ''} & Allocate`
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Similar Payments Allocation Dialog */}
+      <Dialog
+        open={!!similarPaymentsDialog}
+        onOpenChange={(open) => !open && setSimilarPaymentsDialog(null)}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Allocate Similar Payments?</DialogTitle>
+            <DialogDescription>
+              Would you like to allocate any of these similar payments to "{similarPaymentsDialog?.chargeTitle}"?
+            </DialogDescription>
+          </DialogHeader>
+          {similarPaymentsDialog && (
+            <div className="space-y-4 py-4">
+              <p className="text-sm text-muted-foreground">
+                Payments sorted by similarity to the charge amount. Select any to allocate:
+              </p>
+              <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                {similarPaymentsDialog.similarPayments.map((payment) => (
+                  <button
+                    key={payment.id}
+                    type="button"
+                    onClick={() => toggleSimilarPayment(payment.id)}
+                    className={cn(
+                      'flex items-center gap-3 p-3 rounded-xl border text-left transition-all w-full',
+                      selectedSimilarPayments.has(payment.id)
+                        ? 'border-primary bg-primary/10'
+                        : 'border-border/50 hover:bg-secondary/50',
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors shrink-0',
+                        selectedSimilarPayments.has(payment.id)
+                          ? 'bg-gradient-to-br from-primary to-blue-400 border-transparent'
+                          : 'border-muted-foreground/30',
+                      )}
+                    >
+                      {selectedSimilarPayments.has(payment.id) && <Check className="w-3 h-3 text-primary-foreground" />}
+                    </div>
+                    <AvatarGradient name={payment.rawPayerName || 'Unknown'} size="sm" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{payment.rawPayerName || 'Unknown Payer'}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatDate(payment.paidAt)}
+                        {payment.memo && ` • "${payment.memo}"`}
+                      </p>
+                    </div>
+                    <Money cents={payment.unallocatedCents} size="sm" />
+                  </button>
+                ))}
+              </div>
+              {selectedSimilarPayments.size > 0 && (
+                <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
+                  <p className="text-sm">
+                    <span className="font-medium">{selectedSimilarPayments.size}</span> payment{selectedSimilarPayments.size > 1 ? 's' : ''} selected
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSimilarPaymentsDialog(null)}>
+              Skip
+            </Button>
+            <Button
+              onClick={handleAllocateSimilarPayments}
+              disabled={allocatePayment.isPending || selectedSimilarPayments.size === 0}
+              className="bg-gradient-to-r from-primary to-blue-400"
+            >
+              {allocatePayment.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Allocating...
+                </>
+              ) : (
+                `Allocate ${selectedSimilarPayments.size > 0 ? selectedSimilarPayments.size : ''} Payment${selectedSimilarPayments.size !== 1 ? 's' : ''}`
               )}
             </Button>
           </DialogFooter>

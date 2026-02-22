@@ -61,6 +61,9 @@ class ChargeFiltersDto {
 
   @IsOptional()
   limit?: string;
+
+  @IsOptional()
+  cursor?: string;
 }
 
 @Controller('organizations/:orgId/charges')
@@ -77,6 +80,7 @@ export class ChargesController {
       overdue: query.overdue ? query.overdue === 'true' : undefined,
       page: query.page ? parseInt(query.page, 10) : 1,
       limit: query.limit ? parseInt(query.limit, 10) : 50,
+      cursor: query.cursor,
     });
   }
 

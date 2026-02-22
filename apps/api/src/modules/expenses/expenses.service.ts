@@ -40,7 +40,7 @@ export class ExpensesService {
   async findAll(orgId: string, filters: ExpenseFilters = {}) {
     const { category, startDate, endDate, page = 1, limit = 50 } = filters;
 
-    const where: any = { orgId };
+    const where: any = { orgId, deletedAt: null };
 
     if (category) {
       where.category = category;
@@ -105,7 +105,7 @@ export class ExpensesService {
 
   async findOne(orgId: string, expenseId: string) {
     const expense = await this.prisma.expense.findFirst({
-      where: { id: expenseId, orgId },
+      where: { id: expenseId, orgId, deletedAt: null },
       include: {
         createdBy: {
           select: {
@@ -169,7 +169,7 @@ export class ExpensesService {
 
   async update(orgId: string, expenseId: string, dto: UpdateExpenseDto, actorId?: string) {
     const expense = await this.prisma.expense.findFirst({
-      where: { id: expenseId, orgId },
+      where: { id: expenseId, orgId, deletedAt: null },
     });
 
     if (!expense) {
@@ -221,14 +221,17 @@ export class ExpensesService {
 
   async delete(orgId: string, expenseId: string, actorId?: string) {
     const expense = await this.prisma.expense.findFirst({
-      where: { id: expenseId, orgId },
+      where: { id: expenseId, orgId, deletedAt: null },
     });
 
     if (!expense) {
       throw new NotFoundException('Expense not found');
     }
 
-    await this.prisma.expense.delete({ where: { id: expenseId } });
+    await this.prisma.expense.update({
+      where: { id: expenseId },
+      data: { deletedAt: new Date() },
+    });
 
     // Log audit entry for delete
     if (actorId) {
@@ -243,8 +246,36 @@ export class ExpensesService {
     return { success: true };
   }
 
+  async restore(orgId: string, expenseId: string, actorId?: string) {
+    const expense = await this.prisma.expense.findFirst({
+      where: { id: expenseId, orgId, deletedAt: { not: null } },
+    });
+
+    if (!expense) {
+      throw new NotFoundException('Expense not found or not deleted');
+    }
+
+    await this.prisma.expense.update({
+      where: { id: expenseId },
+      data: { deletedAt: null },
+    });
+
+    // Log audit entry for restore
+    if (actorId) {
+      await this.auditService.logCreate(orgId, actorId, 'EXPENSE', expenseId, {
+        title: expense.title,
+        amountCents: expense.amountCents,
+        category: expense.category,
+        vendor: expense.vendor,
+        action: 'restore',
+      });
+    }
+
+    return { success: true };
+  }
+
   async getSummary(orgId: string, startDate?: string, endDate?: string) {
-    const where: any = { orgId };
+    const where: any = { orgId, deletedAt: null };
 
     if (startDate || endDate) {
       where.date = {};

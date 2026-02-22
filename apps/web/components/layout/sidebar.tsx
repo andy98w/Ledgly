@@ -17,6 +17,7 @@ import {
   Check,
   TrendingDown,
   Table2,
+  History,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/lib/stores/auth';
@@ -40,6 +41,7 @@ const navItems: Array<{ href: string; label: string; icon: typeof LayoutDashboar
   { href: '/payments', label: 'Payments', icon: CreditCard },
   { href: '/inbox', label: 'Inbox', icon: Inbox },
   { href: '/spreadsheet', label: 'Spreadsheet', icon: Table2 },
+  { href: '/audit', label: 'Audit Log', icon: History },
 ];
 
 export function Sidebar() {

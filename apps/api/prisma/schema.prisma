@@ -8,31 +8,31 @@ datasource db {
 }
 
 model Organization {
-  id        String   @id @default(cuid())
-  name      String
-  timezone  String   @default("America/New_York")
-  createdAt DateTime @default(now()) @map("created_at")
-
-  memberships     Membership[]
-  charges         Charge[]
-  payments        Payment[]
-  expenses        Expense[]
+  id              String           @id @default(cuid())
+  name            String
+  timezone        String           @default("America/New_York")
+  createdAt       DateTime         @default(now()) @map("created_at")
   auditLogs       AuditLog[]
-  gmailConnection GmailConnection?
+  charges         Charge[]
+  expenses        Expense[]
+  autoApprovePayments Boolean          @default(true) @map("auto_approve_payments")
+  autoApproveExpenses Boolean          @default(true) @map("auto_approve_expenses")
+  gmailConnection     GmailConnection?
+  memberships         Membership[]
+  payments            Payment[]
 
   @@map("organizations")
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  phone     String?
-  avatarUrl String?  @map("avatar_url")
-  createdAt DateTime @default(now()) @map("created_at")
-
-  memberships Membership[]
+  id          String       @id @default(cuid())
+  email       String       @unique
+  name        String?
+  phone       String?
+  createdAt   DateTime     @default(now()) @map("created_at")
+  avatarUrl   String?      @map("avatar_url")
   magicTokens MagicToken[]
+  memberships Membership[]
 
   @@map("users")
 }
@@ -44,35 +44,189 @@ model MagicToken {
   expiresAt DateTime  @map("expires_at")
   usedAt    DateTime? @map("used_at")
   createdAt DateTime  @default(now()) @map("created_at")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("magic_tokens")
 }
 
 model Membership {
-  id       String           @id @default(cuid())
-  orgId    String           @map("org_id")
-  userId   String?          @map("user_id")
-  role     MembershipRole   @default(MEMBER)
-  status   MembershipStatus @default(ACTIVE)
-  name     String?
-  joinedAt DateTime         @default(now()) @map("joined_at")
-  leftAt   DateTime?        @map("left_at")
-
-  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  user User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
-
+  id                 String              @id @default(cuid())
+  orgId              String              @map("org_id")
+  userId             String?             @map("user_id")
+  role               MembershipRole      @default(MEMBER)
+  status             MembershipStatus    @default(ACTIVE)
+  name               String?
+  joinedAt           DateTime            @default(now()) @map("joined_at")
+  leftAt             DateTime?           @map("left_at")
+  auditLogsCreated   AuditLog[]
   chargesCreated     Charge[]            @relation("ChargeCreatedBy")
   chargesAssigned    Charge[]            @relation("ChargeAssignedTo")
-  paymentsCreated    Payment[]           @relation("PaymentCreatedBy")
-  allocationsCreated PaymentAllocation[] @relation("AllocationCreatedBy")
   expensesCreated    Expense[]           @relation("ExpenseCreatedBy")
-  auditLogsCreated   AuditLog[]
+  org                Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user               User?               @relation(fields: [userId], references: [id])
+  allocationsCreated PaymentAllocation[] @relation("AllocationCreatedBy")
+  paymentsCreated    Payment[]           @relation("PaymentCreatedBy")
 
   @@unique([orgId, userId])
   @@index([orgId])
   @@map("memberships")
+}
+
+model Charge {
+  id           String              @id @default(cuid())
+  orgId        String              @map("org_id")
+  membershipId String              @map("membership_id")
+  category     ChargeCategory
+  title        String
+  amountCents  Int                 @map("amount_cents")
+  dueDate      DateTime?           @map("due_date")
+  status       ChargeStatus        @default(OPEN)
+  createdById  String              @map("created_by_id")
+  createdAt    DateTime            @default(now()) @map("created_at")
+  createdBy    Membership          @relation("ChargeCreatedBy", fields: [createdById], references: [id])
+  membership   Membership          @relation("ChargeAssignedTo", fields: [membershipId], references: [id], onDelete: Cascade)
+  org          Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  allocations  PaymentAllocation[]
+
+  @@index([orgId, status])
+  @@index([membershipId])
+  @@map("charges")
+}
+
+model Payment {
+  id           String              @id @default(cuid())
+  orgId        String              @map("org_id")
+  membershipId String?             @map("membership_id")
+  amountCents  Int                 @map("amount_cents")
+  paidAt       DateTime            @map("paid_at")
+  source       String              @default("manual")
+  rawPayerName String?             @map("raw_payer_name")
+  memo         String?
+  externalId   String?             @map("external_id")
+  createdById  String?             @map("created_by_id")
+  createdAt    DateTime            @default(now()) @map("created_at")
+  deletedAt    DateTime?           @map("deleted_at")
+  allocations  PaymentAllocation[]
+  createdBy    Membership?         @relation("PaymentCreatedBy", fields: [createdById], references: [id])
+  org          Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, externalId])
+  @@index([orgId])
+  @@index([membershipId])
+  @@map("payments")
+}
+
+model PaymentAllocation {
+  id          String     @id @default(cuid())
+  orgId       String     @map("org_id")
+  paymentId   String     @map("payment_id")
+  chargeId    String     @map("charge_id")
+  amountCents Int        @map("amount_cents")
+  createdById String     @map("created_by_id")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  charge      Charge     @relation(fields: [chargeId], references: [id], onDelete: Cascade)
+  createdBy   Membership @relation("AllocationCreatedBy", fields: [createdById], references: [id])
+  payment     Payment    @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+  @@index([chargeId])
+  @@map("payment_allocations")
+}
+
+model AuditLog {
+  id               String       @id @default(cuid())
+  orgId            String       @map("org_id")
+  actorId          String?      @map("actor_id")
+  entityType       String       @map("entity_type")
+  entityId         String       @map("entity_id")
+  action           String
+  diffJson         Json?        @map("diff_json")
+  batchId          String?      @map("batch_id")
+  batchDescription String?      @map("batch_description")
+  undone           Boolean      @default(false)
+  undoneAt         DateTime?    @map("undone_at")
+  createdAt        DateTime     @default(now()) @map("created_at")
+  actor            Membership?  @relation(fields: [actorId], references: [id])
+  org              Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, entityType, entityId])
+  @@index([orgId, batchId])
+  @@map("audit_logs")
+}
+
+model GmailConnection {
+  id             String        @id @default(cuid())
+  orgId          String        @unique @map("org_id")
+  email          String
+  accessToken    String        @map("access_token")
+  refreshToken   String        @map("refresh_token")
+  tokenExpiresAt DateTime      @map("token_expires_at")
+  lastSyncAt     DateTime?     @map("last_sync_at")
+  lastHistoryId  String?       @map("last_history_id")
+  isActive       Boolean       @default(true) @map("is_active")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+  emailImports   EmailImport[]
+  org            Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@map("gmail_connections")
+}
+
+model EmailImport {
+  id                  String            @id @default(cuid())
+  orgId               String            @map("org_id")
+  gmailConnectionId   String            @map("gmail_connection_id")
+  messageId           String            @map("message_id")
+  threadId            String?           @map("thread_id")
+  emailFrom           String            @map("email_from")
+  emailSubject        String            @map("email_subject")
+  emailDate           DateTime          @map("email_date")
+  emailSnippet        String?           @map("email_snippet")
+  parsedSource        String            @map("parsed_source")
+  parsedAmount        Int?              @map("parsed_amount")
+  parsedPayerName     String?           @map("parsed_payer_name")
+  parsedPayerEmail    String?           @map("parsed_payer_email")
+  parsedMemo          String?           @map("parsed_memo")
+  status              EmailImportStatus @default(PENDING)
+  paymentId           String?           @unique @map("payment_id")
+  reviewedAt          DateTime?         @map("reviewed_at")
+  createdAt           DateTime          @default(now()) @map("created_at")
+  allocatedChargeIds  String[]          @default([]) @map("allocated_charge_ids")
+  derivedCategory     String?           @map("derived_category")
+  matchConfidence     Float?            @map("match_confidence")
+  matchedMembershipId String?           @map("matched_membership_id")
+  needsReviewReason   String?           @map("needs_review_reason")
+  expenseId           String?           @unique @map("expense_id")
+  parsedDirection     String            @default("incoming") @map("parsed_direction")
+  matchedExpenseId    String?           @map("matched_expense_id")
+  potentialExpenseIds String[]          @default([]) @map("potential_expense_ids")
+  gmailConnection     GmailConnection   @relation(fields: [gmailConnectionId], references: [id], onDelete: Cascade)
+
+  @@unique([gmailConnectionId, messageId])
+  @@index([orgId, status])
+  @@map("email_imports")
+}
+
+model Expense {
+  id          String          @id @default(cuid())
+  orgId       String          @map("org_id")
+  category    ExpenseCategory
+  title       String
+  description String?
+  amountCents Int             @map("amount_cents")
+  date        DateTime
+  vendor      String?
+  receiptUrl  String?         @map("receipt_url")
+  createdById String          @map("created_by_id")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+  deletedAt   DateTime?       @map("deleted_at")
+  createdBy   Membership      @relation("ExpenseCreatedBy", fields: [createdById], references: [id])
+  org         Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([orgId, date])
+  @@map("expenses")
 }
 
 enum MembershipRole {
@@ -85,28 +239,6 @@ enum MembershipStatus {
   ACTIVE
   INACTIVE
   LEFT
-}
-
-model Charge {
-  id           String         @id @default(cuid())
-  orgId        String         @map("org_id")
-  membershipId String         @map("membership_id")
-  category     ChargeCategory
-  title        String
-  amountCents  Int            @map("amount_cents")
-  dueDate      DateTime?      @map("due_date")
-  status       ChargeStatus   @default(OPEN)
-  createdById  String         @map("created_by_id")
-  createdAt    DateTime       @default(now()) @map("created_at")
-
-  org         Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  membership  Membership          @relation("ChargeAssignedTo", fields: [membershipId], references: [id], onDelete: Cascade)
-  createdBy   Membership          @relation("ChargeCreatedBy", fields: [createdById], references: [id])
-  allocations PaymentAllocation[]
-
-  @@index([orgId, status])
-  @@index([membershipId])
-  @@map("charges")
 }
 
 enum ChargeCategory {
@@ -124,152 +256,12 @@ enum ChargeStatus {
   VOID
 }
 
-model Payment {
-  id           String    @id @default(cuid())
-  orgId        String    @map("org_id")
-  membershipId String?   @map("membership_id")
-  amountCents  Int       @map("amount_cents")
-  paidAt       DateTime  @map("paid_at")
-  source       String    @default("manual")
-  rawPayerName String?   @map("raw_payer_name")
-  memo         String?
-  externalId   String?   @map("external_id")
-  createdById  String?   @map("created_by_id")
-  createdAt    DateTime  @default(now()) @map("created_at")
-  deletedAt    DateTime? @map("deleted_at")
-
-  org         Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  createdBy   Membership?         @relation("PaymentCreatedBy", fields: [createdById], references: [id])
-  allocations PaymentAllocation[]
-
-  @@unique([orgId, externalId])
-  @@index([orgId])
-  @@index([membershipId])
-  @@map("payments")
-}
-
-model PaymentAllocation {
-  id          String   @id @default(cuid())
-  orgId       String   @map("org_id")
-  paymentId   String   @map("payment_id")
-  chargeId    String   @map("charge_id")
-  amountCents Int      @map("amount_cents")
-  createdById String   @map("created_by_id")
-  createdAt   DateTime @default(now()) @map("created_at")
-
-  payment   Payment    @relation(fields: [paymentId], references: [id], onDelete: Cascade)
-  charge    Charge     @relation(fields: [chargeId], references: [id], onDelete: Cascade)
-  createdBy Membership @relation("AllocationCreatedBy", fields: [createdById], references: [id])
-
-  @@index([paymentId])
-  @@index([chargeId])
-  @@map("payment_allocations")
-}
-
-model AuditLog {
-  id         String   @id @default(cuid())
-  orgId      String   @map("org_id")
-  actorId    String   @map("actor_id")
-  entityType String   @map("entity_type")
-  entityId   String   @map("entity_id")
-  action     String
-  diffJson   Json?    @map("diff_json")
-  createdAt  DateTime @default(now()) @map("created_at")
-
-  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  actor Membership   @relation(fields: [actorId], references: [id])
-
-  @@index([orgId, entityType, entityId])
-  @@map("audit_logs")
-}
-
-// Gmail Integration
-model GmailConnection {
-  id              String    @id @default(cuid())
-  orgId           String    @unique @map("org_id")
-  email           String
-  accessToken     String    @map("access_token")
-  refreshToken    String    @map("refresh_token")
-  tokenExpiresAt  DateTime  @map("token_expires_at")
-  lastSyncAt      DateTime? @map("last_sync_at")
-  lastHistoryId   String?   @map("last_history_id")
-  isActive        Boolean   @default(true) @map("is_active")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
-
-  org          Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  emailImports EmailImport[]
-
-  @@map("gmail_connections")
-}
-
-model EmailImport {
-  id                  String            @id @default(cuid())
-  orgId               String            @map("org_id")
-  gmailConnectionId   String            @map("gmail_connection_id")
-  messageId           String            @map("message_id")
-  threadId            String?           @map("thread_id")
-  emailFrom           String            @map("email_from")
-  emailSubject        String            @map("email_subject")
-  emailDate           DateTime          @map("email_date")
-  emailSnippet        String?           @map("email_snippet")
-  parsedSource        String            @map("parsed_source") // venmo, zelle, cashapp
-  parsedDirection     String            @default("incoming") @map("parsed_direction") // incoming, outgoing
-  parsedAmount        Int?              @map("parsed_amount") // in cents
-  parsedPayerName     String?           @map("parsed_payer_name")
-  parsedPayerEmail    String?           @map("parsed_payer_email")
-  parsedMemo          String?           @map("parsed_memo")
-  status              EmailImportStatus @default(PENDING)
-  paymentId           String?           @unique @map("payment_id")
-  expenseId           String?           @unique @map("expense_id")
-  reviewedAt          DateTime?         @map("reviewed_at")
-  createdAt           DateTime          @default(now()) @map("created_at")
-  // Auto-matching fields
-  matchedMembershipId String?           @map("matched_membership_id")
-  matchConfidence     Float?            @map("match_confidence") // 0.0 to 1.0
-  needsReviewReason   String?           @map("needs_review_reason")
-  derivedCategory     String?           @map("derived_category") // Derived from memo
-  allocatedChargeIds  String[]          @default([]) @map("allocated_charge_ids")
-  // Expense matching fields (for outgoing payments)
-  matchedExpenseId    String?           @map("matched_expense_id") // Suggested expense to link to
-  potentialExpenseIds String[]          @default([]) @map("potential_expense_ids") // Other potential matches
-
-  gmailConnection GmailConnection @relation(fields: [gmailConnectionId], references: [id], onDelete: Cascade)
-
-  @@unique([gmailConnectionId, messageId])
-  @@index([orgId, status])
-  @@map("email_imports")
-}
-
 enum EmailImportStatus {
-  PENDING        // Needs manual review (no confident match)
-  AUTO_CONFIRMED // Auto-matched and payment created
-  CONFIRMED      // Manually confirmed
-  IGNORED        // User chose to ignore
-  DUPLICATE      // Already have this payment
-}
-
-// Expenses (organization outflows)
-model Expense {
-  id          String          @id @default(cuid())
-  orgId       String          @map("org_id")
-  category    ExpenseCategory
-  title       String
-  description String?
-  amountCents Int             @map("amount_cents")
-  date        DateTime
-  vendor      String?
-  receiptUrl  String?         @map("receipt_url")
-  createdById String          @map("created_by_id")
-  createdAt   DateTime        @default(now()) @map("created_at")
-  updatedAt   DateTime        @updatedAt @map("updated_at")
-
-  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  createdBy Membership   @relation("ExpenseCreatedBy", fields: [createdById], references: [id])
-
-  @@index([orgId])
-  @@index([orgId, date])
-  @@map("expenses")
+  PENDING
+  CONFIRMED
+  IGNORED
+  DUPLICATE
+  AUTO_CONFIRMED
 }
 
 enum ExpenseCategory {

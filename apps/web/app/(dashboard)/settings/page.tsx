@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { motion } from 'framer-motion';
-import { Moon, Sun, Monitor, User, Building2, Shield, Bell, Loader2, Camera, Plus, Settings, History } from 'lucide-react';
+import { Moon, Sun, Monitor, User, Building2, Shield, Bell, Loader2, Camera, Plus, Trash2, AlertTriangle, Mail } from 'lucide-react';
 import { useAuthStore } from '@/lib/stores/auth';
 import { useUpdateProfile } from '@/lib/queries/auth';
-import { useCreateOrganization } from '@/lib/queries/organizations';
+import { useCreateOrganization, useDeleteOrganization, useOrganization, useUpdateOrganization } from '@/lib/queries/organizations';
 import { uploadAvatar } from '@/lib/supabase';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
@@ -36,6 +36,7 @@ const themeOptions = [
 ];
 
 export default function SettingsPage() {
+  const router = useRouter();
   const { theme, setTheme } = useTheme();
   const { toast } = useToast();
   const user = useAuthStore((s) => s.user);
@@ -43,12 +44,17 @@ export default function SettingsPage() {
   const currentOrg = user?.memberships.find((m) => m.orgId === currentOrgId);
   const updateProfile = useUpdateProfile();
   const createOrganization = useCreateOrganization();
+  const deleteOrganization = useDeleteOrganization();
+  const { data: orgDetails } = useOrganization(currentOrgId ?? null);
+  const updateOrganization = useUpdateOrganization(currentOrgId ?? null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState(user?.name || '');
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [showCreateOrgDialog, setShowCreateOrgDialog] = useState(false);
+  const [showDeleteOrgDialog, setShowDeleteOrgDialog] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [newOrgName, setNewOrgName] = useState('');
 
   const hasChanges = name !== (user?.name || '');
@@ -75,6 +81,28 @@ export default function SettingsPage() {
         },
       },
     );
+  };
+
+  const handleDeleteOrg = () => {
+    if (!currentOrgId || deleteConfirmText !== currentOrg?.orgName) {
+      toast({ title: 'Please type the organization name to confirm', variant: 'destructive' });
+      return;
+    }
+    deleteOrganization.mutate(currentOrgId, {
+      onSuccess: () => {
+        toast({ title: 'Organization deleted' });
+        setShowDeleteOrgDialog(false);
+        setDeleteConfirmText('');
+        router.push('/');
+      },
+      onError: (error: any) => {
+        toast({
+          title: 'Error',
+          description: error.message || 'Failed to delete organization',
+          variant: 'destructive',
+        });
+      },
+    });
   };
 
   const handleSave = () => {
@@ -374,39 +402,18 @@ export default function SettingsPage() {
                     <div>
                       <p className="font-medium">{currentOrg.orgName}</p>
                       <div className="flex items-center gap-2 mt-1">
-                        <Badge variant="secondary" className="text-xs">
-                          {currentOrg.role}
-                        </Badge>
-                        {currentOrg.role === 'ADMIN' && (
+                        {currentOrg.role === 'ADMIN' ? (
                           <Badge variant="outline" className="text-xs border-primary/50 text-primary">
                             <Shield className="h-3 w-3 mr-1" />
                             Admin
                           </Badge>
+                        ) : (
+                          <Badge variant="secondary" className="text-xs">
+                            {currentOrg.role}
+                          </Badge>
                         )}
                       </div>
                     </div>
-                  </div>
-                </div>
-              )}
-
-              {currentOrg?.role === 'ADMIN' && (
-                <div className="pt-2">
-                  <p className="text-sm text-muted-foreground mb-3">
-                    As an admin, you can manage members, charges, and organization settings.
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" asChild>
-                      <Link href="/members">
-                        <Settings className="w-4 h-4 mr-2" />
-                        Manage Members
-                      </Link>
-                    </Button>
-                    <Button variant="outline" asChild>
-                      <Link href="/audit">
-                        <History className="w-4 h-4 mr-2" />
-                        Audit Log
-                      </Link>
-                    </Button>
                   </div>
                 </div>
               )}
@@ -430,6 +437,55 @@ export default function SettingsPage() {
         </MotionCard>
       </FadeIn>
 
+      {/* Gmail Sync Section — admin only */}
+      {currentOrg?.role === 'ADMIN' && (
+        <FadeIn delay={0.45}>
+          <MotionCard hover={false}>
+            <MotionCardHeader>
+              <MotionCardTitle className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Mail className="h-4 w-4 text-primary" />
+                </div>
+                Gmail Sync
+              </MotionCardTitle>
+            </MotionCardHeader>
+            <MotionCardContent>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <Label className="text-sm font-medium">Auto-approve payments</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Automatically confirm incoming payments with high-confidence member matches
+                    </p>
+                  </div>
+                  <Switch
+                    checked={orgDetails?.autoApprovePayments ?? true}
+                    onCheckedChange={(checked) =>
+                      updateOrganization.mutate({ autoApprovePayments: checked })
+                    }
+                  />
+                </div>
+                <Separator className="opacity-50" />
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <Label className="text-sm font-medium">Auto-approve expenses</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Automatically create expenses from outgoing payment emails
+                    </p>
+                  </div>
+                  <Switch
+                    checked={orgDetails?.autoApproveExpenses ?? true}
+                    onCheckedChange={(checked) =>
+                      updateOrganization.mutate({ autoApproveExpenses: checked })
+                    }
+                  />
+                </div>
+              </div>
+            </MotionCardContent>
+          </MotionCard>
+        </FadeIn>
+      )}
+
       {/* Danger Zone */}
       <FadeIn delay={0.5}>
         <MotionCard hover={false} className="border-destructive/30">
@@ -443,6 +499,26 @@ export default function SettingsPage() {
           </MotionCardHeader>
           <MotionCardContent>
             <div className="space-y-4">
+              {currentOrg?.role === 'ADMIN' && (
+                <>
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">Delete Organization</p>
+                      <p className="text-xs text-muted-foreground">
+                        Permanently delete {currentOrg.orgName} and all its data
+                      </p>
+                    </div>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => setShowDeleteOrgDialog(true)}
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                  <Separator className="opacity-50" />
+                </>
+              )}
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <p className="text-sm font-medium">Delete Account</p>
@@ -496,6 +572,66 @@ export default function SettingsPage() {
                 </>
               ) : (
                 'Create Organization'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Organization Dialog */}
+      <Dialog open={showDeleteOrgDialog} onOpenChange={setShowDeleteOrgDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Delete Organization
+            </DialogTitle>
+            <DialogDescription>
+              This action cannot be undone. This will permanently delete the organization
+              and all associated data including members, charges, payments, and expenses.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/30">
+              <p className="text-sm text-destructive font-medium">
+                Warning: You are about to delete &quot;{currentOrg?.orgName}&quot;
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                All members, charges, payments, expenses, and audit logs will be permanently deleted.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="deleteConfirm">
+                Type <span className="font-semibold">{currentOrg?.orgName}</span> to confirm
+              </Label>
+              <Input
+                id="deleteConfirm"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="Organization name"
+                className="bg-secondary/30 border-border/50"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setShowDeleteOrgDialog(false);
+              setDeleteConfirmText('');
+            }}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteOrg}
+              disabled={deleteOrganization.isPending || deleteConfirmText !== currentOrg?.orgName}
+            >
+              {deleteOrganization.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete Organization'
               )}
             </Button>
           </DialogFooter>

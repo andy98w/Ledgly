@@ -9,6 +9,8 @@ interface CreateOrganizationDto {
 interface UpdateOrganizationDto {
   name?: string;
   timezone?: string;
+  autoApprovePayments?: boolean;
+  autoApproveExpenses?: boolean;
 }
 
 @Injectable()
@@ -74,6 +76,8 @@ export class OrganizationsService {
       id: org.id,
       name: org.name,
       timezone: org.timezone,
+      autoApprovePayments: org.autoApprovePayments,
+      autoApproveExpenses: org.autoApproveExpenses,
       createdAt: org.createdAt,
       membership: org.memberships[0],
       memberCount: org._count.memberships,
@@ -87,6 +91,8 @@ export class OrganizationsService {
       data: {
         ...(dto.name && { name: dto.name }),
         ...(dto.timezone && { timezone: dto.timezone }),
+        ...(dto.autoApprovePayments !== undefined && { autoApprovePayments: dto.autoApprovePayments }),
+        ...(dto.autoApproveExpenses !== undefined && { autoApproveExpenses: dto.autoApproveExpenses }),
       },
     });
 
@@ -181,5 +187,39 @@ export class OrganizationsService {
         role: m.role,
       },
     }));
+  }
+
+  async delete(orgId: string) {
+    // Delete all related data in a transaction
+    await this.prisma.$transaction(async (tx) => {
+      // Delete payment allocations
+      await tx.paymentAllocation.deleteMany({ where: { orgId } });
+
+      // Delete payments
+      await tx.payment.deleteMany({ where: { orgId } });
+
+      // Delete charges
+      await tx.charge.deleteMany({ where: { orgId } });
+
+      // Delete expenses
+      await tx.expense.deleteMany({ where: { orgId } });
+
+      // Delete email imports
+      await tx.emailImport.deleteMany({ where: { orgId } });
+
+      // Delete gmail connections
+      await tx.gmailConnection.deleteMany({ where: { orgId } });
+
+      // Delete audit logs
+      await tx.auditLog.deleteMany({ where: { orgId } });
+
+      // Delete memberships
+      await tx.membership.deleteMany({ where: { orgId } });
+
+      // Delete the organization
+      await tx.organization.delete({ where: { id: orgId } });
+    });
+
+    return { success: true };
   }
 }

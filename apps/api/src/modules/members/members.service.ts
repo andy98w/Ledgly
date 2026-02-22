@@ -26,6 +26,40 @@ interface MemberFilters {
 export class MembersService {
   constructor(private prisma: PrismaService) {}
 
+  private async getMemberBalances(orgId: string): Promise<
+    Map<string, { totalChargedCents: number; totalPaidCents: number; overdueCharges: number }>
+  > {
+    const rows: Array<{
+      membership_id: string;
+      total_charged_cents: bigint;
+      total_paid_cents: bigint;
+      overdue_charges: bigint;
+    }> = await this.prisma.$queryRaw`
+      SELECT
+        c.membership_id,
+        COALESCE(SUM(c.amount_cents), 0) AS total_charged_cents,
+        COALESCE(SUM(pa_sum.allocated_cents), 0) AS total_paid_cents,
+        COUNT(CASE WHEN c.status != 'PAID' AND c.due_date < NOW() THEN 1 END) AS overdue_charges
+      FROM charges c
+      LEFT JOIN (
+        SELECT charge_id, SUM(amount_cents) AS allocated_cents
+        FROM payment_allocations GROUP BY charge_id
+      ) pa_sum ON pa_sum.charge_id = c.id
+      WHERE c.org_id = ${orgId} AND c.status != 'VOID'
+      GROUP BY c.membership_id
+    `;
+
+    const map = new Map<string, { totalChargedCents: number; totalPaidCents: number; overdueCharges: number }>();
+    for (const row of rows) {
+      map.set(row.membership_id, {
+        totalChargedCents: Number(row.total_charged_cents),
+        totalPaidCents: Number(row.total_paid_cents),
+        overdueCharges: Number(row.overdue_charges),
+      });
+    }
+    return map;
+  }
+
   async findAll(orgId: string, filters: MemberFilters = {}) {
     const { status, hasBalance, search, page = 1, limit = 50 } = filters;
 
@@ -43,20 +77,12 @@ export class MembersService {
       ];
     }
 
-    const [members, total] = await Promise.all([
+    const [members, total, balanceMap] = await Promise.all([
       this.prisma.membership.findMany({
         where,
         include: {
           user: {
             select: { id: true, email: true, name: true },
-          },
-          chargesAssigned: {
-            where: { status: { not: 'VOID' } },
-            include: {
-              allocations: {
-                select: { amountCents: true },
-              },
-            },
           },
         },
         orderBy: [{ status: 'asc' }, { name: 'asc' }],
@@ -64,25 +90,12 @@ export class MembersService {
         take: limit,
       }),
       this.prisma.membership.count({ where }),
+      this.getMemberBalances(orgId),
     ]);
 
-    const now = new Date();
     const membersWithBalance = members.map((m) => {
-      let totalChargedCents = 0;
-      let totalPaidCents = 0;
-      let overdueCharges = 0;
-
-      for (const charge of m.chargesAssigned) {
-        totalChargedCents += charge.amountCents;
-        const allocated = charge.allocations.reduce((sum, a) => sum + a.amountCents, 0);
-        totalPaidCents += allocated;
-
-        if (charge.status !== 'PAID' && charge.dueDate && charge.dueDate < now) {
-          overdueCharges++;
-        }
-      }
-
-      const balanceCents = totalChargedCents - totalPaidCents;
+      const balance = balanceMap.get(m.id) || { totalChargedCents: 0, totalPaidCents: 0, overdueCharges: 0 };
+      const balanceCents = balance.totalChargedCents - balance.totalPaidCents;
 
       return {
         id: m.id,
@@ -95,9 +108,9 @@ export class MembersService {
         joinedAt: m.joinedAt,
         user: m.user,
         balanceCents,
-        totalChargedCents,
-        totalPaidCents,
-        overdueCharges,
+        totalChargedCents: balance.totalChargedCents,
+        totalPaidCents: balance.totalPaidCents,
+        overdueCharges: balance.overdueCharges,
       };
     });
 

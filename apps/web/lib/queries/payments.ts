@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { queryKeys } from '@/lib/query-keys';
 import type { PaymentWithAllocations, PaginatedResponse } from '@ledgly/shared';
 
 interface PaymentFilters {
@@ -19,7 +20,7 @@ export function usePayments(orgId: string | null, filters: PaymentFilters = {}) 
   const queryString = params.toString();
 
   return useQuery({
-    queryKey: ['organizations', orgId, 'payments', filters],
+    queryKey: queryKeys.payments.list(orgId, filters),
     queryFn: () =>
       api.get<PaginatedResponse<PaymentWithAllocations>>(
         `/organizations/${orgId}/payments${queryString ? `?${queryString}` : ''}`,
@@ -30,7 +31,7 @@ export function usePayments(orgId: string | null, filters: PaymentFilters = {}) 
 
 export function usePayment(orgId: string | null, paymentId: string | null) {
   return useQuery({
-    queryKey: ['organizations', orgId, 'payments', paymentId],
+    queryKey: queryKeys.payments.detail(orgId, paymentId),
     queryFn: () => api.get(`/organizations/${orgId}/payments/${paymentId}`),
     enabled: !!orgId && !!paymentId,
   });
@@ -54,12 +55,8 @@ export function useCreatePayment() {
       };
     }) => api.post(`/organizations/${orgId}/payments`, data),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'payments'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'dashboard'],
-      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.payments.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
     },
   });
 }
@@ -78,18 +75,10 @@ export function useAllocatePayment() {
       allocations: Array<{ chargeId: string; amountCents: number }>;
     }) => api.post(`/organizations/${orgId}/payments/${paymentId}/allocate`, { allocations }),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'payments'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'charges'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'members'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'dashboard'],
-      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.payments.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.charges.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.members.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
     },
   });
 }
@@ -113,12 +102,8 @@ export function useUpdatePayment() {
       };
     }) => api.patch(`/organizations/${orgId}/payments/${paymentId}`, data),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'payments'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'dashboard'],
-      });
+      // Only invalidate payments — metadata-only update doesn't affect charges or members
+      queryClient.invalidateQueries({ queryKey: queryKeys.payments.all(variables.orgId) });
     },
   });
 }
@@ -130,18 +115,10 @@ export function useDeletePayment() {
     mutationFn: ({ orgId, paymentId }: { orgId: string; paymentId: string }) =>
       api.delete(`/organizations/${orgId}/payments/${paymentId}`),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'payments'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'charges'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'members'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'dashboard'],
-      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.payments.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.charges.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.members.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
     },
   });
 }
@@ -153,12 +130,8 @@ export function useRestorePayment() {
     mutationFn: ({ orgId, paymentId }: { orgId: string; paymentId: string }) =>
       api.post(`/organizations/${orgId}/payments/${paymentId}/restore`),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'payments'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'dashboard'],
-      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.payments.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
     },
   });
 }
@@ -170,7 +143,7 @@ export interface UnallocatedPayments {
 
 export function useUnallocatedForMember(orgId: string | null, membershipId: string | null) {
   return useQuery({
-    queryKey: ['organizations', orgId, 'payments', 'member', membershipId, 'unallocated'],
+    queryKey: queryKeys.payments.memberUnallocated(orgId, membershipId),
     queryFn: () =>
       api.get<UnallocatedPayments>(
         `/organizations/${orgId}/payments/member/${membershipId}/unallocated`,
@@ -191,18 +164,10 @@ export function useAutoAllocateToCharge() {
       chargeId: string;
     }) => api.post<{ allocatedCents: number }>(`/organizations/${orgId}/payments/auto-allocate/${chargeId}`),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'payments'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'charges'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'members'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'dashboard'],
-      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.payments.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.charges.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.members.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
     },
   });
 }

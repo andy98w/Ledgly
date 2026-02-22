@@ -1,5 +1,6 @@
 import { Controller, Post, Get, Patch, Body, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { Throttle } from '@nestjs/throttler';
 import { IsEmail, IsString, IsOptional } from 'class-validator';
 import { AuthService } from './auth.service';
 import { CurrentUser, CurrentUserData, Public } from '../../common/decorators';
@@ -29,12 +30,14 @@ export class AuthController {
   constructor(private authService: AuthService) {}
 
   @Public()
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('magic-link')
   async sendMagicLink(@Body() dto: SendMagicLinkDto) {
     return this.authService.sendMagicLink(dto.email);
   }
 
   @Public()
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('verify')
   async verifyMagicLink(@Body() dto: VerifyMagicLinkDto) {
     return this.authService.verifyMagicLink(dto.token);

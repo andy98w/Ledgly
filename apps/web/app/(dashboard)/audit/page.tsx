@@ -1,12 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { motion } from 'framer-motion';
-import { History, User, Receipt, CreditCard, Users, TrendingDown, Building2, Filter } from 'lucide-react';
-import { useAuditLogs, type AuditLogEntry } from '@/lib/queries/audit';
+import { motion, AnimatePresence } from 'framer-motion';
+import { History, Receipt, CreditCard, Users, TrendingDown, Building2, Filter, Undo2, Redo2, Loader2, ChevronDown, ChevronRight } from 'lucide-react';
+import { useAuditLogs, useUndoAuditLog, useUndoBatch, useRedoAuditLog, useRedoBatch, type AuditLogEntry, type BatchedAuditLogEntry, type AuditLogItem } from '@/lib/queries/audit';
 import { useAuthStore } from '@/lib/stores/auth';
 import { formatRelativeDate } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select,
@@ -18,6 +19,8 @@ import {
 import { MotionCard, MotionCardContent } from '@/components/ui/motion-card';
 import { FadeIn, StaggerChildren, StaggerItem } from '@/components/ui/page-transition';
 import { AvatarGradient } from '@/components/ui/avatar-gradient';
+import { useToast } from '@/components/ui/use-toast';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 const entityTypeIcons: Record<string, typeof Receipt> = {
@@ -42,79 +45,150 @@ const actionColors: Record<string, string> = {
   DELETE: 'bg-destructive/10 text-destructive border-destructive/30',
 };
 
-function AuditLogCard({ log }: { log: AuditLogEntry }) {
-  const Icon = entityTypeIcons[log.entityType] || Receipt;
-
-  const renderDiff = () => {
-    if (!log.diffJson) return null;
-
-    // For CREATE actions
-    if (log.action === 'CREATE' && log.diffJson.new) {
-      return (
-        <div className="mt-2 text-xs text-muted-foreground">
-          <span className="text-success">Created</span>
-          {log.diffJson.new.title && ` "${log.diffJson.new.title}"`}
-          {log.diffJson.new.amountCents && ` for $${(log.diffJson.new.amountCents / 100).toFixed(2)}`}
-        </div>
-      );
-    }
-
-    // For DELETE actions
-    if (log.action === 'DELETE' && log.diffJson.deleted) {
-      return (
-        <div className="mt-2 text-xs text-muted-foreground">
-          <span className="text-destructive">Deleted</span>
-          {log.diffJson.deleted.title && ` "${log.diffJson.deleted.title}"`}
-        </div>
-      );
-    }
-
-    // For UPDATE actions - show field changes
-    if (log.action === 'UPDATE') {
-      const changes = Object.entries(log.diffJson);
-      if (changes.length === 0) return null;
-
-      return (
-        <div className="mt-2 space-y-1">
-          {changes.slice(0, 3).map(([field, change]: [string, any]) => (
-            <div key={field} className="text-xs">
-              <span className="text-muted-foreground">{field}: </span>
-              <span className="text-destructive/70 line-through">{formatValue(change.from)}</span>
-              <span className="mx-1">→</span>
-              <span className="text-success">{formatValue(change.to)}</span>
-            </div>
-          ))}
-          {changes.length > 3 && (
-            <div className="text-xs text-muted-foreground">
-              +{changes.length - 3} more changes
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    return null;
-  };
-
-  const formatValue = (value: any): string => {
-    if (value === null || value === undefined) return 'null';
-    if (typeof value === 'boolean') return value ? 'Yes' : 'No';
-    if (typeof value === 'number') {
-      // Check if it looks like cents
-      if (String(value).length > 2) {
-        return `$${(value / 100).toFixed(2)}`;
-      }
-      return String(value);
-    }
-    if (typeof value === 'string' && value.length > 50) {
-      return value.substring(0, 50) + '...';
+const formatValue = (value: any): string => {
+  if (value === null || value === undefined) return 'null';
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (typeof value === 'number') {
+    if (String(value).length > 2) {
+      return `$${(value / 100).toFixed(2)}`;
     }
     return String(value);
-  };
+  }
+  if (typeof value === 'string' && value.length > 50) {
+    return value.substring(0, 50) + '...';
+  }
+  return String(value);
+};
+
+function renderDiff(log: AuditLogEntry) {
+  if (!log.diffJson) return null;
+
+  if (log.action === 'CREATE' && log.diffJson.new) {
+    const memberName = log.diffJson.new.memberName;
+    return (
+      <div className="mt-2 text-xs text-muted-foreground">
+        <span className="text-success">Created</span>
+        {log.diffJson.new.title && ` "${log.diffJson.new.title}"`}
+        {log.diffJson.new.amountCents && ` for $${(log.diffJson.new.amountCents / 100).toFixed(2)}`}
+        {memberName && <> &middot; <span className="text-foreground/70">{memberName}</span></>}
+      </div>
+    );
+  }
+
+  if (log.action === 'DELETE' && log.diffJson.deleted) {
+    return (
+      <div className="mt-2 text-xs text-muted-foreground">
+        <span className="text-destructive">Deleted</span>
+        {log.diffJson.deleted.title && ` "${log.diffJson.deleted.title}"`}
+      </div>
+    );
+  }
+
+  if (log.action === 'UPDATE') {
+    const changes = Object.entries(log.diffJson);
+    if (changes.length === 0) return null;
+
+    return (
+      <div className="mt-2 space-y-1">
+        {changes.slice(0, 3).map(([field, change]: [string, any]) => (
+          <div key={field} className="text-xs">
+            <span className="text-muted-foreground">{field}: </span>
+            <span className="text-destructive/70 line-through">{formatValue(change.from)}</span>
+            <span className="mx-1">&rarr;</span>
+            <span className="text-success">{formatValue(change.to)}</span>
+          </div>
+        ))}
+        {changes.length > 3 && (
+          <div className="text-xs text-muted-foreground">
+            +{changes.length - 3} more changes
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return null;
+}
+
+function UndoRedoButton({
+  log,
+  onUndo,
+  onRedo,
+  isProcessing,
+}: {
+  log: AuditLogEntry;
+  onUndo: (logId: string) => void;
+  onRedo: (logId: string) => void;
+  isProcessing: boolean;
+}) {
+  const isUndoable = (log.action === 'CREATE' || log.action === 'DELETE') &&
+    (log.entityType === 'CHARGE' || log.entityType === 'EXPENSE');
+
+  if (!isUndoable) return null;
+
+  if (isProcessing) {
+    return (
+      <Button variant="ghost" size="sm" disabled className="shrink-0">
+        <Loader2 className="w-4 h-4 animate-spin" />
+      </Button>
+    );
+  }
+
+  if (log.undone) {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onRedo(log.id)}
+              className="text-muted-foreground hover:text-foreground shrink-0"
+            >
+              <Redo2 className="w-4 h-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Redo</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onUndo(log.id)}
+            className="text-muted-foreground hover:text-foreground shrink-0"
+          >
+            <Undo2 className="w-4 h-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Undo</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+function AuditLogCard({
+  log,
+  onUndo,
+  onRedo,
+  processingId,
+}: {
+  log: AuditLogEntry;
+  onUndo: (logId: string) => void;
+  onRedo: (logId: string) => void;
+  processingId: string | null;
+}) {
+  const Icon = entityTypeIcons[log.entityType] || Receipt;
 
   return (
     <StaggerItem>
-      <MotionCard>
+      <MotionCard className={log.undone ? 'opacity-50' : ''}>
         <MotionCardContent className="p-4">
           <div className="flex items-start gap-4">
             <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center shrink-0">
@@ -128,16 +202,214 @@ function AuditLogCard({ log }: { log: AuditLogEntry }) {
                 <Badge variant="outline" className={cn('text-xs', actionColors[log.action])}>
                   {log.action}
                 </Badge>
+                {log.undone && (
+                  <Badge variant="outline" className="text-xs bg-muted text-muted-foreground">
+                    Undone
+                  </Badge>
+                )}
               </div>
               <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                <AvatarGradient name={log.actor.name} size="xs" />
-                <span>{log.actor.name}</span>
-                <span>•</span>
+                {log.actor && (
+                  <>
+                    <AvatarGradient name={log.actor.name} size="xs" />
+                    <span>{log.actor.name}</span>
+                    <span>&bull;</span>
+                  </>
+                )}
                 <span>{formatRelativeDate(log.createdAt)}</span>
               </div>
-              {renderDiff()}
+              {renderDiff(log)}
+            </div>
+            <UndoRedoButton
+              log={log}
+              onUndo={onUndo}
+              onRedo={onRedo}
+              isProcessing={processingId === log.id}
+            />
+          </div>
+        </MotionCardContent>
+      </MotionCard>
+    </StaggerItem>
+  );
+}
+
+function BatchAuditLogCard({
+  batch,
+  onUndo,
+  onRedo,
+  onUndoBatch,
+  onRedoBatch,
+  processingId,
+}: {
+  batch: BatchedAuditLogEntry;
+  onUndo: (logId: string) => void;
+  onRedo: (logId: string) => void;
+  onUndoBatch: (batchId: string) => void;
+  onRedoBatch: (batchId: string) => void;
+  processingId: string | null;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const Icon = entityTypeIcons[batch.entityType] || Receipt;
+  const items = batch.items || [];
+  const allUndone = batch.undone;
+  const someUndone = items.some((i) => i.undone);
+
+  const isUndoable = (batch.action === 'CREATE' || batch.action === 'DELETE') &&
+    (batch.entityType === 'CHARGE' || batch.entityType === 'EXPENSE');
+
+  const isBatchProcessing = processingId === batch.id;
+
+  return (
+    <StaggerItem>
+      <MotionCard className={allUndone ? 'opacity-50' : ''}>
+        <MotionCardContent className="p-4">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center shrink-0">
+              <Icon className="w-5 h-5 text-muted-foreground" />
+            </div>
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="flex-1 min-w-0 text-left"
+            >
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-medium text-sm">
+                  {entityTypeLabels[batch.entityType] || batch.entityType}
+                </span>
+                <Badge variant="outline" className={cn('text-xs', actionColors[batch.action])}>
+                  {batch.action}
+                </Badge>
+                <Badge variant="secondary" className="text-xs">
+                  {batch.itemCount} members
+                </Badge>
+                {allUndone && (
+                  <Badge variant="outline" className="text-xs bg-muted text-muted-foreground">
+                    Undone
+                  </Badge>
+                )}
+                {!allUndone && someUndone && (
+                  <Badge variant="outline" className="text-xs bg-muted text-muted-foreground">
+                    Partially undone
+                  </Badge>
+                )}
+              </div>
+              <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                {batch.actor && (
+                  <>
+                    <AvatarGradient name={batch.actor.name} size="xs" />
+                    <span>{batch.actor.name}</span>
+                    <span>&bull;</span>
+                  </>
+                )}
+                <span>{formatRelativeDate(batch.createdAt)}</span>
+                {batch.batchDescription && (
+                  <>
+                    <span>&bull;</span>
+                    <span>{batch.batchDescription}</span>
+                  </>
+                )}
+              </div>
+            </button>
+            <div className="flex items-center gap-1 shrink-0">
+              {isUndoable && (
+                isBatchProcessing ? (
+                  <Button variant="ghost" size="sm" disabled>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  </Button>
+                ) : allUndone ? (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onRedoBatch(batch.id)}
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <Redo2 className="w-4 h-4 mr-1" />
+                          <span className="text-xs">All</span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Redo all {batch.itemCount} items</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                ) : (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onUndoBatch(batch.id)}
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <Undo2 className="w-4 h-4 mr-1" />
+                          <span className="text-xs">All</span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Undo all {batch.itemCount} items</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )
+              )}
+              <button
+                onClick={() => setExpanded(!expanded)}
+                className="p-2 rounded-lg hover:bg-secondary/50 transition-colors"
+              >
+                {expanded ? (
+                  <ChevronDown className="w-4 h-4" />
+                ) : (
+                  <ChevronRight className="w-4 h-4" />
+                )}
+              </button>
             </div>
           </div>
+
+          <AnimatePresence>
+            {expanded && items.length > 0 && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <div className="mt-4 pt-4 border-t border-border/30 space-y-2">
+                  {items.map((item) => {
+                    const memberName = item.diffJson?.new?.memberName || item.diffJson?.deleted?.memberName;
+                    return (
+                      <div
+                        key={item.id}
+                        className={cn(
+                          'flex items-center gap-3 p-3 rounded-lg bg-secondary/20',
+                          item.undone && 'opacity-50',
+                        )}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            {memberName && (
+                              <span className="text-sm font-medium">{memberName}</span>
+                            )}
+                            {item.undone && (
+                              <Badge variant="outline" className="text-xs bg-muted text-muted-foreground">
+                                Undone
+                              </Badge>
+                            )}
+                          </div>
+                          {renderDiff(item)}
+                        </div>
+                        <UndoRedoButton
+                          log={item}
+                          onUndo={onUndo}
+                          onRedo={onRedo}
+                          isProcessing={processingId === item.id}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </MotionCardContent>
       </MotionCard>
     </StaggerItem>
@@ -160,9 +432,11 @@ function AuditLogSkeleton() {
 
 export default function AuditLogPage() {
   const [entityTypeFilter, setEntityTypeFilter] = useState<string>('all');
+  const [processingId, setProcessingId] = useState<string | null>(null);
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
   const user = useAuthStore((s) => s.user);
   const currentMembership = user?.memberships.find((m) => m.orgId === currentOrgId);
+  const { toast } = useToast();
 
   const isAdmin = currentMembership?.role === 'ADMIN' || currentMembership?.role === 'TREASURER';
 
@@ -171,7 +445,64 @@ export default function AuditLogPage() {
     limit: 100,
   });
 
+  const undoMutation = useUndoAuditLog();
+  const undoBatchMutation = useUndoBatch();
+  const redoMutation = useRedoAuditLog();
+  const redoBatchMutation = useRedoBatch();
+
   const logs = data?.data || [];
+
+  const handleUndo = async (logId: string) => {
+    if (!currentOrgId) return;
+    setProcessingId(logId);
+    try {
+      await undoMutation.mutateAsync({ orgId: currentOrgId, logId });
+      toast({ title: 'Action undone', description: 'The action has been reversed.' });
+    } catch (error: any) {
+      toast({ title: 'Failed to undo', description: error?.message || 'Could not undo this action.', variant: 'destructive' });
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleRedo = async (logId: string) => {
+    if (!currentOrgId) return;
+    setProcessingId(logId);
+    try {
+      await redoMutation.mutateAsync({ orgId: currentOrgId, logId });
+      toast({ title: 'Action redone', description: 'The action has been restored.' });
+    } catch (error: any) {
+      toast({ title: 'Failed to redo', description: error?.message || 'Could not redo this action.', variant: 'destructive' });
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleUndoBatch = async (batchId: string) => {
+    if (!currentOrgId) return;
+    setProcessingId(batchId);
+    try {
+      await undoBatchMutation.mutateAsync({ orgId: currentOrgId, batchId });
+      toast({ title: 'Batch undone', description: 'All actions in this batch have been reversed.' });
+    } catch (error: any) {
+      toast({ title: 'Failed to undo batch', description: error?.message || 'Could not undo this batch.', variant: 'destructive' });
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleRedoBatch = async (batchId: string) => {
+    if (!currentOrgId) return;
+    setProcessingId(batchId);
+    try {
+      await redoBatchMutation.mutateAsync({ orgId: currentOrgId, batchId });
+      toast({ title: 'Batch redone', description: 'All actions in this batch have been restored.' });
+    } catch (error: any) {
+      toast({ title: 'Failed to redo batch', description: error?.message || 'Could not redo this batch.', variant: 'destructive' });
+    } finally {
+      setProcessingId(null);
+    }
+  };
 
   if (!isAdmin) {
     return (
@@ -254,9 +585,33 @@ export default function AuditLogPage() {
         </FadeIn>
       ) : (
         <StaggerChildren className="space-y-3">
-          {logs.map((log) => (
-            <AuditLogCard key={log.id} log={log} />
-          ))}
+          {logs.map((log) => {
+            const isBatch = 'isBatch' in log && log.isBatch;
+
+            if (isBatch) {
+              return (
+                <BatchAuditLogCard
+                  key={log.id}
+                  batch={log as BatchedAuditLogEntry}
+                  onUndo={handleUndo}
+                  onRedo={handleRedo}
+                  onUndoBatch={handleUndoBatch}
+                  onRedoBatch={handleRedoBatch}
+                  processingId={processingId}
+                />
+              );
+            }
+
+            return (
+              <AuditLogCard
+                key={log.id}
+                log={log as AuditLogEntry}
+                onUndo={handleUndo}
+                onRedo={handleRedo}
+                processingId={processingId}
+              />
+            );
+          })}
         </StaggerChildren>
       )}
     </div>

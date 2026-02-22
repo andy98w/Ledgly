@@ -7,6 +7,26 @@ import { PaymentMatcherService } from './payment-matcher.service';
 import { ExpenseMatcherService } from './expense-matcher.service';
 import { ChargesService } from '../charges/charges.service';
 
+function createConcurrencyLimiter(concurrency: number) {
+  let active = 0;
+  const queue: Array<() => void> = [];
+  return <T>(fn: () => Promise<T>): Promise<T> =>
+    new Promise((resolve, reject) => {
+      const run = () => {
+        active++;
+        fn()
+          .then(resolve)
+          .catch(reject)
+          .finally(() => {
+            active--;
+            if (queue.length > 0) queue.shift()!();
+          });
+      };
+      if (active < concurrency) run();
+      else queue.push(run);
+    });
+}
+
 @Injectable()
 export class GmailService {
   private readonly logger = new Logger(GmailService.name);
@@ -106,6 +126,15 @@ export class GmailService {
       throw new Error('No active Gmail connection');
     }
 
+    // Fetch org auto-approve settings
+    const org = await this.prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { autoApprovePayments: true, autoApproveExpenses: true },
+    });
+
+    const autoApprovePayments = org?.autoApprovePayments ?? true;
+    const autoApproveExpenses = org?.autoApproveExpenses ?? true;
+
     // Refresh token if needed
     const gmail = await this.getGmailClient(connection);
 
@@ -116,11 +145,20 @@ export class GmailService {
     let imported = 0;
     let skipped = 0;
 
-    for (const message of messages) {
-      const result = await this.processMessage(gmail, connection, message.id!);
-      if (result === 'imported') {
-        imported++;
+    // Process messages concurrently with a limiter to avoid overwhelming the API
+    const limit = createConcurrencyLimiter(5);
+    const results = await Promise.allSettled(
+      messages.map((message) =>
+        limit(() => this.processMessage(gmail, connection, message.id!, { autoApprovePayments, autoApproveExpenses })),
+      ),
+    );
+
+    for (const result of results) {
+      if (result.status === 'fulfilled') {
+        if (result.value === 'imported') imported++;
+        else skipped++;
       } else {
+        this.logger.error(`Failed to process email: ${result.reason}`);
         skipped++;
       }
     }
@@ -223,6 +261,7 @@ export class GmailService {
     gmail: gmail_v1.Gmail,
     connection: { id: string; orgId: string },
     messageId: string,
+    flags: { autoApprovePayments: boolean; autoApproveExpenses: boolean },
   ): Promise<'imported' | 'skipped'> {
     // Check if already processed
     const existing = await this.prisma.emailImport.findUnique({
@@ -251,11 +290,12 @@ export class GmailService {
     const dateStr = headers.find((h) => h.name?.toLowerCase() === 'date')?.value;
     const emailDate = dateStr ? new Date(dateStr) : new Date();
 
-    // Get body text
+    // Get body text and snippet
     const body = this.extractBody(message.data.payload);
+    const snippet = message.data.snippet || '';
 
-    // Parse the email
-    const parsed = this.emailParser.parseEmail(from, subject, body);
+    // Parse the email (pass snippet for memo extraction fallback)
+    const parsed = this.emailParser.parseEmail(from, subject, body, snippet);
 
     if (!parsed) {
       // Not a payment email we can parse
@@ -264,11 +304,11 @@ export class GmailService {
 
     // Handle OUTGOING payments as expenses
     if (parsed.direction === 'outgoing') {
-      return this.processOutgoingPayment(connection, messageId, message, from, subject, emailDate, parsed);
+      return this.processOutgoingPayment(connection, messageId, message, from, subject, emailDate, parsed, flags.autoApproveExpenses);
     }
 
     // Handle INCOMING payments (existing logic)
-    return this.processIncomingPayment(connection, messageId, message, from, subject, emailDate, parsed);
+    return this.processIncomingPayment(connection, messageId, message, from, subject, emailDate, parsed, flags.autoApprovePayments);
   }
 
   private async processOutgoingPayment(
@@ -287,9 +327,40 @@ export class GmailService {
       memo: string | null;
       transactionId: string | null;
     },
+    autoApproveExpenses: boolean,
   ): Promise<'imported' | 'skipped'> {
     if (!parsed.amount) {
       return 'skipped';
+    }
+
+    // If auto-approve expenses is disabled, always send to inbox for review
+    if (!autoApproveExpenses) {
+      await this.prisma.emailImport.create({
+        data: {
+          orgId: connection.orgId,
+          gmailConnectionId: connection.id,
+          messageId,
+          threadId: message.data.threadId || undefined,
+          emailFrom: from,
+          emailSubject: subject,
+          emailDate,
+          emailSnippet: message.data.snippet || undefined,
+          parsedSource: parsed.source,
+          parsedDirection: 'outgoing',
+          parsedAmount: parsed.amount,
+          parsedPayerName: parsed.payerName,
+          parsedPayerEmail: parsed.payerEmail,
+          parsedMemo: parsed.memo,
+          status: 'PENDING',
+          needsReviewReason: 'Auto-approve expenses is disabled',
+        },
+      });
+
+      this.logger.log(
+        `Outgoing payment of ${parsed.amount} cents sent to review (auto-approve disabled)`,
+      );
+
+      return 'imported';
     }
 
     // Check for similar existing expenses
@@ -405,7 +476,38 @@ export class GmailService {
       memo: string | null;
       transactionId: string | null;
     },
+    autoApprovePayments: boolean,
   ): Promise<'imported' | 'skipped'> {
+    // If auto-approve payments is disabled, always send to inbox for review
+    if (!autoApprovePayments) {
+      await this.prisma.emailImport.create({
+        data: {
+          orgId: connection.orgId,
+          gmailConnectionId: connection.id,
+          messageId,
+          threadId: message.data.threadId || undefined,
+          emailFrom: from,
+          emailSubject: subject,
+          emailDate,
+          emailSnippet: message.data.snippet || undefined,
+          parsedSource: parsed.source,
+          parsedDirection: 'incoming',
+          parsedAmount: parsed.amount,
+          parsedPayerName: parsed.payerName,
+          parsedPayerEmail: parsed.payerEmail,
+          parsedMemo: parsed.memo,
+          status: 'PENDING',
+          needsReviewReason: 'Auto-approve payments is disabled',
+        },
+      });
+
+      this.logger.log(
+        `Payment from ${parsed.payerName} sent to review (auto-approve disabled)`,
+      );
+
+      return 'imported';
+    }
+
     // Try to auto-match the payment to a member
     const matchResult = await this.paymentMatcher.matchPayment(
       connection.orgId,

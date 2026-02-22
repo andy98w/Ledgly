@@ -18,9 +18,16 @@ import {
   ArrowUpRight,
   Undo2,
   EyeOff,
+  Info,
+  Circle,
+  Trash2,
+  Search,
+  Plus,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { useAuthStore } from '@/lib/stores/auth';
-import { useMembers } from '@/lib/queries/members';
+import { useMembers, useCreateMembers } from '@/lib/queries/members';
 import {
   useGmailStatus,
   useGmailImports,
@@ -35,6 +42,7 @@ import {
 } from '@/lib/queries/gmail';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Money } from '@/components/ui/money';
 import { AvatarGradient } from '@/components/ui/avatar-gradient';
 import {
@@ -51,23 +59,37 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 function ImportCard({
   item,
   members,
   onConfirm,
   onIgnore,
+  onCreateMember,
   isConfirming,
   isIgnoring,
+  isSelected,
+  onToggleSelect,
 }: {
   item: EmailImport;
   members: Array<{ id: string; displayName: string }>;
   onConfirm: (membershipId?: string) => void;
   onIgnore: () => void;
+  onCreateMember: (name: string) => Promise<string | null>;
   isConfirming: boolean;
   isIgnoring: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: () => void;
 }) {
   const [selectedMemberId, setSelectedMemberId] = useState<string>('none');
+  const [memberSearch, setMemberSearch] = useState('');
+  const [isCreatingMember, setIsCreatingMember] = useState(false);
 
   // Try to auto-match based on payer name
   useEffect(() => {
@@ -83,6 +105,31 @@ function ImportCard({
     }
   }, [item.parsedPayerName, members]);
 
+  // Filter members based on search
+  const filteredMembers = memberSearch
+    ? members.filter((m) => m.displayName.toLowerCase().includes(memberSearch.toLowerCase()))
+    : members;
+
+  // Get the name to use for creating a new member
+  // Use the search term if typed, otherwise use the payer name
+  const createName = memberSearch.trim() || item.parsedPayerName || '';
+
+  // Check if we can create a new member with this name
+  const canCreateNew = createName && !filteredMembers.some(
+    (m) => m.displayName.toLowerCase() === createName.toLowerCase()
+  );
+
+  const handleCreateAndSelect = async () => {
+    if (!createName) return;
+    setIsCreatingMember(true);
+    const newMemberId = await onCreateMember(createName);
+    if (newMemberId) {
+      setSelectedMemberId(newMemberId);
+      setMemberSearch('');
+    }
+    setIsCreatingMember(false);
+  };
+
   const sourceColors: Record<string, string> = {
     venmo: 'bg-blue-500/10 text-blue-400 border-blue-500/30',
     zelle: 'bg-purple-500/10 text-purple-400 border-purple-500/30',
@@ -95,60 +142,75 @@ function ImportCard({
   return (
     <StaggerItem>
       <MotionCard className={isOutgoing
-        ? 'border-l-4 border-l-destructive/50 bg-destructive/5'
-        : 'border-l-4 border-l-success/50 bg-success/5'
+        ? 'border-l-4 border-l-destructive/30 bg-destructive/5'
+        : 'border-l-4 border-l-success/30 bg-success/5'
       }>
-        <MotionCardContent className="p-5">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-start gap-4 flex-1">
+        <MotionCardContent className="p-3">
+          <div className="flex items-start justify-between gap-3">
+            {onToggleSelect && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleSelect();
+                }}
+                className="mt-1 flex items-center justify-center transition-colors"
+                title={isSelected ? "Deselect" : "Select"}
+              >
+                {isSelected ? (
+                  <CheckCircle2 className="w-5 h-5 text-primary" />
+                ) : (
+                  <Circle className="w-5 h-5 text-muted-foreground hover:text-primary" />
+                )}
+              </button>
+            )}
+            <div className="flex items-start gap-3 flex-1">
               <AvatarGradient
                 name={item.parsedPayerName || 'Unknown'}
-                size="lg"
+                size="md"
               />
-              <div className="space-y-2 flex-1">
+              <div className="space-y-1 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <p className="font-semibold">
+                  <p className="font-medium text-sm">
                     {isOutgoing ? `To: ${item.parsedPayerName || 'Unknown'}` : item.parsedPayerName || 'Unknown Payer'}
                   </p>
                   <Badge
                     variant="outline"
-                    className={isOutgoing
-                      ? 'bg-destructive/10 text-destructive border-destructive/30'
-                      : 'bg-success/10 text-success border-success/30'
-                    }
+                    className={`text-xs ${isOutgoing
+                      ? 'bg-destructive/10 text-destructive border-destructive/20'
+                      : 'bg-success/10 text-success border-success/20'
+                    }`}
                   >
                     {isOutgoing ? (
-                      <><ArrowUpRight className="w-3 h-3 mr-1" />Outgoing</>
+                      <><ArrowUpRight className="w-3 h-3 mr-1" />Out</>
                     ) : (
-                      <><ArrowDownLeft className="w-3 h-3 mr-1" />Incoming</>
+                      <><ArrowDownLeft className="w-3 h-3 mr-1" />In</>
                     )}
                   </Badge>
                   <Badge
                     variant="outline"
-                    className={sourceColors[item.parsedSource] || ''}
+                    className={`text-xs ${sourceColors[item.parsedSource] || ''}`}
                   >
                     {item.parsedSource}
                   </Badge>
                 </div>
-                {item.parsedAmount && (
-                  <Money cents={item.parsedAmount} size="lg" />
-                )}
-                <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
-                  <span>
-                    {new Date(item.emailDate).toLocaleDateString()}
-                  </span>
-                  <span className="opacity-30">•</span>
-                  {item.parsedMemo ? (
-                    <span>"{item.parsedMemo}"</span>
-                  ) : (
-                    <span className="italic opacity-60">No description</span>
+                <div className="flex items-center gap-3">
+                  {item.parsedAmount && (
+                    <Money cents={item.parsedAmount} size="md" />
                   )}
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                    <span>
+                      {new Date(item.emailDate).toLocaleDateString()}
+                    </span>
+                    {item.parsedMemo && (
+                      <>
+                        <span className="opacity-30">•</span>
+                        <span>"{item.parsedMemo}"</span>
+                      </>
+                    )}
+                  </div>
                 </div>
-                <p className="text-xs text-muted-foreground truncate max-w-md">
-                  {item.emailSubject}
-                </p>
                 {item.needsReviewReason && (
-                  <div className="flex items-center gap-1.5 mt-1">
+                  <div className="flex items-center gap-1.5">
                     <AlertCircle className="w-3 h-3 text-warning" />
                     <p className="text-xs text-warning">{item.needsReviewReason}</p>
                   </div>
@@ -156,19 +218,45 @@ function ImportCard({
               </div>
             </div>
 
-            {!isOutgoing && (
-              <div className="text-right space-y-2 min-w-[180px]">
-                <p className="text-xs text-muted-foreground">Assign to member:</p>
+            <div className="flex items-center gap-2">
+              {!isOutgoing && (
                 <Select
                   value={selectedMemberId}
-                  onValueChange={setSelectedMemberId}
+                  onValueChange={(v) => {
+                    setSelectedMemberId(v);
+                    setMemberSearch('');
+                  }}
                 >
-                  <SelectTrigger className="h-9 bg-secondary/30 border-border/50">
-                    <SelectValue placeholder="Select member" />
+                  <SelectTrigger className="h-8 w-40 text-xs bg-secondary/30 border-border/50">
+                    <SelectValue placeholder="Member" />
                   </SelectTrigger>
                   <SelectContent>
+                    <div className="px-2 pb-2">
+                      <div className="relative">
+                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                        <Input
+                          placeholder="Search or create..."
+                          value={memberSearch}
+                          onChange={(e) => setMemberSearch(e.target.value)}
+                          className="h-7 pl-7 text-xs"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                    </div>
                     <SelectItem value="none">Unassigned</SelectItem>
-                    {members.map((member) => (
+                    {canCreateNew && (
+                      <div
+                        className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-xs outline-none hover:bg-accent hover:text-accent-foreground text-primary font-medium"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCreateAndSelect();
+                        }}
+                      >
+                        <Plus className="w-3 h-3 mr-2" />
+                        {isCreatingMember ? 'Creating...' : `Create "${createName}"`}
+                      </div>
+                    )}
+                    {filteredMembers.map((member) => (
                       <SelectItem key={member.id} value={member.id}>
                         <div className="flex items-center gap-2">
                           <AvatarGradient name={member.displayName} size="xs" />
@@ -178,41 +266,39 @@ function ImportCard({
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 mt-5 pt-4 border-t border-border/30">
-            <Button
-              size="sm"
-              className={`flex-1 ${isOutgoing
-                ? 'bg-gradient-to-r from-destructive to-red-400 hover:opacity-90'
-                : 'bg-gradient-to-r from-primary to-blue-400 hover:opacity-90'
-              }`}
-              onClick={() =>
-                onConfirm(isOutgoing ? undefined : (selectedMemberId === 'none' ? undefined : selectedMemberId))
-              }
-              disabled={isConfirming || isIgnoring || !item.parsedAmount}
-            >
-              {isConfirming ? (
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-              ) : (
-                <CheckCircle2 className="w-4 h-4 mr-2" />
               )}
-              {isOutgoing ? 'Confirm Expense' : 'Confirm Payment'}
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={onIgnore}
-              disabled={isConfirming || isIgnoring}
-            >
-              {isIgnoring ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <X className="w-4 h-4" />
-              )}
-            </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className={isOutgoing
+                  ? 'border-destructive/30 text-destructive hover:bg-destructive/10'
+                  : 'border-success/30 text-success hover:bg-success/10'
+                }
+                onClick={() =>
+                  onConfirm(isOutgoing ? undefined : (selectedMemberId === 'none' ? undefined : selectedMemberId))
+                }
+                disabled={isConfirming || isIgnoring || !item.parsedAmount}
+              >
+                {isConfirming ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="w-3 h-3" />
+                )}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-muted-foreground hover:text-foreground"
+                onClick={onIgnore}
+                disabled={isConfirming || isIgnoring}
+              >
+                {isIgnoring ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <X className="w-3 h-3" />
+                )}
+              </Button>
+            </div>
           </div>
         </MotionCardContent>
       </MotionCard>
@@ -222,24 +308,20 @@ function ImportCard({
 
 function LoadingSkeleton() {
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {[1, 2, 3].map((i) => (
-        <div key={i} className="rounded-xl border border-border/50 bg-card p-5">
-          <div className="flex items-start gap-4">
-            <Skeleton className="w-12 h-12 rounded-full" />
-            <div className="space-y-2 flex-1">
-              <Skeleton className="h-5 w-32" />
-              <Skeleton className="h-8 w-24" />
-              <Skeleton className="h-4 w-48" />
+        <div key={i} className="rounded-xl border border-border/50 bg-card p-3">
+          <div className="flex items-center gap-3">
+            <Skeleton className="w-10 h-10 rounded-full" />
+            <div className="space-y-1.5 flex-1">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-5 w-20" />
             </div>
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-9 w-40" />
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-8 w-32" />
+              <Skeleton className="h-8 w-8" />
+              <Skeleton className="h-8 w-8" />
             </div>
-          </div>
-          <div className="flex gap-2 mt-5 pt-4 border-t border-border/30">
-            <Skeleton className="h-9 flex-1" />
-            <Skeleton className="h-9 w-9" />
           </div>
         </div>
       ))}
@@ -265,10 +347,19 @@ export default function InboxPage() {
   const ignoreImport = useIgnoreImport();
   const restoreImport = useRestoreImport();
   const disconnectGmail = useDisconnectGmail();
+  const createMembers = useCreateMembers();
 
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [ignoringId, setIgnoringId] = useState<string | null>(null);
   const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [selectedImports, setSelectedImports] = useState<Set<string>>(new Set());
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+  const [autoConfirmedPage, setAutoConfirmedPage] = useState(1);
+  const [autoConfirmedPerPage, setAutoConfirmedPerPage] = useState(10);
+  const [autoConfirmedSearch, setAutoConfirmedSearch] = useState('');
+  const [pendingPage, setPendingPage] = useState(1);
+  const [pendingPerPage, setPendingPerPage] = useState(10);
+  const [pendingSearch, setPendingSearch] = useState('');
 
   // Handle OAuth callback
   useEffect(() => {
@@ -421,6 +512,103 @@ export default function InboxPage() {
     );
   };
 
+  const handleCreateMember = async (name: string): Promise<string | null> => {
+    if (!currentOrgId) return null;
+    try {
+      const result = await createMembers.mutateAsync({
+        orgId: currentOrgId,
+        members: [{ name }],
+      });
+      toast({ title: `Member "${name}" created` });
+      return result[0]?.id || null;
+    } catch (error: any) {
+      toast({
+        title: 'Error creating member',
+        description: error.message,
+        variant: 'destructive',
+      });
+      return null;
+    }
+  };
+
+  const toggleImportSelection = (importId: string) => {
+    setSelectedImports((prev) => {
+      const next = new Set(prev);
+      if (next.has(importId)) {
+        next.delete(importId);
+      } else {
+        next.add(importId);
+      }
+      return next;
+    });
+  };
+
+  const handleBulkApprove = async () => {
+    if (!currentOrgId || selectedImports.size === 0) return;
+    setIsBulkProcessing(true);
+
+    const importIds = Array.from(selectedImports);
+    let approvedCount = 0;
+
+    for (const importId of importIds) {
+      try {
+        await confirmImport.mutateAsync({ orgId: currentOrgId, importId });
+        approvedCount++;
+      } catch (error) {
+        // Continue with other approvals
+      }
+    }
+
+    setSelectedImports(new Set());
+    setIsBulkProcessing(false);
+    toast({ title: `Approved ${approvedCount} payment${approvedCount !== 1 ? 's' : ''}` });
+  };
+
+  const handleBulkIgnore = async () => {
+    if (!currentOrgId || selectedImports.size === 0) return;
+    setIsBulkProcessing(true);
+
+    const importIds = Array.from(selectedImports);
+    const ignoredIds: string[] = [];
+
+    for (const importId of importIds) {
+      try {
+        await ignoreImport.mutateAsync({ orgId: currentOrgId, importId });
+        ignoredIds.push(importId);
+      } catch (error) {
+        // Continue with other ignores
+      }
+    }
+
+    setSelectedImports(new Set());
+    setIsBulkProcessing(false);
+
+    const handleUndo = async () => {
+      let restoredCount = 0;
+      for (const importId of ignoredIds) {
+        try {
+          await restoreImport.mutateAsync({ orgId: currentOrgId, importId });
+          restoredCount++;
+        } catch (error) {
+          // Continue
+        }
+      }
+      toast({ title: `Restored ${restoredCount} import${restoredCount !== 1 ? 's' : ''}` });
+    };
+
+    toast({
+      title: `Ignored ${ignoredIds.length} import${ignoredIds.length !== 1 ? 's' : ''}`,
+      action: (
+        <button
+          onClick={handleUndo}
+          className="text-xs font-medium text-primary hover:underline"
+        >
+          Undo
+        </button>
+      ),
+    });
+  };
+
   const isConnected = gmailStatus?.connected;
   const imports = importsData?.data || [];
   const ignored = ignoredData?.data || [];
@@ -432,11 +620,20 @@ export default function InboxPage() {
       {/* Header */}
       <FadeIn>
         <div className="flex items-center justify-between">
-          <div>
+          <div className="flex items-center gap-2">
             <h1 className="text-3xl font-bold tracking-tight">Inbox</h1>
-            <p className="text-muted-foreground mt-1">
-              Review and approve incoming payments
-            </p>
+            <TooltipProvider delayDuration={0}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button className="text-muted-foreground hover:text-foreground transition-colors">
+                    <Info className="w-4 h-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="max-w-xs">
+                  <p className="text-sm">Review and approve incoming payment notifications from Gmail. Connect your Gmail to auto-import Venmo and Zelle payments. Use selection checkboxes for bulk actions.</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
           {isConnected && (
             <div className="flex items-center gap-2">
@@ -657,24 +854,173 @@ export default function InboxPage() {
             </div>
           </FadeIn>
 
-          {activeTab === 'pending' && (
+          {activeTab === 'pending' && (() => {
+            // Filter by search
+            const filteredImports = pendingSearch
+              ? imports.filter((item) =>
+                  (item.parsedPayerName || '').toLowerCase().includes(pendingSearch.toLowerCase()) ||
+                  (item.parsedMemo || '').toLowerCase().includes(pendingSearch.toLowerCase())
+                )
+              : imports;
+
+            // Pagination
+            const totalPendingPages = Math.ceil(filteredImports.length / pendingPerPage);
+            const pendingStartIndex = (pendingPage - 1) * pendingPerPage;
+            const paginatedImports = filteredImports.slice(pendingStartIndex, pendingStartIndex + pendingPerPage);
+
+            // Track select all state for filtered/paginated items
+            const currentPageIds = paginatedImports.map((i) => i.id);
+            const isAllCurrentPageSelected = currentPageIds.length > 0 && currentPageIds.every((id) => selectedImports.has(id));
+
+            const toggleSelectAllCurrentPage = () => {
+              if (isAllCurrentPageSelected) {
+                setSelectedImports((prev) => {
+                  const next = new Set(prev);
+                  currentPageIds.forEach((id) => next.delete(id));
+                  return next;
+                });
+              } else {
+                setSelectedImports((prev) => { const next = new Set(Array.from(prev)); currentPageIds.forEach((id) => next.add(id)); return next; });
+              }
+            };
+
+            return (
             <>
               {importsLoading ? (
                 <LoadingSkeleton />
               ) : imports.length > 0 ? (
-                <StaggerChildren className="space-y-3">
-                  {imports.map((item) => (
-                    <ImportCard
-                      key={item.id}
-                      item={item}
-                      members={members}
-                      onConfirm={(membershipId) => handleConfirm(item.id, membershipId)}
-                      onIgnore={() => handleIgnore(item.id)}
-                      isConfirming={confirmingId === item.id}
-                      isIgnoring={ignoringId === item.id}
-                    />
-                  ))}
-                </StaggerChildren>
+                <div className="space-y-3">
+                  {/* Search and Per Page Controls */}
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">Show</span>
+                      <Select
+                        value={String(pendingPerPage)}
+                        onValueChange={(v) => {
+                          setPendingPerPage(Number(v));
+                          setPendingPage(1);
+                        }}
+                      >
+                        <SelectTrigger className="w-20 h-8 bg-secondary/30 border-border/50">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="5">5</SelectItem>
+                          <SelectItem value="10">10</SelectItem>
+                          <SelectItem value="25">25</SelectItem>
+                          <SelectItem value="50">50</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <span className="text-sm text-muted-foreground">per page</span>
+                    </div>
+                    <div className="relative w-64">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search by name or memo..."
+                        value={pendingSearch}
+                        onChange={(e) => {
+                          setPendingSearch(e.target.value);
+                          setPendingPage(1);
+                        }}
+                        className="pl-10 h-9 bg-secondary/30 border-border/50 focus:border-primary"
+                      />
+                    </div>
+                  </div>
+
+                  {filteredImports.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      No results found for &quot;{pendingSearch}&quot;
+                    </div>
+                  ) : (
+                    <>
+                      {/* Select All Row */}
+                      <div className="rounded-xl border border-border/50 bg-secondary/20 p-3 flex items-center justify-between">
+                        <button
+                          onClick={toggleSelectAllCurrentPage}
+                          className="flex items-center gap-3 transition-colors"
+                          title={isAllCurrentPageSelected ? "Deselect all" : "Select all"}
+                        >
+                          {isAllCurrentPageSelected ? (
+                            <CheckCircle2 className="w-5 h-5 text-primary" />
+                          ) : (
+                            <Circle className="w-5 h-5 text-muted-foreground hover:text-primary" />
+                          )}
+                          <span className="text-sm text-muted-foreground">
+                            {isAllCurrentPageSelected ? 'Deselect all on page' : 'Select all on page'}
+                          </span>
+                        </button>
+                        <div className={`flex items-center gap-2 transition-opacity ${selectedImports.size > 0 ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                          <button
+                            onClick={handleBulkApprove}
+                            disabled={isBulkProcessing || selectedImports.size === 0}
+                            className="w-7 h-7 flex items-center justify-center transition-colors hover:text-success"
+                            title={`Approve ${selectedImports.size} selected`}
+                          >
+                            {isBulkProcessing ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <CheckCircle2 className="w-4 h-4 text-muted-foreground hover:text-success" />
+                            )}
+                          </button>
+                          <button
+                            onClick={handleBulkIgnore}
+                            disabled={isBulkProcessing || selectedImports.size === 0}
+                            className="w-7 h-7 flex items-center justify-center transition-colors hover:text-destructive"
+                            title={`Ignore ${selectedImports.size} selected`}
+                          >
+                            <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
+                          </button>
+                        </div>
+                      </div>
+                      <StaggerChildren className="space-y-3">
+                        {paginatedImports.map((item) => (
+                          <ImportCard
+                            key={item.id}
+                            item={item}
+                            members={members}
+                            onConfirm={(membershipId) => handleConfirm(item.id, membershipId)}
+                            onIgnore={() => handleIgnore(item.id)}
+                            onCreateMember={handleCreateMember}
+                            isConfirming={confirmingId === item.id}
+                            isIgnoring={ignoringId === item.id}
+                            isSelected={selectedImports.has(item.id)}
+                            onToggleSelect={() => toggleImportSelection(item.id)}
+                          />
+                        ))}
+                      </StaggerChildren>
+
+                      {/* Pagination */}
+                      {totalPendingPages > 1 && (
+                        <div className="flex items-center justify-between pt-4">
+                          <span className="text-sm text-muted-foreground">
+                            Showing {pendingStartIndex + 1}-{Math.min(pendingStartIndex + pendingPerPage, filteredImports.length)} of {filteredImports.length}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setPendingPage((p) => Math.max(1, p - 1))}
+                              disabled={pendingPage === 1}
+                            >
+                              <ChevronLeft className="w-4 h-4" />
+                            </Button>
+                            <span className="text-sm">
+                              Page {pendingPage} of {totalPendingPages}
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setPendingPage((p) => Math.min(totalPendingPages, p + 1))}
+                              disabled={pendingPage === totalPendingPages}
+                            >
+                              <ChevronRight className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               ) : (
                 <FadeIn delay={0.3}>
                   <motion.div
@@ -707,7 +1053,8 @@ export default function InboxPage() {
                 </FadeIn>
               )}
             </>
-          )}
+            );
+          })()}
 
           {activeTab === 'ignored' && (
             <>
@@ -783,62 +1130,178 @@ export default function InboxPage() {
         </div>
       )}
 
-      {/* Recently Auto-Confirmed */}
-      {isConnected && autoConfirmed.length > 0 && (
-        <div className="space-y-4">
-          <FadeIn delay={0.3}>
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-success" />
-              <h2 className="text-lg font-semibold">Recently Auto-Confirmed</h2>
-              <Badge variant="outline" className="border-success/30 text-success">
-                {autoConfirmed.length}
-              </Badge>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              These payments were automatically matched and allocated based on payer name and memo.
-            </p>
-          </FadeIn>
+      {/* Auto-Confirmed Payments */}
+      {isConnected && autoConfirmed.length > 0 && (() => {
+        // Filter by search
+        const filteredAutoConfirmed = autoConfirmedSearch
+          ? autoConfirmed.filter((item) =>
+              (item.parsedPayerName || '').toLowerCase().includes(autoConfirmedSearch.toLowerCase()) ||
+              (item.parsedMemo || '').toLowerCase().includes(autoConfirmedSearch.toLowerCase())
+            )
+          : autoConfirmed;
 
-          <StaggerChildren className="space-y-2">
-            {autoConfirmed.slice(0, 5).map((item) => (
-              <StaggerItem key={item.id}>
-                <div className="flex items-center justify-between p-4 rounded-xl border bg-card/50">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-success/10 flex items-center justify-center">
-                      <CheckCircle2 className="w-5 h-5 text-success" />
-                    </div>
-                    <div>
-                      <p className="font-medium">{item.parsedPayerName || 'Unknown'}</p>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <span>{new Date(item.emailDate).toLocaleDateString()}</span>
-                        {item.derivedCategory && (
-                          <>
-                            <span className="opacity-30">•</span>
-                            <Badge variant="outline" className="text-xs">
-                              {item.derivedCategory}
-                            </Badge>
-                          </>
-                        )}
-                        {item.matchConfidence && (
-                          <>
-                            <span className="opacity-30">•</span>
-                            <span className="text-xs">
-                              {Math.round(item.matchConfidence * 100)}% match
-                            </span>
-                          </>
-                        )}
-                      </div>
+        // Pagination
+        const totalPages = Math.ceil(filteredAutoConfirmed.length / autoConfirmedPerPage);
+        const startIndex = (autoConfirmedPage - 1) * autoConfirmedPerPage;
+        const paginatedAutoConfirmed = filteredAutoConfirmed.slice(startIndex, startIndex + autoConfirmedPerPage);
+
+        return (
+          <div className="space-y-4">
+            <FadeIn delay={0.3}>
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-success" />
+                <h2 className="text-lg font-semibold">Auto-Confirmed Payments</h2>
+                <Badge variant="outline" className="border-success/30 text-success">
+                  {autoConfirmed.length}
+                </Badge>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                These payments were automatically matched and allocated based on payer name and memo.
+              </p>
+            </FadeIn>
+
+            {/* Search and Per Page Controls */}
+            <FadeIn delay={0.35}>
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Show</span>
+                  <Select
+                    value={String(autoConfirmedPerPage)}
+                    onValueChange={(v) => {
+                      setAutoConfirmedPerPage(Number(v));
+                      setAutoConfirmedPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="w-20 h-8 bg-secondary/30 border-border/50">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="5">5</SelectItem>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="25">25</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <span className="text-sm text-muted-foreground">per page</span>
+                </div>
+                <div className="relative w-64">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search by name or memo..."
+                    value={autoConfirmedSearch}
+                    onChange={(e) => {
+                      setAutoConfirmedSearch(e.target.value);
+                      setAutoConfirmedPage(1);
+                    }}
+                    className="pl-10 h-9 bg-secondary/30 border-border/50 focus:border-primary"
+                  />
+                </div>
+              </div>
+            </FadeIn>
+
+            {filteredAutoConfirmed.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                No results found for &quot;{autoConfirmedSearch}&quot;
+              </div>
+            ) : (
+              <>
+                <StaggerChildren className="space-y-2">
+                  {paginatedAutoConfirmed.map((item) => {
+                    const isOutgoing = item.parsedDirection === 'outgoing';
+                    return (
+                      <StaggerItem key={item.id}>
+                        <div className={`flex items-center justify-between p-4 rounded-xl border ${
+                          isOutgoing ? 'border-l-4 border-l-destructive/30' : 'border-l-4 border-l-success/30'
+                        } bg-card/50`}>
+                          <div className="flex items-center gap-3">
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                              isOutgoing ? 'bg-destructive/10' : 'bg-success/10'
+                            }`}>
+                              {isOutgoing ? (
+                                <ArrowUpRight className="w-5 h-5 text-destructive" />
+                              ) : (
+                                <ArrowDownLeft className="w-5 h-5 text-success" />
+                              )}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium">
+                                  {isOutgoing ? `To: ${item.parsedPayerName || 'Unknown'}` : item.parsedPayerName || 'Unknown'}
+                                </p>
+                                <Badge
+                                  variant="outline"
+                                  className={`text-xs ${isOutgoing
+                                    ? 'bg-destructive/10 text-destructive border-destructive/20'
+                                    : 'bg-success/10 text-success border-success/20'
+                                  }`}
+                                >
+                                  {isOutgoing ? 'Expense' : 'Payment'}
+                                </Badge>
+                              </div>
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <span>{new Date(item.emailDate).toLocaleDateString()}</span>
+                                {item.derivedCategory && (
+                                  <>
+                                    <span className="opacity-30">•</span>
+                                    <Badge variant="outline" className="text-xs">
+                                      {item.derivedCategory}
+                                    </Badge>
+                                  </>
+                                )}
+                                {item.matchConfidence && (
+                                  <>
+                                    <span className="opacity-30">•</span>
+                                    <span className="text-xs">
+                                      {Math.round(item.matchConfidence * 100)}% match
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          {item.parsedAmount && (
+                            <Money cents={item.parsedAmount} size="md" />
+                          )}
+                        </div>
+                      </StaggerItem>
+                    );
+                  })}
+                </StaggerChildren>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between pt-4">
+                    <span className="text-sm text-muted-foreground">
+                      Showing {startIndex + 1}-{Math.min(startIndex + autoConfirmedPerPage, filteredAutoConfirmed.length)} of {filteredAutoConfirmed.length}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setAutoConfirmedPage((p) => Math.max(1, p - 1))}
+                        disabled={autoConfirmedPage === 1}
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </Button>
+                      <span className="text-sm">
+                        Page {autoConfirmedPage} of {totalPages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setAutoConfirmedPage((p) => Math.min(totalPages, p + 1))}
+                        disabled={autoConfirmedPage === totalPages}
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
                     </div>
                   </div>
-                  {item.parsedAmount && (
-                    <Money cents={item.parsedAmount} size="md" />
-                  )}
-                </div>
-              </StaggerItem>
-            ))}
-          </StaggerChildren>
-        </div>
-      )}
+                )}
+              </>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }

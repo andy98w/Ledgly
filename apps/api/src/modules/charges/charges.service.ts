@@ -25,6 +25,7 @@ interface ChargeFilters {
   overdue?: boolean;
   page?: number;
   limit?: number;
+  cursor?: string;
 }
 
 @Injectable()
@@ -35,7 +36,7 @@ export class ChargesService {
   ) {}
 
   async findAll(orgId: string, filters: ChargeFilters = {}) {
-    const { status, category, membershipId, overdue, page = 1, limit = 50 } = filters;
+    const { status, category, membershipId, overdue, page = 1, limit = 50, cursor } = filters;
     const now = new Date();
 
     const where: any = { orgId };
@@ -60,22 +61,57 @@ export class ChargesService {
       where.dueDate = { lt: now };
     }
 
+    const includeOpts = {
+      membership: {
+        select: {
+          id: true,
+          name: true,
+          user: { select: { name: true, email: true } },
+        },
+      },
+      allocations: {
+        select: { amountCents: true },
+      },
+    };
+
+    const orderBy = [{ status: 'asc' as const }, { dueDate: 'asc' as const }, { createdAt: 'desc' as const }];
+
+    // Cursor-based pagination mode
+    if (cursor) {
+      const items = await this.prisma.charge.findMany({
+        where,
+        include: includeOpts,
+        cursor: { id: cursor },
+        skip: 1,
+        take: limit + 1,
+        orderBy,
+      });
+
+      const hasMore = items.length > limit;
+      const charges = items.slice(0, limit);
+
+      const data = charges.map((c) => {
+        const allocatedCents = c.allocations.reduce((sum, a) => sum + a.amountCents, 0);
+        return {
+          id: c.id, orgId: c.orgId, membershipId: c.membershipId, category: c.category,
+          title: c.title, amountCents: c.amountCents, dueDate: c.dueDate, status: c.status, createdAt: c.createdAt,
+          membership: { id: c.membership.id, name: c.membership.name, displayName: c.membership.name || c.membership.user?.name || c.membership.user?.email || 'Unknown' },
+          allocatedCents, balanceDueCents: c.amountCents - allocatedCents,
+        };
+      });
+
+      return {
+        data,
+        meta: { limit, nextCursor: hasMore ? data[data.length - 1].id : null, hasMore },
+      };
+    }
+
+    // Offset-based pagination mode (default)
     const [charges, total] = await Promise.all([
       this.prisma.charge.findMany({
         where,
-        include: {
-          membership: {
-            select: {
-              id: true,
-              name: true,
-              user: { select: { name: true, email: true } },
-            },
-          },
-          allocations: {
-            select: { amountCents: true },
-          },
-        },
-        orderBy: [{ status: 'asc' }, { dueDate: 'asc' }, { createdAt: 'desc' }],
+        include: includeOpts,
+        orderBy,
         skip: (page - 1) * limit,
         take: limit,
       }),
@@ -85,33 +121,16 @@ export class ChargesService {
     const data = charges.map((c) => {
       const allocatedCents = c.allocations.reduce((sum, a) => sum + a.amountCents, 0);
       return {
-        id: c.id,
-        orgId: c.orgId,
-        membershipId: c.membershipId,
-        category: c.category,
-        title: c.title,
-        amountCents: c.amountCents,
-        dueDate: c.dueDate,
-        status: c.status,
-        createdAt: c.createdAt,
-        membership: {
-          id: c.membership.id,
-          name: c.membership.name,
-          displayName: c.membership.name || c.membership.user?.name || c.membership.user?.email || 'Unknown',
-        },
-        allocatedCents,
-        balanceDueCents: c.amountCents - allocatedCents,
+        id: c.id, orgId: c.orgId, membershipId: c.membershipId, category: c.category,
+        title: c.title, amountCents: c.amountCents, dueDate: c.dueDate, status: c.status, createdAt: c.createdAt,
+        membership: { id: c.membership.id, name: c.membership.name, displayName: c.membership.name || c.membership.user?.name || c.membership.user?.email || 'Unknown' },
+        allocatedCents, balanceDueCents: c.amountCents - allocatedCents,
       };
     });
 
     return {
       data,
-      meta: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
   }
 
@@ -192,11 +211,28 @@ export class ChargesService {
         orgId,
         status: 'ACTIVE',
       },
+      include: {
+        user: { select: { name: true, email: true } },
+      },
     });
 
     if (memberships.length !== dto.membershipIds.length) {
       throw new BadRequestException('Some member IDs are invalid');
     }
+
+    // Parse and validate dueDate
+    let parsedDueDate: Date | null = null;
+    if (dto.dueDate) {
+      const dateValue = new Date(dto.dueDate + 'T12:00:00');
+      if (!isNaN(dateValue.getTime())) {
+        parsedDueDate = dateValue;
+      }
+    }
+
+    // Build a membership name lookup for audit logs
+    const memberNameMap = new Map(
+      memberships.map((m) => [m.id, m.name || m.user?.name || m.user?.email || 'Unknown']),
+    );
 
     // Create charges for each member
     const charges = await Promise.all(
@@ -208,12 +244,19 @@ export class ChargesService {
             category: dto.category,
             title: dto.title,
             amountCents: dto.amountCents,
-            dueDate: dto.dueDate ? new Date(dto.dueDate + 'T12:00:00') : null,
+            dueDate: parsedDueDate,
             createdById,
           },
         }),
       ),
     );
+
+    // Use batch context when charging multiple members
+    const batch = dto.membershipIds.length > 1
+      ? this.auditService.createBatchContext(
+          `Charged ${dto.membershipIds.length} members: ${dto.title}`,
+        )
+      : undefined;
 
     // Log audit entries for each charge created
     await Promise.all(
@@ -223,7 +266,8 @@ export class ChargesService {
           amountCents: charge.amountCents,
           category: charge.category,
           membershipId: charge.membershipId,
-        }),
+          memberName: memberNameMap.get(charge.membershipId) || 'Unknown',
+        }, batch),
       ),
     );
 
@@ -252,12 +296,23 @@ export class ChargesService {
       }
     }
 
+    // Parse and validate dueDate for update
+    let updateDueDate: Date | null | undefined = undefined;
+    if (dto.dueDate !== undefined) {
+      if (dto.dueDate) {
+        const dateValue = new Date(dto.dueDate + 'T12:00:00');
+        updateDueDate = !isNaN(dateValue.getTime()) ? dateValue : null;
+      } else {
+        updateDueDate = null;
+      }
+    }
+
     const updated = await this.prisma.charge.update({
       where: { id: chargeId },
       data: {
         ...(dto.title && { title: dto.title }),
         ...(dto.amountCents !== undefined && { amountCents: dto.amountCents }),
-        ...(dto.dueDate !== undefined && { dueDate: dto.dueDate ? new Date(dto.dueDate + 'T12:00:00') : null }),
+        ...(updateDueDate !== undefined && { dueDate: updateDueDate }),
         ...(dto.status && { status: dto.status }),
       },
     });

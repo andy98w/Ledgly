@@ -2,9 +2,9 @@
 
 import { useState, useMemo, useRef, useEffect, useLayoutEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Table2, ArrowUpRight, ArrowDownRight, Download, Filter, Plus, DollarSign, Wallet, Search, Minus, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Table2, ArrowUpRight, ArrowDownRight, Download, Filter, Plus, DollarSign, Wallet, Search, Minus, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, Trash2, Circle, CheckCircle2 } from 'lucide-react';
 import { useCharges, useUpdateCharge, useCreateCharge, useVoidCharge, useRestoreCharge } from '@/lib/queries/charges';
-import { useExpenses, useUpdateExpense, useCreateExpense, useDeleteExpense } from '@/lib/queries/expenses';
+import { useExpenses, useUpdateExpense, useCreateExpense, useDeleteExpense, useRestoreExpense } from '@/lib/queries/expenses';
 import { usePayments, useUpdatePayment, useCreatePayment, useDeletePayment, useRestorePayment } from '@/lib/queries/payments';
 import { useMembers } from '@/lib/queries/members';
 import { useAuthStore } from '@/lib/stores/auth';
@@ -31,6 +31,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { useCreateMembers } from '@/lib/queries/members';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -41,6 +47,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Money } from '@/components/ui/money';
 import { FadeIn } from '@/components/ui/page-transition';
+import { PageHeader } from '@/components/ui/page-header';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 
@@ -75,6 +82,7 @@ function EditableCell({
   rowType,
   column,
   members,
+  onAddMember,
 }: {
   value: string | number;
   type: 'text' | 'money' | 'category' | 'date' | 'member';
@@ -85,10 +93,16 @@ function EditableCell({
   isAdmin: boolean;
   rowType: 'charge' | 'expense' | 'payment';
   column: string;
-  members?: Array<{ id: string; name: string | null; user?: { name: string | null } | null }>;
+  members?: Array<{ id: string; name: string | null; displayName?: string | null; user?: { name: string | null } | null }>;
+  onAddMember?: (name: string) => Promise<string | null>;
 }) {
   const [editValue, setEditValue] = useState(String(value));
+  const [memberSearch, setMemberSearch] = useState('');
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [newMemberName, setNewMemberName] = useState('');
+  const [isAddingMember, setIsAddingMember] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -128,82 +142,186 @@ function EditableCell({
     }
   };
 
+  const handleAddMember = async () => {
+    if (!newMemberName.trim() || !onAddMember) return;
+    setIsAddingMember(true);
+    try {
+      const newMemberId = await onAddMember(newMemberName.trim());
+      if (newMemberId) {
+        onSave(newMemberId);
+      }
+      setShowAddMember(false);
+      setNewMemberName('');
+    } finally {
+      setIsAddingMember(false);
+    }
+  };
+
+  const editingStyles = "h-6 text-xs !bg-transparent !border-0 !border-none !shadow-none !ring-0 !outline-none focus:!ring-0 focus:!border-0 focus:!outline-none focus-visible:!ring-0 focus-visible:!outline-none [&>span]:!ring-0";
+
   if (isEditing) {
     if (type === 'category') {
       const categories = rowType === 'charge' ? CHARGE_CATEGORIES : EXPENSE_CATEGORIES;
       const labels = rowType === 'charge' ? CHARGE_CATEGORY_LABELS : EXPENSE_CATEGORY_LABELS;
       return (
-        <Select
-          value={editValue}
-          onValueChange={(v) => {
-            setEditValue(v);
-            onSave(v);
-          }}
-        >
-          <SelectTrigger className="h-7 text-xs w-28 bg-transparent border-0 shadow-none focus:ring-0">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {categories.map((cat) => (
-              <SelectItem key={cat} value={cat}>
-                {labels[cat as keyof typeof labels]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="inline-block">
+          <Select
+            value={editValue}
+            onValueChange={(v) => {
+              setEditValue(v);
+              onSave(v);
+            }}
+          >
+            <SelectTrigger className={editingStyles}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {categories.map((cat) => (
+                <SelectItem key={cat} value={cat}>
+                  {labels[cat as keyof typeof labels]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       );
     }
 
     if (type === 'member' && members) {
+      const filteredMembers = memberSearch.trim()
+        ? members.filter((m) => {
+            const name = m.displayName || m.name || m.user?.name || '';
+            return name.toLowerCase().includes(memberSearch.toLowerCase());
+          })
+        : members;
+
       return (
-        <Select
-          value={editValue}
-          onValueChange={(v) => {
-            setEditValue(v);
-            onSave(v);
-          }}
-        >
-          <SelectTrigger className="h-7 text-xs w-32 bg-transparent border-0 shadow-none focus:ring-0">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {members.map((m) => (
-              <SelectItem key={m.id} value={m.id}>
-                {m.displayName || m.name || m.user?.name || 'Unknown'}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Popover open={true} onOpenChange={(open) => !open && onCancel()}>
+          <PopoverTrigger asChild>
+            <button className="text-xs text-left">
+              {members.find((m) => m.id === editValue)?.displayName ||
+                members.find((m) => m.id === editValue)?.name ||
+                members.find((m) => m.id === editValue)?.user?.name ||
+                'Select member...'}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-64 p-2" align="start">
+            {showAddMember ? (
+              <div className="space-y-2">
+                <p className="text-xs font-medium">Add New Member</p>
+                <Input
+                  placeholder="Member name"
+                  value={newMemberName}
+                  onChange={(e) => setNewMemberName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleAddMember();
+                    if (e.key === 'Escape') setShowAddMember(false);
+                  }}
+                  autoFocus
+                  className="h-8 text-xs"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setShowAddMember(false)}
+                    className="flex-1 h-7 text-xs"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleAddMember}
+                    disabled={!newMemberName.trim() || isAddingMember}
+                    className="flex-1 h-7 text-xs"
+                  >
+                    {isAddingMember ? 'Adding...' : 'Add'}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="relative mb-2">
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                  <Input
+                    ref={searchInputRef}
+                    placeholder="Search members..."
+                    value={memberSearch}
+                    onChange={(e) => setMemberSearch(e.target.value)}
+                    className="h-7 text-xs pl-7"
+                    autoFocus
+                  />
+                </div>
+                <div className="max-h-48 overflow-y-auto space-y-0.5">
+                  {filteredMembers.filter((m) => m.id).map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => {
+                        setEditValue(m.id);
+                        onSave(m.id);
+                      }}
+                      className={cn(
+                        'w-full text-left px-2 py-1.5 text-xs rounded hover:bg-secondary transition-colors',
+                        editValue === m.id && 'bg-primary/10 text-primary'
+                      )}
+                    >
+                      {m.displayName || m.name || m.user?.name || 'Unknown'}
+                    </button>
+                  ))}
+                  {filteredMembers.length === 0 && (
+                    <p className="text-xs text-muted-foreground text-center py-2">
+                      No members found
+                    </p>
+                  )}
+                </div>
+                {onAddMember && (
+                  <button
+                    onClick={() => {
+                      setNewMemberName(memberSearch);
+                      setShowAddMember(true);
+                    }}
+                    className="w-full mt-2 pt-2 border-t text-left px-2 py-1.5 text-xs text-primary hover:bg-secondary rounded transition-colors flex items-center gap-1"
+                  >
+                    <Plus className="h-3 w-3" />
+                    Add new member{memberSearch && `: "${memberSearch}"`}
+                  </button>
+                )}
+              </>
+            )}
+          </PopoverContent>
+        </Popover>
       );
     }
 
     if (type === 'date') {
       return (
-        <Input
+        <input
           ref={inputRef}
           value={editValue}
           onChange={(e) => setEditValue(e.target.value)}
           onKeyDown={handleKeyDown}
           onBlur={handleSave}
-          className="h-7 text-xs w-32 bg-transparent border-0 shadow-none focus-visible:ring-0"
+          className="h-6 text-xs bg-transparent border-0 shadow-none ring-0 outline-none focus:ring-0 focus:border-0 focus:outline-none"
           type="date"
+          style={{ WebkitAppearance: 'none', border: 'none', outline: 'none' }}
         />
       );
     }
 
     return (
-      <Input
+      <input
         ref={inputRef}
         value={editValue}
         onChange={(e) => setEditValue(e.target.value)}
         onKeyDown={handleKeyDown}
         onBlur={handleSave}
         className={cn(
-          'h-7 text-xs bg-transparent border-0 shadow-none focus-visible:ring-0',
-          type === 'money' ? 'w-20 text-right' : 'w-full'
+          'h-6 text-xs bg-transparent border-0 shadow-none ring-0 outline-none focus:ring-0 focus:border-0 focus:outline-none',
+          type === 'money' ? 'w-16 text-right' : 'w-full'
         )}
         type={type === 'money' ? 'number' : 'text'}
         step={type === 'money' ? '0.01' : undefined}
+        style={{ WebkitAppearance: 'none', border: 'none', outline: 'none' }}
       />
     );
   }
@@ -254,9 +372,10 @@ function EditableCell({
 export default function SpreadsheetPage() {
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<'date' | 'amount'>('date');
+  const [sortBy, setSortBy] = useState<'date' | 'amount' | 'type' | 'category' | 'member' | 'status' | 'income' | 'expense'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [editingCell, setEditingCell] = useState<EditingCell>(null);
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -291,8 +410,10 @@ export default function SpreadsheetPage() {
   const voidCharge = useVoidCharge();
   const restoreCharge = useRestoreCharge();
   const deleteExpense = useDeleteExpense();
+  const restoreExpense = useRestoreExpense();
   const deletePayment = useDeletePayment();
   const restorePayment = useRestorePayment();
+  const createMembers = useCreateMembers();
 
   const isLoading = chargesLoading || expensesLoading || paymentsLoading;
   const members = membersData?.data || [];
@@ -348,7 +469,7 @@ export default function SpreadsheetPage() {
           date: typeof expense.date === 'string' ? expense.date : new Date(expense.date).toISOString(),
           type: 'expense',
           category: expense.category,
-          description: expense.title,
+          description: expense.description || expense.title,
           member: expense.vendor || undefined,
           incomeCents: 0,
           expenseCents: expense.amountCents,
@@ -360,11 +481,8 @@ export default function SpreadsheetPage() {
     if (paymentsData?.data) {
       for (const payment of paymentsData.data) {
         if (typeFilter !== 'all' && typeFilter !== 'payment') continue;
-        // Find member name from membershipId if available
-        const paymentMember = payment.membershipId
-          ? members.find(m => m.id === payment.membershipId)
-          : null;
-        const memberName = paymentMember?.name || paymentMember?.user?.name || payment.rawPayerName || undefined;
+        // Use rawPayerName for payments
+        const memberName = payment.rawPayerName || undefined;
         allRows.push({
           id: payment.id,
           date: typeof payment.paidAt === 'string' ? payment.paidAt : new Date(payment.paidAt).toISOString(),
@@ -372,7 +490,7 @@ export default function SpreadsheetPage() {
           category: payment.source || 'manual',
           description: payment.memo || memberName || 'Payment',
           member: memberName,
-          membershipId: payment.membershipId || undefined,
+          membershipId: undefined,
           incomeCents: payment.amountCents,
           expenseCents: 0,
           allocatedCents: payment.allocatedCents,
@@ -394,15 +512,50 @@ export default function SpreadsheetPage() {
 
     // Sort
     filteredRows.sort((a, b) => {
-      if (sortBy === 'date') {
-        const dateA = new Date(a.date).getTime();
-        const dateB = new Date(b.date).getTime();
-        return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
-      } else {
-        const amountA = a.incomeCents || a.expenseCents;
-        const amountB = b.incomeCents || b.expenseCents;
-        return sortOrder === 'asc' ? amountA - amountB : amountB - amountA;
+      let comparison = 0;
+      switch (sortBy) {
+        case 'date':
+          comparison = new Date(a.date).getTime() - new Date(b.date).getTime();
+          break;
+        case 'amount':
+          comparison = (a.incomeCents || a.expenseCents) - (b.incomeCents || b.expenseCents);
+          break;
+        case 'income':
+          // Sort by income first (rows with income come before rows without)
+          // Then by amount within each group
+          const aHasIncome = a.incomeCents > 0 ? 1 : 0;
+          const bHasIncome = b.incomeCents > 0 ? 1 : 0;
+          comparison = bHasIncome - aHasIncome; // Income rows first
+          if (comparison === 0) {
+            comparison = a.incomeCents - b.incomeCents;
+          }
+          break;
+        case 'expense':
+          // Sort by expense first (rows with expense come before rows without)
+          // Then by amount within each group
+          const aHasExpense = a.expenseCents > 0 ? 1 : 0;
+          const bHasExpense = b.expenseCents > 0 ? 1 : 0;
+          comparison = bHasExpense - aHasExpense; // Expense rows first
+          if (comparison === 0) {
+            comparison = a.expenseCents - b.expenseCents;
+          }
+          break;
+        case 'type':
+          comparison = a.type.localeCompare(b.type);
+          break;
+        case 'category':
+          comparison = (a.category || '').localeCompare(b.category || '');
+          break;
+        case 'member':
+          comparison = (a.member || '').localeCompare(b.member || '');
+          break;
+        case 'status':
+          comparison = (a.status || '').localeCompare(b.status || '');
+          break;
+        default:
+          comparison = 0;
       }
+      return sortOrder === 'asc' ? comparison : -comparison;
     });
 
     return filteredRows;
@@ -418,6 +571,7 @@ export default function SpreadsheetPage() {
   // Reset to page 1 when filters change
   useEffect(() => {
     setPage(1);
+    setSelectedRows(new Set());
   }, [typeFilter, searchQuery, sortBy, sortOrder, pageSize]);
 
   // Calculate totals
@@ -510,6 +664,29 @@ export default function SpreadsheetPage() {
     }
 
     setEditingCell(null);
+  };
+
+  const handleAddMember = async (name: string): Promise<string | null> => {
+    if (!currentOrgId) return null;
+    try {
+      const result = await createMembers.mutateAsync({
+        orgId: currentOrgId,
+        members: [{ name }],
+      });
+      toast({ title: `Added member: ${name}` });
+      // Return the new member's ID
+      if (Array.isArray(result) && result.length > 0) {
+        return result[0].id;
+      }
+      return null;
+    } catch (error: any) {
+      toast({
+        title: 'Error adding member',
+        description: error.message || 'Please try again',
+        variant: 'destructive',
+      });
+      return null;
+    }
   };
 
   const handleAddRow = async () => {
@@ -610,7 +787,17 @@ export default function SpreadsheetPage() {
         });
       } else if (row.type === 'expense') {
         await deleteExpense.mutateAsync({ orgId: currentOrgId, expenseId: row.id });
-        toast({ title: 'Expense deleted' });
+        toast({
+          title: 'Expense deleted',
+          action: (
+            <button
+              onClick={() => restoreExpense.mutate({ orgId: currentOrgId, expenseId: row.id })}
+              className="text-xs font-medium text-primary hover:underline"
+            >
+              Undo
+            </button>
+          ),
+        });
       } else if (row.type === 'payment') {
         await deletePayment.mutateAsync({ orgId: currentOrgId, paymentId: row.id });
         toast({
@@ -633,6 +820,87 @@ export default function SpreadsheetPage() {
       });
     }
   };
+
+  const handleDeleteSelected = async () => {
+    if (!currentOrgId || selectedRows.size === 0) return;
+
+    const rowsToDelete = paginatedRows.filter((r) => selectedRows.has(r.id));
+    const deletedItems: Array<{ id: string; type: 'charge' | 'expense' | 'payment' }> = [];
+
+    for (const row of rowsToDelete) {
+      try {
+        if (row.type === 'charge') {
+          await voidCharge.mutateAsync({ orgId: currentOrgId, chargeId: row.id });
+          deletedItems.push({ id: row.id, type: 'charge' });
+        } else if (row.type === 'expense') {
+          await deleteExpense.mutateAsync({ orgId: currentOrgId, expenseId: row.id });
+          deletedItems.push({ id: row.id, type: 'expense' });
+        } else if (row.type === 'payment') {
+          await deletePayment.mutateAsync({ orgId: currentOrgId, paymentId: row.id });
+          deletedItems.push({ id: row.id, type: 'payment' });
+        }
+      } catch (error) {
+        // Continue with other deletions
+      }
+    }
+
+    setSelectedRows(new Set());
+
+    const handleUndo = async () => {
+      let restoredCount = 0;
+      for (const item of deletedItems) {
+        try {
+          if (item.type === 'charge') {
+            await restoreCharge.mutateAsync({ orgId: currentOrgId, chargeId: item.id });
+            restoredCount++;
+          } else if (item.type === 'expense') {
+            await restoreExpense.mutateAsync({ orgId: currentOrgId, expenseId: item.id });
+            restoredCount++;
+          } else if (item.type === 'payment') {
+            await restorePayment.mutateAsync({ orgId: currentOrgId, paymentId: item.id });
+            restoredCount++;
+          }
+        } catch (error) {
+          // Continue with other restorations
+        }
+      }
+      toast({ title: `Restored ${restoredCount} item${restoredCount !== 1 ? 's' : ''}` });
+    };
+
+    toast({
+      title: `Deleted ${deletedItems.length} item${deletedItems.length !== 1 ? 's' : ''}`,
+      action: (
+        <button
+          onClick={handleUndo}
+          className="text-xs font-medium text-primary hover:underline"
+        >
+          Undo
+        </button>
+      ),
+    });
+  };
+
+  const toggleRowSelection = (rowId: string) => {
+    setSelectedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(rowId)) {
+        next.delete(rowId);
+      } else {
+        next.add(rowId);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedRows.size === paginatedRows.length) {
+      setSelectedRows(new Set());
+    } else {
+      setSelectedRows(new Set(paginatedRows.map((r) => r.id)));
+    }
+  };
+
+  const isAllSelected = paginatedRows.length > 0 && selectedRows.size === paginatedRows.length;
 
   const handleExportCSV = () => {
     const headers = ['Date', 'Type', 'Category', 'Description', 'Member/Vendor', 'Income', 'Expense', 'Status'];
@@ -665,24 +933,17 @@ export default function SpreadsheetPage() {
     <div className="space-y-6">
       {/* Header */}
       <FadeIn>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-blue-400 flex items-center justify-center shadow-lg">
-              <Table2 className="h-6 w-6 text-primary-foreground" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">Spreadsheet</h1>
-              <p className="text-muted-foreground mt-1">
-                Combined view of charges and expenses
-                {isAdmin && <span className="text-primary ml-2">(Click cells to edit)</span>}
-              </p>
-            </div>
-          </div>
-          <Button variant="outline" onClick={handleExportCSV}>
-            <Download className="w-4 h-4 mr-2" />
-            Export CSV
-          </Button>
-        </div>
+        <PageHeader
+          title="Spreadsheet"
+          helpText={`Combined view of all charges, expenses, and payments in one place. ${isAdmin ? 'Click on any cell to edit values directly. Use the selection checkboxes to select multiple rows, then click the trash icon to delete. Sort by clicking column headers.' : 'View all your organization\'s financial transactions.'}`}
+          icon={<Table2 className="h-6 w-6 text-primary-foreground" />}
+          actions={
+            <Button variant="outline" onClick={handleExportCSV}>
+              <Download className="w-4 h-4 mr-2" />
+              Export CSV
+            </Button>
+          }
+        />
       </FadeIn>
 
       {/* Summary Cards */}
@@ -733,23 +994,6 @@ export default function SpreadsheetPage() {
                 </SelectContent>
               </Select>
             </div>
-            <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
-              <SelectTrigger className="w-32 bg-secondary/30 border-border/50">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="date">Sort by Date</SelectItem>
-                <SelectItem value="amount">Sort by Amount</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-              title={sortOrder === 'asc' ? 'Ascending' : 'Descending'}
-            >
-              {sortOrder === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
-            </Button>
           </div>
           <div className="relative w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -819,15 +1063,150 @@ export default function SpreadsheetPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-secondary/30">
-                  {isAdmin && <th className="w-10 px-2 py-3"></th>}
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Date</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Type</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Category</th>
+                  {isAdmin && (
+                    <th className="w-16 px-2 py-3">
+                      <div className="w-7 h-7 flex items-center justify-center">
+                        {selectedRows.size > 0 && (
+                          <button
+                            onClick={handleDeleteSelected}
+                            className="w-7 h-7 flex items-center justify-center transition-colors hover:text-destructive"
+                            title={`Delete ${selectedRows.size} selected`}
+                          >
+                            <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
+                          </button>
+                        )}
+                      </div>
+                    </th>
+                  )}
+                  <th
+                    className="text-left px-4 py-3 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none w-28"
+                    onClick={() => {
+                      if (sortBy === 'date') {
+                        setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+                      } else {
+                        setSortBy('date');
+                        setSortOrder('desc');
+                      }
+                    }}
+                  >
+                    <span className="flex items-center gap-1">
+                      Date
+                      {sortBy === 'date' && (
+                        sortOrder === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                      )}
+                    </span>
+                  </th>
+                  <th
+                    className="text-left px-4 py-3 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none w-24"
+                    onClick={() => {
+                      if (sortBy === 'type') {
+                        setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+                      } else {
+                        setSortBy('type');
+                        setSortOrder('asc');
+                      }
+                    }}
+                  >
+                    <span className="flex items-center gap-1">
+                      Type
+                      {sortBy === 'type' && (
+                        sortOrder === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                      )}
+                    </span>
+                  </th>
+                  <th
+                    className="text-left px-4 py-3 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none w-28"
+                    onClick={() => {
+                      if (sortBy === 'category') {
+                        setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+                      } else {
+                        setSortBy('category');
+                        setSortOrder('asc');
+                      }
+                    }}
+                  >
+                    <span className="flex items-center gap-1">
+                      Category
+                      {sortBy === 'category' && (
+                        sortOrder === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                      )}
+                    </span>
+                  </th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Description</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Member/Vendor</th>
-                  <th className="text-right px-4 py-3 pr-6 font-medium text-success">Income</th>
-                  <th className="text-right px-4 py-3 pr-6 font-medium text-destructive">Expense</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
+                  <th
+                    className="text-left px-4 py-3 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none w-36"
+                    onClick={() => {
+                      if (sortBy === 'member') {
+                        setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+                      } else {
+                        setSortBy('member');
+                        setSortOrder('asc');
+                      }
+                    }}
+                  >
+                    <span className="flex items-center gap-1">
+                      Member/Vendor
+                      {sortBy === 'member' && (
+                        sortOrder === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                      )}
+                    </span>
+                  </th>
+                  <th
+                    className="text-right px-4 py-3 font-medium text-success cursor-pointer hover:text-success/80 select-none w-24"
+                    onClick={() => {
+                      if (sortBy === 'income') {
+                        setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+                      } else {
+                        setSortBy('income');
+                        setSortOrder('desc');
+                      }
+                    }}
+                  >
+                    <span className="flex items-center justify-end gap-1">
+                      <DollarSign className="h-3 w-3" />
+                      Income
+                      {sortBy === 'income' && (
+                        sortOrder === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                      )}
+                    </span>
+                  </th>
+                  <th
+                    className="text-right px-4 py-3 font-medium text-destructive cursor-pointer hover:text-destructive/80 select-none w-24"
+                    onClick={() => {
+                      if (sortBy === 'expense') {
+                        setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+                      } else {
+                        setSortBy('expense');
+                        setSortOrder('desc');
+                      }
+                    }}
+                  >
+                    <span className="flex items-center justify-end gap-1">
+                      <DollarSign className="h-3 w-3" />
+                      Expense
+                      {sortBy === 'expense' && (
+                        sortOrder === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                      )}
+                    </span>
+                  </th>
+                  <th
+                    className="text-left px-4 py-3 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none w-24"
+                    onClick={() => {
+                      if (sortBy === 'status') {
+                        setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+                      } else {
+                        setSortBy('status');
+                        setSortOrder('asc');
+                      }
+                    }}
+                  >
+                    <span className="flex items-center gap-1">
+                      Status
+                      {sortBy === 'status' && (
+                        sortOrder === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                      )}
+                    </span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -835,13 +1214,26 @@ export default function SpreadsheetPage() {
                 {isAdmin && !isLoading && (
                   <tr className="border-b border-border/50 bg-secondary/20 hover:bg-secondary/40 transition-colors">
                     <td className="px-2 py-2">
-                      <button
-                        onClick={() => setShowAddDialog(true)}
-                        className="w-7 h-7 flex items-center justify-center transition-colors hover:text-primary"
-                        title="Add new row"
-                      >
-                        <Plus className="w-4 h-4 text-muted-foreground hover:text-primary" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => setShowAddDialog(true)}
+                          className="w-7 h-7 flex items-center justify-center transition-colors hover:text-primary"
+                          title="Add new row"
+                        >
+                          <Plus className="w-4 h-4 text-muted-foreground hover:text-primary" />
+                        </button>
+                        <button
+                          onClick={toggleSelectAll}
+                          className="w-7 h-7 flex items-center justify-center transition-colors hover:text-primary"
+                          title={isAllSelected ? "Deselect all" : "Select all"}
+                        >
+                          {isAllSelected ? (
+                            <CheckCircle2 className="w-4 h-4 text-primary" />
+                          ) : (
+                            <Circle className="w-4 h-4 text-muted-foreground hover:text-primary" />
+                          )}
+                        </button>
+                      </div>
                     </td>
                     <td colSpan={8}></td>
                   </tr>
@@ -849,7 +1241,7 @@ export default function SpreadsheetPage() {
                 {isLoading ? (
                   Array.from({ length: 5 }).map((_, i) => (
                     <tr key={i} className="border-b border-border/50">
-                      {isAdmin && <td className="px-2 py-3"><Skeleton className="h-7 w-7" /></td>}
+                      {isAdmin && <td className="px-2 py-3"><Skeleton className="h-7 w-14" /></td>}
                       <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
                       <td className="px-4 py-3"><Skeleton className="h-5 w-16" /></td>
                       <td className="px-4 py-3"><Skeleton className="h-5 w-20" /></td>
@@ -882,16 +1274,29 @@ export default function SpreadsheetPage() {
                     >
                       {isAdmin && (
                         <td className="px-2 py-2">
-                          <button
-                            onClick={() => handleDeleteRow(row)}
-                            className="w-7 h-7 flex items-center justify-center transition-colors hover:text-destructive"
-                            title="Delete row"
-                          >
-                            <Minus className="w-4 h-4 text-muted-foreground hover:text-destructive" />
-                          </button>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => handleDeleteRow(row)}
+                              className="w-7 h-7 flex items-center justify-center transition-colors hover:text-destructive"
+                              title="Delete row"
+                            >
+                              <Minus className="w-4 h-4 text-muted-foreground hover:text-destructive" />
+                            </button>
+                            <button
+                              onClick={() => toggleRowSelection(row.id)}
+                              className="w-7 h-7 flex items-center justify-center transition-colors"
+                              title={selectedRows.has(row.id) ? "Deselect" : "Select"}
+                            >
+                              {selectedRows.has(row.id) ? (
+                                <CheckCircle2 className="w-4 h-4 text-primary" />
+                              ) : (
+                                <Circle className="w-4 h-4 text-muted-foreground hover:text-primary" />
+                              )}
+                            </button>
+                          </div>
                         </td>
                       )}
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 w-28">
                         <EditableCell
                           value={row.date}
                           type="date"
@@ -904,7 +1309,7 @@ export default function SpreadsheetPage() {
                           column="date"
                         />
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 w-24">
                         <Badge
                           variant="outline"
                           className={cn(
@@ -923,7 +1328,7 @@ export default function SpreadsheetPage() {
                           {row.type === 'charge' ? 'Charge' : row.type === 'expense' ? 'Expense' : 'Payment'}
                         </Badge>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 w-28">
                         {row.type === 'payment' ? (
                           <span className="text-xs text-muted-foreground">{row.category}</span>
                         ) : (
@@ -953,7 +1358,7 @@ export default function SpreadsheetPage() {
                           column="description"
                         />
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 w-36">
                         {row.type === 'charge' || row.type === 'payment' ? (
                           <EditableCell
                             value={row.membershipId || ''}
@@ -966,6 +1371,7 @@ export default function SpreadsheetPage() {
                             rowType={row.type}
                             column="member"
                             members={members}
+                            onAddMember={handleAddMember}
                           />
                         ) : (
                           <EditableCell
@@ -981,7 +1387,7 @@ export default function SpreadsheetPage() {
                           />
                         )}
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-4 py-3 text-right w-24">
                         {row.incomeCents > 0 ? (
                           <EditableCell
                             value={row.incomeCents}
@@ -998,7 +1404,7 @@ export default function SpreadsheetPage() {
                           <span className="text-muted-foreground/30">-</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-4 py-3 text-right w-24">
                         {row.expenseCents > 0 ? (
                           <EditableCell
                             value={row.expenseCents}
@@ -1015,7 +1421,7 @@ export default function SpreadsheetPage() {
                           <span className="text-muted-foreground/30">-</span>
                         )}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 w-24">
                         {row.status && (
                           <Badge
                             variant="outline"
@@ -1198,7 +1604,7 @@ export default function SpreadsheetPage() {
                     <SelectValue placeholder="Select member" />
                   </SelectTrigger>
                   <SelectContent>
-                    {members.map((m) => (
+                    {members.filter((m) => m.id).map((m) => (
                       <SelectItem key={m.id} value={m.id}>
                         {m.displayName || m.name || m.user?.name || 'Unknown'}
                       </SelectItem>
@@ -1219,7 +1625,7 @@ export default function SpreadsheetPage() {
                     <SelectValue placeholder="Select member" />
                   </SelectTrigger>
                   <SelectContent>
-                    {members.map((m) => (
+                    {members.filter((m) => m.id).map((m) => (
                       <SelectItem key={m.id} value={m.id}>
                         {m.displayName || m.name || m.user?.name || 'Unknown'}
                       </SelectItem>

@@ -133,4 +133,11 @@ export class ExpensesController {
     const actorId = req.membership.id;
     return this.expensesService.delete(orgId, id, actorId);
   }
+
+  @Post(':id/restore')
+  @Roles('ADMIN', 'TREASURER')
+  async restore(@Param('orgId') orgId: string, @Param('id') id: string, @Req() req: any) {
+    const actorId = req.membership.id;
+    return this.expensesService.restore(orgId, id, actorId);
+  }
 }

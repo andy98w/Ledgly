@@ -14,6 +14,8 @@ interface Organization {
 }
 
 interface OrganizationDetails extends Organization {
+  autoApprovePayments: boolean;
+  autoApproveExpenses: boolean;
   memberCount: number;
   chargeCount: number;
 }
@@ -54,5 +56,32 @@ export function useDashboard(orgId: string | null) {
     queryFn: () => api.get<DashboardStats>(`/organizations/${orgId}/dashboard`),
     enabled: !!orgId,
     refetchInterval: 30000,
+  });
+}
+
+export function useUpdateOrganization(orgId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: Partial<Pick<OrganizationDetails, 'name' | 'timezone' | 'autoApprovePayments' | 'autoApproveExpenses'>>) =>
+      api.patch<OrganizationDetails>(`/organizations/${orgId}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['organizations', orgId] });
+      queryClient.invalidateQueries({ queryKey: ['organizations', orgId, 'dashboard'] });
+    },
+  });
+}
+
+export function useDeleteOrganization() {
+  const queryClient = useQueryClient();
+  const setCurrentOrgId = useAuthStore((s) => s.setCurrentOrgId);
+
+  return useMutation({
+    mutationFn: (orgId: string) => api.delete(`/organizations/${orgId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['organizations'] });
+      queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
+      setCurrentOrgId(null);
+    },
   });
 }

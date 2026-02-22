@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { queryKeys } from '@/lib/query-keys';
 import type { PaginatedResponse } from '@ledgly/shared';
 
 export interface Expense {
@@ -44,7 +45,7 @@ export function useExpenses(orgId: string | null, filters: ExpenseFilters = {}) 
   const queryString = params.toString();
 
   return useQuery({
-    queryKey: ['organizations', orgId, 'expenses', filters],
+    queryKey: queryKeys.expenses.list(orgId, filters),
     queryFn: () =>
       api.get<PaginatedResponse<Expense>>(
         `/organizations/${orgId}/expenses${queryString ? `?${queryString}` : ''}`,
@@ -55,7 +56,7 @@ export function useExpenses(orgId: string | null, filters: ExpenseFilters = {}) 
 
 export function useExpense(orgId: string | null, expenseId: string | null) {
   return useQuery({
-    queryKey: ['organizations', orgId, 'expenses', expenseId],
+    queryKey: queryKeys.expenses.detail(orgId, expenseId),
     queryFn: () => api.get<Expense>(`/organizations/${orgId}/expenses/${expenseId}`),
     enabled: !!orgId && !!expenseId,
   });
@@ -68,7 +69,7 @@ export function useExpenseSummary(orgId: string | null, startDate?: string, endD
   const queryString = params.toString();
 
   return useQuery({
-    queryKey: ['organizations', orgId, 'expenses', 'summary', { startDate, endDate }],
+    queryKey: queryKeys.expenses.summary(orgId, { startDate, endDate }),
     queryFn: () =>
       api.get<ExpenseSummary>(
         `/organizations/${orgId}/expenses/summary${queryString ? `?${queryString}` : ''}`,
@@ -97,12 +98,8 @@ export function useCreateExpense() {
       };
     }) => api.post(`/organizations/${orgId}/expenses`, data),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'expenses'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'dashboard'],
-      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.expenses.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
     },
   });
 }
@@ -129,9 +126,8 @@ export function useUpdateExpense() {
       };
     }) => api.patch(`/organizations/${orgId}/expenses/${expenseId}`, data),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'expenses'],
-      });
+      // Only invalidate expenses — no cross-domain impact
+      queryClient.invalidateQueries({ queryKey: queryKeys.expenses.all(variables.orgId) });
     },
   });
 }
@@ -143,12 +139,21 @@ export function useDeleteExpense() {
     mutationFn: ({ orgId, expenseId }: { orgId: string; expenseId: string }) =>
       api.delete(`/organizations/${orgId}/expenses/${expenseId}`),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'expenses'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'dashboard'],
-      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.expenses.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
+    },
+  });
+}
+
+export function useRestoreExpense() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ orgId, expenseId }: { orgId: string; expenseId: string }) =>
+      api.post(`/organizations/${orgId}/expenses/${expenseId}/restore`, {}),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.expenses.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
     },
   });
 }

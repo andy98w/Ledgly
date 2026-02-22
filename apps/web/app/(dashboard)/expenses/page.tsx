@@ -2,8 +2,8 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Receipt, TrendingDown, Pencil, Trash2, MoreHorizontal, Loader2, Search, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useExpenses, useExpenseSummary, useDeleteExpense, useCreateExpense } from '@/lib/queries/expenses';
+import { Plus, Receipt, TrendingDown, Trash2, MoreHorizontal, Loader2, Search, ChevronLeft, ChevronRight, Pencil, Info, Circle, CheckCircle2 } from 'lucide-react';
+import { useExpenses, useExpenseSummary, useDeleteExpense, useCreateExpense, useUpdateExpense, useRestoreExpense } from '@/lib/queries/expenses';
 import { useAuthStore } from '@/lib/stores/auth';
 import { formatDate, parseCents } from '@/lib/utils';
 import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_LABELS, type ExpenseCategory } from '@ledgly/shared';
@@ -39,6 +39,12 @@ import { Money } from '@/components/ui/money';
 import { StatCard } from '@/components/ui/stat-card';
 import { MotionCard, MotionCardContent } from '@/components/ui/motion-card';
 import { FadeIn, StaggerChildren, StaggerItem } from '@/components/ui/page-transition';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 const categoryColors: Record<string, string> = {
   EVENT: 'bg-purple-500/10 text-purple-400 border-purple-500/30',
@@ -52,18 +58,40 @@ const categoryColors: Record<string, string> = {
 
 function ExpenseCard({
   expense,
+  onEdit,
   onDelete,
   isAdmin = false,
+  isSelected = false,
+  onToggleSelect,
 }: {
   expense: any;
+  onEdit: (expense: any) => void;
   onDelete: (expense: any) => void;
   isAdmin?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: () => void;
 }) {
   return (
     <StaggerItem>
       <MotionCard>
         <MotionCardContent className="p-4">
           <div className="flex items-center justify-between">
+            {isAdmin && onToggleSelect && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleSelect();
+                }}
+                className="mr-3 flex items-center justify-center transition-colors"
+                title={isSelected ? "Deselect" : "Select"}
+              >
+                {isSelected ? (
+                  <CheckCircle2 className="w-5 h-5 text-primary" />
+                ) : (
+                  <Circle className="w-5 h-5 text-muted-foreground hover:text-primary" />
+                )}
+              </button>
+            )}
             <div className="flex items-center gap-4 flex-1">
               <div className="w-10 h-10 rounded-xl bg-destructive/10 flex items-center justify-center">
                 <TrendingDown className="w-5 h-5 text-destructive" />
@@ -105,11 +133,9 @@ function ExpenseCard({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem asChild>
-                      <Link href={`/expenses/${expense.id}/edit`}>
-                        <Pencil className="h-4 w-4 mr-2" />
-                        Edit
-                      </Link>
+                    <DropdownMenuItem onClick={() => onEdit(expense)}>
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Edit
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={() => onDelete(expense)}
@@ -152,8 +178,17 @@ export default function ExpensesPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [deletingExpense, setDeletingExpense] = useState<any | null>(null);
+  const [editingExpense, setEditingExpense] = useState<any | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newExpenseData, setNewExpenseData] = useState({
+    category: 'OTHER' as ExpenseCategory,
+    title: '',
+    description: '',
+    amount: '',
+    date: new Date().toISOString().split('T')[0],
+    vendor: '',
+  });
+  const [editExpenseData, setEditExpenseData] = useState({
     category: 'OTHER' as ExpenseCategory,
     title: '',
     description: '',
@@ -172,7 +207,10 @@ export default function ExpensesPage() {
   });
   const { data: summary } = useExpenseSummary(currentOrgId);
   const deleteExpense = useDeleteExpense();
+  const restoreExpense = useRestoreExpense();
   const createExpense = useCreateExpense();
+  const updateExpense = useUpdateExpense();
+  const [selectedExpenses, setSelectedExpenses] = useState<Set<string>>(new Set());
 
   const resetCreateDialog = () => {
     setShowCreateDialog(false);
@@ -184,6 +222,98 @@ export default function ExpensesPage() {
       date: new Date().toISOString().split('T')[0],
       vendor: '',
     });
+  };
+
+  const handleEdit = (expense: any) => {
+    setEditingExpense(expense);
+    setEditExpenseData({
+      category: expense.category,
+      title: expense.title,
+      description: expense.description || '',
+      amount: (expense.amountCents / 100).toFixed(2),
+      date: expense.date.split('T')[0],
+      vendor: expense.vendor || '',
+    });
+  };
+
+  const resetEditDialog = () => {
+    setEditingExpense(null);
+    setEditExpenseData({
+      category: 'OTHER',
+      title: '',
+      description: '',
+      amount: '',
+      date: new Date().toISOString().split('T')[0],
+      vendor: '',
+    });
+  };
+
+  const handleUpdateExpense = async () => {
+    if (!currentOrgId || !editingExpense) return;
+
+    if (!editExpenseData.title.trim()) {
+      toast({ title: 'Please enter a title', variant: 'destructive' });
+      return;
+    }
+    if (!editExpenseData.amount) {
+      toast({ title: 'Please enter an amount', variant: 'destructive' });
+      return;
+    }
+
+    // Store original data for undo
+    const originalExpense = { ...editingExpense };
+
+    try {
+      await updateExpense.mutateAsync({
+        orgId: currentOrgId,
+        expenseId: editingExpense.id,
+        data: {
+          category: editExpenseData.category,
+          title: editExpenseData.title,
+          description: editExpenseData.description || undefined,
+          amountCents: parseCents(editExpenseData.amount),
+          date: editExpenseData.date,
+          vendor: editExpenseData.vendor || undefined,
+        },
+      });
+
+      toast({
+        title: 'Expense updated',
+        action: (
+          <button
+            onClick={async () => {
+              try {
+                await updateExpense.mutateAsync({
+                  orgId: currentOrgId,
+                  expenseId: originalExpense.id,
+                  data: {
+                    category: originalExpense.category,
+                    title: originalExpense.title,
+                    description: originalExpense.description || undefined,
+                    amountCents: originalExpense.amountCents,
+                    date: originalExpense.date.split('T')[0],
+                    vendor: originalExpense.vendor || undefined,
+                  },
+                });
+                toast({ title: 'Expense restored' });
+              } catch (error) {
+                toast({ title: 'Failed to restore', variant: 'destructive' });
+              }
+            }}
+            className="text-xs font-medium text-primary hover:underline"
+          >
+            Undo
+          </button>
+        ),
+      });
+      resetEditDialog();
+    } catch (error: any) {
+      toast({
+        title: 'Error updating expense',
+        description: error.message || 'Please try again',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleCreateExpense = async () => {
@@ -277,14 +407,95 @@ export default function ExpensesPage() {
     );
   };
 
+  const toggleExpenseSelection = (expenseId: string) => {
+    setSelectedExpenses((prev) => {
+      const next = new Set(prev);
+      if (next.has(expenseId)) {
+        next.delete(expenseId);
+      } else {
+        next.add(expenseId);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAllExpenses = () => {
+    if (selectedExpenses.size === paginatedExpenses.length) {
+      setSelectedExpenses(new Set());
+    } else {
+      setSelectedExpenses(new Set(paginatedExpenses.map((e) => e.id)));
+    }
+  };
+
+  const isAllExpensesSelected = paginatedExpenses.length > 0 && selectedExpenses.size === paginatedExpenses.length;
+
+  const handleBulkDeleteExpenses = async () => {
+    if (!currentOrgId || selectedExpenses.size === 0) return;
+
+    const expenseIds = Array.from(selectedExpenses);
+    const deletedExpenseIds: string[] = [];
+
+    for (const expenseId of expenseIds) {
+      try {
+        await deleteExpense.mutateAsync({ orgId: currentOrgId, expenseId });
+        deletedExpenseIds.push(expenseId);
+      } catch (error) {
+        // Continue with other deletions
+      }
+    }
+
+    setSelectedExpenses(new Set());
+
+    const handleUndo = async () => {
+      let restoredCount = 0;
+      for (const expenseId of deletedExpenseIds) {
+        try {
+          await restoreExpense.mutateAsync({ orgId: currentOrgId, expenseId });
+          restoredCount++;
+        } catch (error) {
+          // Continue with other restorations
+        }
+      }
+      toast({ title: `Restored ${restoredCount} expense${restoredCount !== 1 ? 's' : ''}` });
+    };
+
+    toast({
+      title: `Deleted ${deletedExpenseIds.length} expense${deletedExpenseIds.length !== 1 ? 's' : ''}`,
+      action: (
+        <button
+          onClick={handleUndo}
+          className="text-xs font-medium text-primary hover:underline"
+        >
+          Undo
+        </button>
+      ),
+    });
+  };
+
+  // Reset selection when filters change
+  useEffect(() => {
+    setSelectedExpenses(new Set());
+  }, [categoryFilter, searchQuery, page]);
+
   return (
     <div className="space-y-8">
       {/* Header */}
       <FadeIn>
         <div className="flex items-center justify-between">
-          <div>
+          <div className="flex items-center gap-2">
             <h1 className="text-3xl font-bold tracking-tight">Expenses</h1>
-            <p className="text-muted-foreground mt-1">Track organization spending</p>
+            <TooltipProvider delayDuration={0}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button className="text-muted-foreground hover:text-foreground transition-colors">
+                    <Info className="w-4 h-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="max-w-xs">
+                  <p className="text-sm">Track organization spending by category. Expenses are automatically imported from outgoing Venmo/Zelle payments.</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
           <Button
             onClick={() => setShowCreateDialog(true)}
@@ -440,11 +651,49 @@ export default function ExpensesPage() {
         </FadeIn>
       ) : (
         <>
-          <StaggerChildren className="space-y-3">
-            {paginatedExpenses.map((expense) => (
-              <ExpenseCard key={expense.id} expense={expense} onDelete={handleDelete} isAdmin={isAdmin} />
-            ))}
-          </StaggerChildren>
+          <div className="space-y-3">
+            {/* Select All Row */}
+            {isAdmin && paginatedExpenses.length > 0 && (
+              <div className="rounded-xl border border-border/50 bg-secondary/20 p-4 flex items-center justify-between">
+                <button
+                  onClick={toggleSelectAllExpenses}
+                  className="flex items-center gap-3 transition-colors"
+                  title={isAllExpensesSelected ? "Deselect all" : "Select all"}
+                >
+                  {isAllExpensesSelected ? (
+                    <CheckCircle2 className="w-5 h-5 text-primary" />
+                  ) : (
+                    <Circle className="w-5 h-5 text-muted-foreground hover:text-primary" />
+                  )}
+                  <span className="text-sm text-muted-foreground">
+                    {isAllExpensesSelected ? 'Deselect all' : 'Select all'}
+                  </span>
+                </button>
+                {selectedExpenses.size > 0 && (
+                  <button
+                    onClick={handleBulkDeleteExpenses}
+                    className="w-7 h-7 flex items-center justify-center transition-colors hover:text-destructive"
+                    title={`Delete ${selectedExpenses.size} selected`}
+                  >
+                    <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
+                  </button>
+                )}
+              </div>
+            )}
+            <StaggerChildren className="space-y-3">
+              {paginatedExpenses.map((expense) => (
+                <ExpenseCard
+                  key={expense.id}
+                  expense={expense}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  isAdmin={isAdmin}
+                  isSelected={selectedExpenses.has(expense.id)}
+                  onToggleSelect={() => toggleExpenseSelection(expense.id)}
+                />
+              ))}
+            </StaggerChildren>
+          </div>
 
           {/* Pagination Controls - Bottom */}
           {expenses.length > pageSize && (
@@ -610,6 +859,105 @@ export default function ExpensesPage() {
                 </>
               ) : (
                 'Add Expense'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Expense Dialog */}
+      <Dialog open={!!editingExpense} onOpenChange={(open) => !open && resetEditDialog()}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Expense</DialogTitle>
+            <DialogDescription>
+              Update expense details
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Category</Label>
+                <Select
+                  value={editExpenseData.category}
+                  onValueChange={(v) => setEditExpenseData({ ...editExpenseData, category: v as ExpenseCategory })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EXPENSE_CATEGORIES.map((cat) => (
+                      <SelectItem key={cat} value={cat}>
+                        {EXPENSE_CATEGORY_LABELS[cat]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Date</Label>
+                <Input
+                  type="date"
+                  value={editExpenseData.date}
+                  onChange={(e) => setEditExpenseData({ ...editExpenseData, date: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Title</Label>
+              <Input
+                placeholder="e.g., Event supplies"
+                value={editExpenseData.title}
+                onChange={(e) => setEditExpenseData({ ...editExpenseData, title: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Description (optional)</Label>
+              <Textarea
+                placeholder="Additional details..."
+                value={editExpenseData.description}
+                onChange={(e) => setEditExpenseData({ ...editExpenseData, description: e.target.value })}
+                rows={2}
+              />
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Amount ($)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0.00"
+                  value={editExpenseData.amount}
+                  onChange={(e) => setEditExpenseData({ ...editExpenseData, amount: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Vendor (optional)</Label>
+                <Input
+                  placeholder="e.g., Amazon"
+                  value={editExpenseData.vendor}
+                  onChange={(e) => setEditExpenseData({ ...editExpenseData, vendor: e.target.value })}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={resetEditDialog}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleUpdateExpense}
+              disabled={updateExpense.isPending}
+              className="bg-gradient-to-r from-primary to-blue-400"
+            >
+              {updateExpense.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save Changes'
               )}
             </Button>
           </DialogFooter>

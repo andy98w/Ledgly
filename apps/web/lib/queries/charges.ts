@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { queryKeys } from '@/lib/query-keys';
 import type { ChargeWithMember, PaginatedResponse, ChargeCategory } from '@ledgly/shared';
 
 interface ChargeFilters {
@@ -23,7 +24,7 @@ export function useCharges(orgId: string | null, filters: ChargeFilters = {}) {
   const queryString = params.toString();
 
   return useQuery({
-    queryKey: ['organizations', orgId, 'charges', filters],
+    queryKey: queryKeys.charges.list(orgId, filters),
     queryFn: () =>
       api.get<PaginatedResponse<ChargeWithMember>>(
         `/organizations/${orgId}/charges${queryString ? `?${queryString}` : ''}`,
@@ -34,7 +35,7 @@ export function useCharges(orgId: string | null, filters: ChargeFilters = {}) {
 
 export function useCharge(orgId: string | null, chargeId: string | null) {
   return useQuery({
-    queryKey: ['organizations', orgId, 'charges', chargeId],
+    queryKey: queryKeys.charges.detail(orgId, chargeId),
     queryFn: () => api.get(`/organizations/${orgId}/charges/${chargeId}`),
     enabled: !!orgId && !!chargeId,
   });
@@ -58,15 +59,9 @@ export function useCreateCharge() {
       };
     }) => api.post(`/organizations/${orgId}/charges`, data),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'charges'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'members'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'dashboard'],
-      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.charges.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.members.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
     },
   });
 }
@@ -90,12 +85,11 @@ export function useUpdateCharge() {
       };
     }) => api.patch(`/organizations/${orgId}/charges/${chargeId}`, data),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'charges'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'members'],
-      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.charges.all(variables.orgId) });
+      // Only invalidate members if amount changed (affects balances)
+      if (variables.data.amountCents !== undefined) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.members.all(variables.orgId) });
+      }
     },
   });
 }
@@ -106,16 +100,36 @@ export function useVoidCharge() {
   return useMutation({
     mutationFn: ({ orgId, chargeId }: { orgId: string; chargeId: string }) =>
       api.delete(`/organizations/${orgId}/charges/${chargeId}`),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'charges'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'members'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'dashboard'],
-      });
+    // Optimistic update: remove from cached lists immediately
+    onMutate: async ({ orgId, chargeId }) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.charges.all(orgId) });
+      const previousQueries = queryClient.getQueriesData({ queryKey: queryKeys.charges.all(orgId) });
+
+      queryClient.setQueriesData(
+        { queryKey: queryKeys.charges.all(orgId) },
+        (old: any) => {
+          if (!old?.data) return old;
+          return {
+            ...old,
+            data: old.data.filter((c: any) => c.id !== chargeId),
+          };
+        },
+      );
+
+      return { previousQueries };
+    },
+    onError: (_err, { orgId }, context) => {
+      // Rollback on error
+      if (context?.previousQueries) {
+        for (const [key, data] of context.previousQueries) {
+          queryClient.setQueryData(key, data);
+        }
+      }
+    },
+    onSettled: (_, __, { orgId }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.charges.all(orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.members.all(orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(orgId) });
     },
   });
 }
@@ -127,15 +141,9 @@ export function useRestoreCharge() {
     mutationFn: ({ orgId, chargeId }: { orgId: string; chargeId: string }) =>
       api.post(`/organizations/${orgId}/charges/${chargeId}/restore`),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'charges'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'members'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'dashboard'],
-      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.charges.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.members.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
     },
   });
 }

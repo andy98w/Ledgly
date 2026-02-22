@@ -31,6 +31,7 @@ interface PaymentFilters {
   unallocated?: boolean;
   page?: number;
   limit?: number;
+  cursor?: string;
 }
 
 @Injectable()
@@ -42,7 +43,7 @@ export class PaymentsService {
   ) {}
 
   async findAll(orgId: string, filters: PaymentFilters = {}) {
-    const { membershipId, unallocated, page = 1, limit = 50 } = filters;
+    const { membershipId, unallocated, page = 1, limit = 50, cursor } = filters;
 
     const where: any = { orgId, deletedAt: null };
 
@@ -50,18 +51,55 @@ export class PaymentsService {
       where.membershipId = membershipId;
     }
 
+    const includeOpts = {
+      allocations: {
+        include: {
+          charge: {
+            select: { id: true, title: true, membershipId: true },
+          },
+        },
+      },
+    };
+
+    const mapPayment = (p: any) => {
+      const allocatedCents = p.allocations.reduce((sum: number, a: any) => sum + a.amountCents, 0);
+      return {
+        id: p.id, orgId: p.orgId, membershipId: p.membershipId,
+        amountCents: p.amountCents, paidAt: p.paidAt, source: p.source,
+        rawPayerName: p.rawPayerName, memo: p.memo, createdAt: p.createdAt,
+        allocatedCents, unallocatedCents: p.amountCents - allocatedCents,
+        allocations: p.allocations.map((a: any) => ({
+          id: a.id, chargeId: a.chargeId, chargeTitle: a.charge.title, amountCents: a.amountCents,
+        })),
+      };
+    };
+
+    // Cursor-based pagination mode
+    if (cursor) {
+      const items = await this.prisma.payment.findMany({
+        where,
+        include: includeOpts,
+        cursor: { id: cursor },
+        skip: 1,
+        take: limit + 1,
+        orderBy: { paidAt: 'desc' },
+      });
+
+      const hasMore = items.length > limit;
+      let data = items.slice(0, limit).map(mapPayment);
+      if (unallocated === true) data = data.filter((p) => p.unallocatedCents > 0);
+
+      return {
+        data,
+        meta: { limit, nextCursor: hasMore ? data[data.length - 1]?.id : null, hasMore },
+      };
+    }
+
+    // Offset-based pagination mode (default)
     const [payments, total] = await Promise.all([
       this.prisma.payment.findMany({
         where,
-        include: {
-          allocations: {
-            include: {
-              charge: {
-                select: { id: true, title: true, membershipId: true },
-              },
-            },
-          },
-        },
+        include: includeOpts,
         orderBy: { paidAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
@@ -69,42 +107,12 @@ export class PaymentsService {
       this.prisma.payment.count({ where }),
     ]);
 
-    let data = payments.map((p) => {
-      const allocatedCents = p.allocations.reduce((sum, a) => sum + a.amountCents, 0);
-      return {
-        id: p.id,
-        orgId: p.orgId,
-        membershipId: p.membershipId,
-        amountCents: p.amountCents,
-        paidAt: p.paidAt,
-        source: p.source,
-        rawPayerName: p.rawPayerName,
-        memo: p.memo,
-        createdAt: p.createdAt,
-        allocatedCents,
-        unallocatedCents: p.amountCents - allocatedCents,
-        allocations: p.allocations.map((a) => ({
-          id: a.id,
-          chargeId: a.chargeId,
-          chargeTitle: a.charge.title,
-          amountCents: a.amountCents,
-        })),
-      };
-    });
-
-    // Filter by unallocated if requested
-    if (unallocated === true) {
-      data = data.filter((p) => p.unallocatedCents > 0);
-    }
+    let data = payments.map(mapPayment);
+    if (unallocated === true) data = data.filter((p) => p.unallocatedCents > 0);
 
     return {
       data,
-      meta: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
   }
 

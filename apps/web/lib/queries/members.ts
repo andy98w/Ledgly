@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { queryKeys } from '@/lib/query-keys';
 import type { MemberWithBalance, MemberDetail, PaginatedResponse } from '@ledgly/shared';
 
 interface MemberFilters {
@@ -21,7 +22,7 @@ export function useMembers(orgId: string | null, filters: MemberFilters = {}) {
   const queryString = params.toString();
 
   return useQuery({
-    queryKey: ['organizations', orgId, 'members', filters],
+    queryKey: queryKeys.members.list(orgId, filters),
     queryFn: () =>
       api.get<PaginatedResponse<MemberWithBalance>>(
         `/organizations/${orgId}/members${queryString ? `?${queryString}` : ''}`,
@@ -32,7 +33,7 @@ export function useMembers(orgId: string | null, filters: MemberFilters = {}) {
 
 export function useMember(orgId: string | null, memberId: string | null) {
   return useQuery({
-    queryKey: ['organizations', orgId, 'members', memberId],
+    queryKey: queryKeys.members.detail(orgId, memberId),
     queryFn: () => api.get<MemberDetail>(`/organizations/${orgId}/members/${memberId}`),
     enabled: !!orgId && !!memberId,
   });
@@ -48,14 +49,10 @@ export function useCreateMembers() {
     }: {
       orgId: string;
       members: Array<{ name: string; email?: string; role?: string }>;
-    }) => api.post(`/organizations/${orgId}/members`, { members }),
+    }) => api.post<Array<{ id: string; name: string }>>(`/organizations/${orgId}/members`, { members }),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'members'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'dashboard'],
-      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.members.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
     },
   });
 }
@@ -74,9 +71,8 @@ export function useUpdateMember() {
       data: { name?: string; role?: string; status?: string };
     }) => api.patch(`/organizations/${orgId}/members/${memberId}`, data),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'members'],
-      });
+      // Only invalidate members — no need to refetch dashboard for member metadata changes
+      queryClient.invalidateQueries({ queryKey: queryKeys.members.all(variables.orgId) });
     },
   });
 }
@@ -88,12 +84,8 @@ export function useDeleteMember() {
     mutationFn: ({ orgId, memberId }: { orgId: string; memberId: string }) =>
       api.delete(`/organizations/${orgId}/members/${memberId}`),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'members'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'dashboard'],
-      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.members.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
     },
   });
 }
@@ -105,12 +97,8 @@ export function useRestoreMember() {
     mutationFn: ({ orgId, memberId }: { orgId: string; memberId: string }) =>
       api.post(`/organizations/${orgId}/members/${memberId}/restore`),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'members'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'dashboard'],
-      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.members.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
     },
   });
 }

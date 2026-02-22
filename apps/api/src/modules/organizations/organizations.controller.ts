@@ -1,6 +1,6 @@
-import { Controller, Get, Post, Patch, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { IsString, IsOptional } from 'class-validator';
+import { IsString, IsBoolean, IsOptional } from 'class-validator';
 import { OrganizationsService } from './organizations.service';
 import { CurrentUser, CurrentUserData, Roles } from '../../common/decorators';
 import { RolesGuard } from '../../common/guards';
@@ -22,6 +22,14 @@ class UpdateOrganizationDto {
   @IsString()
   @IsOptional()
   timezone?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  autoApprovePayments?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  autoApproveExpenses?: boolean;
 }
 
 @Controller('organizations')
@@ -56,5 +64,12 @@ export class OrganizationsController {
     // Verify membership
     await this.organizationsService.findOne(orgId, user.userId);
     return this.organizationsService.getDashboard(orgId);
+  }
+
+  @Delete(':orgId')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  async delete(@Param('orgId') orgId: string) {
+    return this.organizationsService.delete(orgId);
   }
 }
