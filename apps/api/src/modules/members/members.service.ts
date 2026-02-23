@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { MembershipRole, MembershipStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 
 interface CreateMemberDto {
   email?: string;
@@ -24,7 +25,10 @@ interface MemberFilters {
 
 @Injectable()
 export class MembersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private auditService: AuditService,
+  ) {}
 
   private async getMemberBalances(orgId: string): Promise<
     Map<string, { totalChargedCents: number; totalPaidCents: number; overdueCharges: number }>
@@ -229,11 +233,20 @@ export class MembersService {
     };
   }
 
-  async createMany(orgId: string, members: CreateMemberDto[]) {
+  async createMany(orgId: string, members: CreateMemberDto[], actorId?: string) {
     const created = [];
 
     for (const dto of members) {
+      const trimmedName = dto.name.trim();
       let userId: string | null = null;
+
+      // Check for duplicate name in org (active members only)
+      const nameMatch = await this.prisma.membership.findFirst({
+        where: { orgId, name: trimmedName, status: 'ACTIVE' },
+      });
+      if (nameMatch) {
+        throw new ConflictException(`A member named "${trimmedName}" already exists`);
+      }
 
       // If email provided, find or create user
       if (dto.email) {
@@ -246,14 +259,14 @@ export class MembersService {
           user = await this.prisma.user.create({
             data: {
               email: normalizedEmail,
-              name: dto.name,
+              name: trimmedName,
             },
           });
         }
 
         userId = user.id;
 
-        // Check if membership already exists
+        // Check if membership already exists for this user
         const existing = await this.prisma.membership.findFirst({
           where: { orgId, userId },
         });
@@ -266,15 +279,14 @@ export class MembersService {
               data: {
                 status: 'ACTIVE',
                 role: dto.role || 'MEMBER',
-                name: dto.name || existing.name,
+                name: trimmedName || existing.name,
                 leftAt: null,
               },
             });
             created.push(updated);
             continue;
           }
-          // Skip if already active
-          continue;
+          throw new ConflictException(`A member with email "${normalizedEmail}" already exists`);
         }
       }
 
@@ -283,7 +295,7 @@ export class MembersService {
         data: {
           orgId,
           userId,
-          name: dto.name,
+          name: trimmedName,
           role: dto.role || 'MEMBER',
           status: 'ACTIVE',
         },
@@ -292,10 +304,18 @@ export class MembersService {
       created.push(membership);
     }
 
+    // Audit log
+    if (actorId && created.length > 0) {
+      const batch = created.length > 1 ? this.auditService.createBatchContext(`Added ${created.length} members`) : undefined;
+      for (const m of created) {
+        await this.auditService.logCreate(orgId, actorId, 'MEMBER', m.id, { memberName: m.name, role: m.role }, batch);
+      }
+    }
+
     return created;
   }
 
-  async update(orgId: string, membershipId: string, dto: UpdateMemberDto) {
+  async update(orgId: string, membershipId: string, dto: UpdateMemberDto, actorId?: string) {
     const member = await this.prisma.membership.findFirst({
       where: { id: membershipId, orgId },
     });
@@ -314,10 +334,39 @@ export class MembersService {
       },
     });
 
+    // When name changes, update rawPayerName on all linked payments
+    if (dto.name !== undefined) {
+      await this.prisma.payment.updateMany({
+        where: { membershipId, orgId, deletedAt: null },
+        data: { rawPayerName: dto.name },
+      });
+    }
+
+    // Audit log
+    if (actorId) {
+      const before: Record<string, any> = {};
+      const after: Record<string, any> = {};
+      if (dto.name !== undefined && dto.name !== member.name) {
+        before.name = member.name;
+        after.name = dto.name;
+      }
+      if (dto.role && dto.role !== member.role) {
+        before.role = member.role;
+        after.role = dto.role;
+      }
+      if (dto.status && dto.status !== member.status) {
+        before.status = member.status;
+        after.status = dto.status;
+      }
+      if (Object.keys(after).length > 0) {
+        await this.auditService.logUpdate(orgId, actorId, 'MEMBER', membershipId, before, after);
+      }
+    }
+
     return updated;
   }
 
-  async remove(orgId: string, membershipId: string) {
+  async remove(orgId: string, membershipId: string, actorId?: string) {
     const member = await this.prisma.membership.findFirst({
       where: { id: membershipId, orgId },
     });
@@ -335,10 +384,17 @@ export class MembersService {
       },
     });
 
+    if (actorId) {
+      await this.auditService.logDelete(orgId, actorId, 'MEMBER', membershipId, {
+        memberName: member.name,
+        role: member.role,
+      });
+    }
+
     return { success: true };
   }
 
-  async restore(orgId: string, membershipId: string) {
+  async restore(orgId: string, membershipId: string, actorId?: string) {
     const member = await this.prisma.membership.findFirst({
       where: { id: membershipId, orgId },
     });
@@ -355,6 +411,14 @@ export class MembersService {
         leftAt: null,
       },
     });
+
+    if (actorId) {
+      await this.auditService.logCreate(orgId, actorId, 'MEMBER', membershipId, {
+        memberName: member.name,
+        role: member.role,
+        restored: true,
+      });
+    }
 
     return { success: true };
   }

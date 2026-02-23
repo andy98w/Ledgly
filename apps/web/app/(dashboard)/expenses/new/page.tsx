@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ArrowLeft, Receipt } from 'lucide-react';
-import { useCreateExpense } from '@/lib/queries/expenses';
+import { useCreateExpense, useDeleteExpense, useRestoreExpense } from '@/lib/queries/expenses';
 import { useAuthStore } from '@/lib/stores/auth';
 import { parseCents } from '@/lib/utils';
 import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_LABELS } from '@ledgly/shared';
@@ -40,6 +40,8 @@ export default function NewExpensePage() {
   const { toast } = useToast();
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
   const createExpense = useCreateExpense();
+  const deleteExpense = useDeleteExpense();
+  const restoreExpense = useRestoreExpense();
 
   const {
     register,
@@ -61,7 +63,7 @@ export default function NewExpensePage() {
     if (!currentOrgId) return;
 
     try {
-      await createExpense.mutateAsync({
+      const created = await createExpense.mutateAsync({
         orgId: currentOrgId,
         data: {
           category: data.category,
@@ -73,7 +75,37 @@ export default function NewExpensePage() {
         },
       });
 
-      toast({ title: 'Expense created successfully' });
+      const createdId = (created as any)?.id;
+      toast({
+        title: 'Expense created',
+        action: createdId ? (
+          <button
+            onClick={() => deleteExpense.mutate(
+              { orgId: currentOrgId!, expenseId: createdId },
+              {
+                onSuccess: () => toast({
+                  title: 'Expense deleted',
+                  action: (
+                    <button
+                      onClick={() => restoreExpense.mutate(
+                        { orgId: currentOrgId!, expenseId: createdId },
+                        { onSuccess: () => toast({ title: 'Expense restored' }) },
+                      )}
+                      className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+                    >
+                      Redo
+                    </button>
+                  ),
+                }),
+                onError: () => toast({ title: 'Failed to undo', variant: 'destructive' }),
+              },
+            )}
+            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+          >
+            Undo
+          </button>
+        ) : undefined,
+      });
       router.push('/expenses');
     } catch (error: any) {
       toast({

@@ -1,4 +1,4 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { google, gmail_v1, Auth } from 'googleapis';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -727,6 +727,93 @@ export class GmailService {
     });
   }
 
+  async getRecentConfirmed(orgId: string, limit = 50) {
+    return this.prisma.emailImport.findMany({
+      where: {
+        orgId,
+        status: { in: ['AUTO_CONFIRMED', 'CONFIRMED'] },
+        reviewedAt: {
+          gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+        },
+      },
+      orderBy: { reviewedAt: 'desc' },
+      take: limit,
+    });
+  }
+
+  async getIgnoredImports(orgId: string, limit = 50) {
+    return this.prisma.emailImport.findMany({
+      where: {
+        orgId,
+        status: 'IGNORED',
+      },
+      orderBy: { reviewedAt: 'desc' },
+      take: limit,
+    });
+  }
+
+  async unconfirmImport(importId: string) {
+    const emailImport = await this.prisma.emailImport.findUnique({
+      where: { id: importId },
+    });
+
+    if (!emailImport) {
+      throw new NotFoundException('Import not found');
+    }
+
+    if (emailImport.status !== 'AUTO_CONFIRMED' && emailImport.status !== 'CONFIRMED') {
+      throw new BadRequestException('Import is not confirmed');
+    }
+
+    // If a payment was created, delete it and its allocations
+    if (emailImport.paymentId) {
+      const payment = await this.prisma.payment.findUnique({
+        where: { id: emailImport.paymentId },
+        include: { allocations: { select: { chargeId: true } } },
+      });
+
+      if (payment) {
+        const affectedChargeIds = payment.allocations.map((a) => a.chargeId);
+
+        // Delete allocations and soft-delete the payment (null externalId to avoid unique constraint on re-confirm)
+        await this.prisma.$transaction([
+          this.prisma.paymentAllocation.deleteMany({ where: { paymentId: payment.id } }),
+          this.prisma.payment.update({
+            where: { id: payment.id },
+            data: { deletedAt: new Date(), externalId: null },
+          }),
+        ]);
+
+        // Update charge statuses
+        for (const chargeId of affectedChargeIds) {
+          await this.chargesService.updateChargeStatus(chargeId);
+        }
+      }
+    }
+
+    // If an expense was created, soft-delete it
+    if (emailImport.expenseId) {
+      await this.prisma.expense.update({
+        where: { id: emailImport.expenseId },
+        data: { deletedAt: new Date() },
+      }).catch(() => { /* ignore if already deleted */ });
+    }
+
+    await this.prisma.emailImport.update({
+      where: { id: importId },
+      data: {
+        status: 'PENDING',
+        paymentId: null,
+        expenseId: null,
+        matchedMembershipId: null,
+        matchConfidence: null,
+        needsReviewReason: null,
+        allocatedChargeIds: [],
+        reviewedAt: null,
+      },
+    });
+  }
+
   async getImportStats(orgId: string) {
     const [pending, autoConfirmed, confirmed, ignored] = await Promise.all([
       this.prisma.emailImport.count({ where: { orgId, status: 'PENDING' } }),
@@ -761,40 +848,63 @@ export class GmailService {
       where: { id: importId },
     });
 
-    if (!emailImport || emailImport.status !== 'PENDING') {
-      throw new Error('Import not found or already processed');
+    if (!emailImport) {
+      throw new NotFoundException('Import not found');
+    }
+
+    if (emailImport.status !== 'PENDING') {
+      throw new BadRequestException('Import has already been processed');
     }
 
     if (!emailImport.parsedAmount) {
-      throw new Error('Cannot confirm import without parsed amount');
+      throw new BadRequestException('Cannot confirm import without parsed amount');
     }
 
-    // Create the payment
-    const payment = await this.prisma.payment.create({
-      data: {
-        orgId: emailImport.orgId,
-        membershipId,
-        amountCents: emailImport.parsedAmount,
-        paidAt: emailImport.emailDate,
-        source: emailImport.parsedSource,
-        rawPayerName: emailImport.parsedPayerName,
-        memo: emailImport.parsedMemo,
-        externalId: `email:${emailImport.messageId}`,
-        createdById: actorId,
-      },
+    const externalId = `email:${emailImport.messageId}`;
+
+    // Clear any existing soft-deleted payment with this externalId to avoid unique constraint violation
+    await this.prisma.payment.updateMany({
+      where: { orgId: emailImport.orgId, externalId, deletedAt: { not: null } },
+      data: { externalId: null },
     });
 
-    // Update the import status
-    await this.prisma.emailImport.update({
-      where: { id: importId },
-      data: {
-        status: 'CONFIRMED',
-        paymentId: payment.id,
-        reviewedAt: new Date(),
-      },
+    // Also clear any NON-deleted payment with the same externalId (orphaned from previous confirm)
+    await this.prisma.payment.updateMany({
+      where: { orgId: emailImport.orgId, externalId },
+      data: { externalId: null },
     });
 
-    return payment;
+    try {
+      // Create the payment
+      const payment = await this.prisma.payment.create({
+        data: {
+          orgId: emailImport.orgId,
+          membershipId,
+          amountCents: emailImport.parsedAmount,
+          paidAt: emailImport.emailDate,
+          source: emailImport.parsedSource || 'email',
+          rawPayerName: emailImport.parsedPayerName,
+          memo: emailImport.parsedMemo,
+          externalId,
+          createdById: actorId,
+        },
+      });
+
+      // Update the import status
+      await this.prisma.emailImport.update({
+        where: { id: importId },
+        data: {
+          status: 'CONFIRMED',
+          paymentId: payment.id,
+          reviewedAt: new Date(),
+        },
+      });
+
+      return payment;
+    } catch (error) {
+      this.logger.error(`confirmImport failed for import ${importId}: ${error.message}`, error.stack);
+      throw new BadRequestException(`Failed to confirm import: ${error.message}`);
+    }
   }
 
   async ignoreImport(importId: string) {
@@ -830,15 +940,15 @@ export class GmailService {
     });
 
     if (!emailImport || emailImport.status !== 'PENDING') {
-      throw new Error('Import not found or already processed');
+      throw new BadRequestException('Import not found or already processed');
     }
 
     if (emailImport.parsedDirection !== 'outgoing') {
-      throw new Error('This method is only for outgoing payments (expenses)');
+      throw new BadRequestException('This method is only for outgoing payments (expenses)');
     }
 
     if (!emailImport.parsedAmount) {
-      throw new Error('Cannot confirm import without parsed amount');
+      throw new BadRequestException('Cannot confirm import without parsed amount');
     }
 
     let expenseId: string;
@@ -850,7 +960,7 @@ export class GmailService {
       });
 
       if (!existingExpense) {
-        throw new Error('Selected expense not found');
+        throw new NotFoundException('Selected expense not found');
       }
 
       expenseId = existingExpense.id;

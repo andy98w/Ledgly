@@ -35,7 +35,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { useCreateMembers } from '@/lib/queries/members';
+import { useCreateMembers, useDeleteMember, useRestoreMember } from '@/lib/queries/members';
 import {
   Dialog,
   DialogContent,
@@ -414,6 +414,8 @@ export default function SpreadsheetPage() {
   const deletePayment = useDeletePayment();
   const restorePayment = useRestorePayment();
   const createMembers = useCreateMembers();
+  const deleteOneMember = useDeleteMember();
+  const restoreMember = useRestoreMember();
 
   const isLoading = chargesLoading || expensesLoading || paymentsLoading;
   const members = membersData?.data || [];
@@ -673,12 +675,38 @@ export default function SpreadsheetPage() {
         orgId: currentOrgId,
         members: [{ name }],
       });
-      toast({ title: `Added member: ${name}` });
-      // Return the new member's ID
-      if (Array.isArray(result) && result.length > 0) {
-        return result[0].id;
-      }
-      return null;
+      const createdId = Array.isArray(result) && result.length > 0 ? result[0].id : null;
+      toast({
+        title: `Added member: ${name}`,
+        action: createdId ? (
+          <button
+            onClick={() => deleteOneMember.mutate(
+              { orgId: currentOrgId!, memberId: createdId },
+              {
+                onSuccess: () => toast({
+                  title: `${name} removed`,
+                  action: (
+                    <button
+                      onClick={() => restoreMember.mutate(
+                        { orgId: currentOrgId!, memberId: createdId },
+                        { onSuccess: () => toast({ title: `${name} restored` }) },
+                      )}
+                      className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+                    >
+                      Redo
+                    </button>
+                  ),
+                }),
+                onError: () => toast({ title: 'Failed to undo', variant: 'destructive' }),
+              },
+            )}
+            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+          >
+            Undo
+          </button>
+        ) : undefined,
+      });
+      return createdId;
     } catch (error: any) {
       toast({
         title: 'Error adding member',
@@ -778,8 +806,23 @@ export default function SpreadsheetPage() {
           title: 'Charge deleted',
           action: (
             <button
-              onClick={() => restoreCharge.mutate({ orgId: currentOrgId, chargeId: row.id })}
-              className="text-xs font-medium text-primary hover:underline"
+              onClick={() => restoreCharge.mutate(
+                { orgId: currentOrgId, chargeId: row.id },
+                {
+                  onSuccess: () => toast({
+                    title: 'Charge restored',
+                    action: (
+                      <button
+                        onClick={() => voidCharge.mutate({ orgId: currentOrgId!, chargeId: row.id }, { onSuccess: () => toast({ title: 'Charge deleted' }) })}
+                        className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+                      >
+                        Redo
+                      </button>
+                    ),
+                  }),
+                },
+              )}
+              className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
             >
               Undo
             </button>
@@ -791,8 +834,23 @@ export default function SpreadsheetPage() {
           title: 'Expense deleted',
           action: (
             <button
-              onClick={() => restoreExpense.mutate({ orgId: currentOrgId, expenseId: row.id })}
-              className="text-xs font-medium text-primary hover:underline"
+              onClick={() => restoreExpense.mutate(
+                { orgId: currentOrgId, expenseId: row.id },
+                {
+                  onSuccess: () => toast({
+                    title: 'Expense restored',
+                    action: (
+                      <button
+                        onClick={() => deleteExpense.mutate({ orgId: currentOrgId!, expenseId: row.id }, { onSuccess: () => toast({ title: 'Expense deleted' }) })}
+                        className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+                      >
+                        Redo
+                      </button>
+                    ),
+                  }),
+                },
+              )}
+              className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
             >
               Undo
             </button>
@@ -804,8 +862,23 @@ export default function SpreadsheetPage() {
           title: 'Payment deleted',
           action: (
             <button
-              onClick={() => restorePayment.mutate({ orgId: currentOrgId, paymentId: row.id })}
-              className="text-xs font-medium text-primary hover:underline"
+              onClick={() => restorePayment.mutate(
+                { orgId: currentOrgId, paymentId: row.id },
+                {
+                  onSuccess: () => toast({
+                    title: 'Payment restored',
+                    action: (
+                      <button
+                        onClick={() => deletePayment.mutate({ orgId: currentOrgId!, paymentId: row.id }, { onSuccess: () => toast({ title: 'Payment deleted' }) })}
+                        className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+                      >
+                        Redo
+                      </button>
+                    ),
+                  }),
+                },
+              )}
+              className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
             >
               Undo
             </button>
@@ -864,7 +937,27 @@ export default function SpreadsheetPage() {
           // Continue with other restorations
         }
       }
-      toast({ title: `Restored ${restoredCount} item${restoredCount !== 1 ? 's' : ''}` });
+      toast({
+        title: `Restored ${restoredCount} item${restoredCount !== 1 ? 's' : ''}`,
+        action: (
+          <button
+            onClick={async () => {
+              let redoneCount = 0;
+              for (const item of deletedItems) {
+                try {
+                  if (item.type === 'charge') { await voidCharge.mutateAsync({ orgId: currentOrgId, chargeId: item.id }); redoneCount++; }
+                  else if (item.type === 'expense') { await deleteExpense.mutateAsync({ orgId: currentOrgId, expenseId: item.id }); redoneCount++; }
+                  else if (item.type === 'payment') { await deletePayment.mutateAsync({ orgId: currentOrgId, paymentId: item.id }); redoneCount++; }
+                } catch { /* continue */ }
+              }
+              toast({ title: `Deleted ${redoneCount} item${redoneCount !== 1 ? 's' : ''}` });
+            }}
+            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+          >
+            Redo
+          </button>
+        ),
+      });
     };
 
     toast({
@@ -872,7 +965,7 @@ export default function SpreadsheetPage() {
       action: (
         <button
           onClick={handleUndo}
-          className="text-xs font-medium text-primary hover:underline"
+          className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
         >
           Undo
         </button>
@@ -1010,16 +1103,11 @@ export default function SpreadsheetPage() {
       {/* Pagination Controls - Top */}
       <FadeIn delay={0.2}>
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">
-              {rows.length} total
-            </span>
-          </div>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Rows per page:</span>
+              <span className="text-sm text-muted-foreground">Show</span>
               <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
-                <SelectTrigger className="w-20 h-8 bg-secondary/30 border-border/50">
+                <SelectTrigger className="w-[70px] h-8 bg-secondary/30 border-border/50">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1028,30 +1116,34 @@ export default function SpreadsheetPage() {
                   <SelectItem value="100">100</SelectItem>
                 </SelectContent>
               </Select>
+              <span className="text-sm text-muted-foreground">per page</span>
             </div>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="text-sm text-muted-foreground min-w-[80px] text-center">
-                {page} of {totalPages || 1}
-              </span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
+            <span className="text-sm text-muted-foreground">
+              {rows.length} total
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-sm text-muted-foreground min-w-[80px] text-center">
+              {page} / {totalPages || 1}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
           </div>
         </div>
       </FadeIn>

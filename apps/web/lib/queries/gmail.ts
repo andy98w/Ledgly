@@ -157,6 +157,32 @@ export function useRestoreImport() {
   });
 }
 
+export function useUnconfirmImport() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ orgId, importId }: { orgId: string; importId: string }) =>
+      api.post(`/organizations/${orgId}/gmail/imports/${importId}/unconfirm`),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['organizations', variables.orgId, 'gmail', 'imports'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['organizations', variables.orgId, 'payments'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['organizations', variables.orgId, 'charges'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['organizations', variables.orgId, 'members'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['organizations', variables.orgId, 'dashboard'],
+      });
+    },
+  });
+}
+
 export function useDisconnectGmail() {
   const queryClient = useQueryClient();
 

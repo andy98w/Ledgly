@@ -148,8 +148,9 @@ export class PaymentsController {
 
   @Delete('allocations/:allocationId')
   @Roles('ADMIN', 'TREASURER')
-  async removeAllocation(@Param('orgId') orgId: string, @Param('allocationId') allocationId: string) {
-    return this.paymentsService.removeAllocation(orgId, allocationId);
+  async removeAllocation(@Param('orgId') orgId: string, @Param('allocationId') allocationId: string, @Req() req: any) {
+    const actorId = req.membership?.id;
+    return this.paymentsService.removeAllocation(orgId, allocationId, actorId);
   }
 
   @Get('member/:membershipId/unallocated')

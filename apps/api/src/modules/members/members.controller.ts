@@ -1,10 +1,10 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { IsString, IsEmail, IsOptional, IsEnum, IsArray, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { MembershipRole, MembershipStatus } from '@prisma/client';
 import { MembersService } from './members.service';
-import { CurrentUser, CurrentUserData, Roles } from '../../common/decorators';
+import { Roles } from '../../common/decorators';
 import { RolesGuard } from '../../common/guards';
 
 class CreateMemberDto {
@@ -81,8 +81,9 @@ export class MembersController {
 
   @Post()
   @Roles('ADMIN', 'TREASURER')
-  async create(@Param('orgId') orgId: string, @Body() dto: CreateMembersBulkDto) {
-    return this.membersService.createMany(orgId, dto.members);
+  async create(@Param('orgId') orgId: string, @Body() dto: CreateMembersBulkDto, @Req() req: any) {
+    const actorId = req.membership?.id;
+    return this.membersService.createMany(orgId, dto.members, actorId);
   }
 
   @Patch(':id')
@@ -91,19 +92,23 @@ export class MembersController {
     @Param('orgId') orgId: string,
     @Param('id') id: string,
     @Body() dto: UpdateMemberDto,
+    @Req() req: any,
   ) {
-    return this.membersService.update(orgId, id, dto);
+    const actorId = req.membership?.id;
+    return this.membersService.update(orgId, id, dto, actorId);
   }
 
   @Delete(':id')
   @Roles('ADMIN')
-  async remove(@Param('orgId') orgId: string, @Param('id') id: string) {
-    return this.membersService.remove(orgId, id);
+  async remove(@Param('orgId') orgId: string, @Param('id') id: string, @Req() req: any) {
+    const actorId = req.membership?.id;
+    return this.membersService.remove(orgId, id, actorId);
   }
 
   @Post(':id/restore')
   @Roles('ADMIN')
-  async restore(@Param('orgId') orgId: string, @Param('id') id: string) {
-    return this.membersService.restore(orgId, id);
+  async restore(@Param('orgId') orgId: string, @Param('id') id: string, @Req() req: any) {
+    const actorId = req.membership?.id;
+    return this.membersService.restore(orgId, id, actorId);
   }
 }

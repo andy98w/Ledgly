@@ -109,6 +109,16 @@ export class GmailController {
       return { data: imports };
     }
 
+    if (status === 'confirmed') {
+      const imports = await this.gmailService.getRecentConfirmed(orgId, limitNum);
+      return { data: imports };
+    }
+
+    if (status === 'ignored') {
+      const imports = await this.gmailService.getIgnoredImports(orgId, limitNum);
+      return { data: imports };
+    }
+
     if (status === 'pending' || !status) {
       const imports = await this.gmailService.getPendingImports(orgId, limitNum);
       return { data: imports };
@@ -148,6 +158,13 @@ export class GmailController {
   @Post('imports/:importId/restore')
   async restoreImport(@Param('importId') importId: string) {
     await this.gmailService.restoreImport(importId);
+    return { success: true };
+  }
+
+  @Post('imports/:importId/unconfirm')
+  @Roles('ADMIN', 'TREASURER')
+  async unconfirmImport(@Param('importId') importId: string) {
+    await this.gmailService.unconfirmImport(importId);
     return { success: true };
   }
 

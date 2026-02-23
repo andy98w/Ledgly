@@ -5,9 +5,9 @@ import { motion } from 'framer-motion';
 import { Plus, Receipt, TrendingUp, Percent, Search, ChevronRight, ChevronLeft, Trash2, Info, Circle, CheckCircle2 } from 'lucide-react';
 import { useCharges, useUpdateCharge, useVoidCharge, useRestoreCharge, useCreateCharge } from '@/lib/queries/charges';
 import { useMembers, useCreateMembers } from '@/lib/queries/members';
-import { useAutoAllocateToCharge } from '@/lib/queries/payments';
+import { usePayments, useAutoAllocateToCharge, useRemoveAllocation, useAllocatePayment } from '@/lib/queries/payments';
 import { useAuthStore } from '@/lib/stores/auth';
-import { formatCents, parseCents } from '@/lib/utils';
+import { cn, formatCents, parseCents } from '@/lib/utils';
 import type { ChargeCategory } from '@ledgly/shared';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
@@ -36,6 +36,7 @@ import { ChargeDeleteDialog } from '@/components/charges/charge-delete-dialog';
 import { ChargeGroupEditDialog } from '@/components/charges/charge-group-edit-dialog';
 import { ChargeGroupDeleteDialog } from '@/components/charges/charge-group-delete-dialog';
 import { ChargeCreateDialog } from '@/components/charges/charge-create-dialog';
+import { ChargeAllocatePaymentDialog } from '@/components/charges/charge-allocate-payment-dialog';
 import { useChargeFilters } from '@/hooks/use-charge-filters';
 import { useBulkSelection } from '@/hooks/use-bulk-selection';
 
@@ -56,6 +57,7 @@ export default function ChargesPage() {
   const [deletingGroup, setDeletingGroup] = useState<ChargeGroup | null>(null);
   const [groupEditData, setGroupEditData] = useState({ title: '', amountCents: 0, dueDate: null as string | null });
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [allocatingCharge, setAllocatingCharge] = useState<any | null>(null);
 
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
   const user = useAuthStore((s) => s.user);
@@ -73,6 +75,9 @@ export default function ChargesPage() {
   const restoreCharge = useRestoreCharge();
   const createCharge = useCreateCharge();
   const autoAllocate = useAutoAllocateToCharge();
+  const removeAllocation = useRemoveAllocation();
+  const allocatePayment = useAllocatePayment();
+  const { data: paymentsData } = usePayments(currentOrgId);
   const { data: membersData, isLoading: loadingMembers } = useMembers(currentOrgId, { status: 'ACTIVE', limit: 100 });
   const members = membersData?.data || [];
   const createMembers = useCreateMembers();
@@ -102,7 +107,7 @@ export default function ChargesPage() {
     () => paginatedGroups.flatMap((g) => g.charges.map((c) => c.id)),
     [paginatedGroups],
   );
-  const { selected: selectedCharges, toggle: toggleChargeSelection, toggleAll: toggleSelectAllCharges, clear: clearSelection, isAllSelected: isAllChargesSelected } = useBulkSelection(allChargeIds);
+  const { selected: selectedCharges, toggle: toggleChargeSelection, toggleAll: toggleSelectAllCharges, toggleGroup: toggleGroupSelection, clear: clearSelection, isAllSelected: isAllChargesSelected } = useBulkSelection(allChargeIds);
 
   // Reset selection when filters change
   useEffect(() => {
@@ -127,10 +132,51 @@ export default function ChargesPage() {
 
   const handleSaveEdit = () => {
     if (!editingCharge || !currentOrgId) return;
+    // Capture original values for undo
+    const original = data?.data.find((c) => c.id === editingCharge.id);
+    const undoData = original
+      ? { title: original.title, amountCents: original.amountCents, dueDate: original.dueDate ? new Date(original.dueDate).toISOString().split('T')[0] : null }
+      : null;
+    const chargeId = editingCharge.id;
     updateCharge.mutate(
-      { orgId: currentOrgId, chargeId: editingCharge.id, data: { title: editingCharge.title, amountCents: editingCharge.amountCents, dueDate: editingCharge.dueDate || null } },
+      { orgId: currentOrgId, chargeId, data: { title: editingCharge.title, amountCents: editingCharge.amountCents, dueDate: editingCharge.dueDate || null } },
       {
-        onSuccess: () => { toast({ title: 'Charge updated successfully' }); setEditingCharge(null); },
+        onSuccess: () => {
+          toast({
+            title: 'Charge updated',
+            action: undoData ? (
+              <button
+                onClick={() => {
+                  const redoData = { title: editingCharge.title, amountCents: editingCharge.amountCents, dueDate: editingCharge.dueDate || null };
+                  updateCharge.mutate(
+                    { orgId: currentOrgId!, chargeId, data: undoData },
+                    {
+                      onSuccess: () => toast({
+                        title: 'Change reverted',
+                        action: (
+                          <button
+                            onClick={() => updateCharge.mutate(
+                              { orgId: currentOrgId!, chargeId, data: redoData },
+                              { onSuccess: () => toast({ title: 'Charge updated' }) },
+                            )}
+                            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+                          >
+                            Redo
+                          </button>
+                        ),
+                      }),
+                      onError: () => toast({ title: 'Failed to undo', variant: 'destructive' }),
+                    },
+                  );
+                }}
+                className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+              >
+                Undo
+              </button>
+            ) : undefined,
+          });
+          setEditingCharge(null);
+        },
         onError: (error: any) => { toast({ title: 'Error updating charge', description: error.message || 'Please try again', variant: 'destructive' }); },
       },
     );
@@ -146,7 +192,7 @@ export default function ChargesPage() {
           toast({
             title: 'Charge deleted',
             description: 'You can undo this action.',
-            action: <Button variant="outline" size="sm" onClick={() => handleRestoreCharge(chargeId)}>Undo</Button>,
+            action: <button onClick={() => handleRestoreCharge(chargeId)} className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors">Undo</button>,
           });
           setDeletingCharge(null);
         },
@@ -160,7 +206,20 @@ export default function ChargesPage() {
     restoreCharge.mutate(
       { orgId: currentOrgId, chargeId },
       {
-        onSuccess: () => toast({ title: 'Charge restored' }),
+        onSuccess: () => toast({
+          title: 'Charge restored',
+          action: (
+            <button
+              onClick={() => voidCharge.mutate(
+                { orgId: currentOrgId!, chargeId },
+                { onSuccess: () => toast({ title: 'Charge deleted' }) },
+              )}
+              className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+            >
+              Redo
+            </button>
+          ),
+        }),
         onError: (error: any) => { toast({ title: 'Error restoring charge', description: error.message || 'Please try again', variant: 'destructive' }); },
       },
     );
@@ -229,14 +288,123 @@ export default function ChargesPage() {
             for (const chargeId of deletedChargeIds) {
               try { await restoreCharge.mutateAsync({ orgId: currentOrgId, chargeId }); restoredCount++; } catch { /* continue */ }
             }
-            toast({ title: `Restored ${restoredCount} charge${restoredCount !== 1 ? 's' : ''}` });
+            toast({
+              title: `Restored ${restoredCount} charge${restoredCount !== 1 ? 's' : ''}`,
+              action: (
+                <button
+                  onClick={async () => {
+                    let redoneCount = 0;
+                    for (const chargeId of deletedChargeIds) {
+                      try { await voidCharge.mutateAsync({ orgId: currentOrgId, chargeId }); redoneCount++; } catch { /* continue */ }
+                    }
+                    toast({ title: `Deleted ${redoneCount} charge${redoneCount !== 1 ? 's' : ''}` });
+                  }}
+                  className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+                >
+                  Redo
+                </button>
+              ),
+            });
           }}
-          className="text-xs font-medium text-primary hover:underline"
+          className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
         >
           Undo
         </button>
       ),
     });
+  };
+
+  const handleUnallocate = (allocation: { id: string; paymentId: string; amountCents: number }, chargeId: string) => {
+    if (!currentOrgId) return;
+    removeAllocation.mutate(
+      { orgId: currentOrgId, allocationId: allocation.id },
+      {
+        onSuccess: () => {
+          toast({
+            title: 'Allocation removed',
+            action: (
+              <button
+                onClick={() => {
+                  allocatePayment.mutate(
+                    { orgId: currentOrgId!, paymentId: allocation.paymentId, allocations: [{ chargeId, amountCents: allocation.amountCents }] },
+                    {
+                      onSuccess: (result: any) => {
+                        const newAllocId = result?.allocations?.[0]?.id;
+                        toast({
+                          title: 'Allocation restored',
+                          action: newAllocId ? (
+                            <button
+                              onClick={() => removeAllocation.mutate(
+                                { orgId: currentOrgId!, allocationId: newAllocId },
+                                { onSuccess: () => toast({ title: 'Allocation removed' }) },
+                              )}
+                              className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+                            >
+                              Redo
+                            </button>
+                          ) : undefined,
+                        });
+                      },
+                      onError: () => toast({ title: 'Failed to restore allocation', variant: 'destructive' }),
+                    },
+                  );
+                }}
+                className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+              >
+                Undo
+              </button>
+            ),
+          });
+        },
+        onError: (error: any) => toast({ title: 'Error removing allocation', description: error.message || 'Please try again', variant: 'destructive' }),
+      },
+    );
+  };
+
+  const handleAllocatePaymentToCharge = (paymentId: string, chargeId: string, amountCents: number) => {
+    if (!currentOrgId) return;
+    allocatePayment.mutate(
+      { orgId: currentOrgId, paymentId, allocations: [{ chargeId, amountCents }] },
+      {
+        onSuccess: (result: any) => {
+          const allocationId = result?.allocations?.[0]?.id;
+          toast({
+            title: 'Payment allocated',
+            action: allocationId ? (
+              <button
+                onClick={() => removeAllocation.mutate(
+                  { orgId: currentOrgId!, allocationId },
+                  {
+                    onSuccess: () => toast({
+                      title: 'Allocation removed',
+                      action: (
+                        <button
+                          onClick={() => allocatePayment.mutate(
+                            { orgId: currentOrgId!, paymentId, allocations: [{ chargeId, amountCents }] },
+                            { onSuccess: () => toast({ title: 'Payment allocated' }) },
+                          )}
+                          className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+                        >
+                          Redo
+                        </button>
+                      ),
+                    }),
+                    onError: () => toast({ title: 'Failed to undo', variant: 'destructive' }),
+                  },
+                )}
+                className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+              >
+                Undo
+              </button>
+            ) : undefined,
+          });
+          setAllocatingCharge(null);
+        },
+        onError: (error: any) => {
+          toast({ title: 'Error allocating payment', description: error.message || 'Please try again', variant: 'destructive' });
+        },
+      },
+    );
   };
 
   const handleAddMember = async (name: string): Promise<{ id: string; displayName: string } | null> => {
@@ -435,11 +603,9 @@ export default function ChargesPage() {
                   {isAllChargesSelected ? <CheckCircle2 className="w-5 h-5 text-primary" /> : <Circle className="w-5 h-5 text-muted-foreground hover:text-primary" />}
                   <span className="text-sm text-muted-foreground">{isAllChargesSelected ? 'Deselect all' : 'Select all'}</span>
                 </button>
-                {selectedCharges.size > 0 && (
-                  <button onClick={handleBulkDeleteCharges} className="w-7 h-7 flex items-center justify-center transition-colors hover:text-destructive" title={`Delete ${selectedCharges.size} selected`}>
-                    <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
-                  </button>
-                )}
+                <button onClick={handleBulkDeleteCharges} className={cn("w-7 h-7 flex items-center justify-center transition-all hover:text-destructive", selectedCharges.size === 0 && "invisible")} title={`Delete ${selectedCharges.size} selected`}>
+                  <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
+                </button>
               </div>
             )}
             <StaggerChildren className="space-y-3">
@@ -451,9 +617,12 @@ export default function ChargesPage() {
                   onDelete={(charge) => setDeletingCharge(charge)}
                   onEditGroup={handleEditGroup}
                   onDeleteGroup={(group) => setDeletingGroup(group)}
+                  onUnallocate={handleUnallocate}
+                  onAllocatePayment={(charge) => setAllocatingCharge(charge)}
                   isAdmin={isAdmin}
                   selectedCharges={selectedCharges}
                   onToggleSelect={toggleChargeSelection}
+                  onToggleSelectGroup={toggleGroupSelection}
                 />
               ))}
             </StaggerChildren>
@@ -480,6 +649,7 @@ export default function ChargesPage() {
       <ChargeGroupEditDialog group={editingGroup} editData={groupEditData} onEditDataChange={setGroupEditData} onClose={() => setEditingGroup(null)} onSave={handleSaveGroupEdit} isPending={updateCharge.isPending} />
       <ChargeGroupDeleteDialog group={deletingGroup} onClose={() => setDeletingGroup(null)} onConfirm={handleConfirmDeleteGroup} isPending={voidCharge.isPending} />
       <ChargeCreateDialog open={showCreateDialog} onClose={() => setShowCreateDialog(false)} onCreate={handleCreateCharge} members={members} loadingMembers={loadingMembers} isPending={createCharge.isPending} onAddMember={handleAddMember} isAddingMember={createMembers.isPending} />
+      <ChargeAllocatePaymentDialog charge={allocatingCharge} payments={paymentsData?.data || []} onClose={() => setAllocatingCharge(null)} onAllocate={handleAllocatePaymentToCharge} isPending={allocatePayment.isPending} />
     </div>
   );
 }

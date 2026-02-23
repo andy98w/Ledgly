@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ArrowLeft, CreditCard } from 'lucide-react';
-import { useCreatePayment } from '@/lib/queries/payments';
+import { useCreatePayment, useDeletePayment, useRestorePayment } from '@/lib/queries/payments';
 import { useMembers } from '@/lib/queries/members';
 import { useAuthStore } from '@/lib/stores/auth';
 import { parseCents } from '@/lib/utils';
@@ -39,6 +39,8 @@ export default function NewPaymentPage() {
   const { toast } = useToast();
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
   const createPayment = useCreatePayment();
+  const deletePayment = useDeletePayment();
+  const restorePayment = useRestorePayment();
   const { data: membersData } = useMembers(currentOrgId, { status: 'ACTIVE', limit: 100 });
 
   const {
@@ -60,7 +62,7 @@ export default function NewPaymentPage() {
     if (!currentOrgId) return;
 
     try {
-      await createPayment.mutateAsync({
+      const created: any = await createPayment.mutateAsync({
         orgId: currentOrgId,
         data: {
           membershipId: data.membershipId || undefined,
@@ -70,7 +72,37 @@ export default function NewPaymentPage() {
           memo: data.memo || undefined,
         },
       });
-      toast({ title: 'Payment recorded successfully' });
+      const createdId = created?.id;
+      toast({
+        title: 'Payment recorded',
+        action: createdId ? (
+          <button
+            onClick={() => deletePayment.mutate(
+              { orgId: currentOrgId!, paymentId: createdId },
+              {
+                onSuccess: () => toast({
+                  title: 'Payment deleted',
+                  action: (
+                    <button
+                      onClick={() => restorePayment.mutate(
+                        { orgId: currentOrgId!, paymentId: createdId },
+                        { onSuccess: () => toast({ title: 'Payment restored' }) },
+                      )}
+                      className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+                    >
+                      Redo
+                    </button>
+                  ),
+                }),
+                onError: () => toast({ title: 'Failed to undo', variant: 'destructive' }),
+              },
+            )}
+            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+          >
+            Undo
+          </button>
+        ) : undefined,
+      });
       router.push('/payments');
     } catch (error: any) {
       toast({

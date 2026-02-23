@@ -3,12 +3,13 @@
 import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Plus, CreditCard, AlertCircle, TrendingUp, Wallet, Search, MoreHorizontal, Pencil, Trash2, Loader2, ChevronLeft, ChevronRight, Link2, Receipt, Check, Users, Info, Circle, CheckCircle2 } from 'lucide-react';
-import { useAutoAllocateToCharge } from '@/lib/queries/payments';
+import { Plus, CreditCard, AlertCircle, TrendingUp, Wallet, Search, MoreHorizontal, Pencil, Trash2, Loader2, ChevronLeft, ChevronRight, ChevronDown, Link2, Check, Users, Info, Circle, CheckCircle2, X } from 'lucide-react';
+import { useAutoAllocateToCharge, useRemoveAllocation } from '@/lib/queries/payments';
 import { cn } from '@/lib/utils';
+import { groupCharges } from '@/lib/utils/charge-grouping';
 import { usePayments, useUpdatePayment, useDeletePayment, useRestorePayment, useAllocatePayment } from '@/lib/queries/payments';
 import { useCharges, useCreateCharge } from '@/lib/queries/charges';
-import { useMembers } from '@/lib/queries/members';
+import { useMembers, useCreateMembers } from '@/lib/queries/members';
 import { CHARGE_CATEGORIES, CHARGE_CATEGORY_LABELS } from '@ledgly/shared';
 import { useAuthStore } from '@/lib/stores/auth';
 import { formatDate } from '@/lib/utils';
@@ -59,20 +60,12 @@ interface EditPaymentData {
   memo: string;
 }
 
-interface CreateChargeFromPayment {
-  payment: any;
-  category: string;
-  title: string;
-  amountCents: number;
-  dueDate: string;
-}
-
 function PaymentCard({
   payment,
   onEdit,
   onDelete,
-  onAllocate,
-  onCreateCharge,
+  onApplyToCharge,
+  onUnallocate,
   isAdmin = false,
   isSelected = false,
   onToggleSelect,
@@ -80,8 +73,8 @@ function PaymentCard({
   payment: any;
   onEdit: (payment: any) => void;
   onDelete: (payment: any) => void;
-  onAllocate: (payment: any) => void;
-  onCreateCharge: (payment: any) => void;
+  onApplyToCharge: (payment: any) => void;
+  onUnallocate?: (allocation: { id: string; chargeId: string; amountCents: number }, paymentId: string) => void;
   isAdmin?: boolean;
   isSelected?: boolean;
   onToggleSelect?: () => void;
@@ -153,18 +146,10 @@ function PaymentCard({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    {hasUnallocated && (
-                      <>
-                        <DropdownMenuItem onClick={() => onAllocate(payment)}>
-                          <Link2 className="h-4 w-4 mr-2" />
-                          Allocate to Charge
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => onCreateCharge(payment)}>
-                          <Receipt className="h-4 w-4 mr-2" />
-                          Create Charge
-                        </DropdownMenuItem>
-                      </>
-                    )}
+                    <DropdownMenuItem onClick={() => onApplyToCharge(payment)}>
+                      <Link2 className="h-4 w-4 mr-2" />
+                      {hasUnallocated ? 'Apply to Charge' : 'Manage Allocations'}
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => onEdit(payment)}>
                       <Pencil className="h-4 w-4 mr-2" />
                       Edit
@@ -186,8 +171,20 @@ function PaymentCard({
               <p className="text-xs text-muted-foreground mb-2">Applied to:</p>
               <div className="flex flex-wrap gap-1">
                 {payment.allocations.map((a: any) => (
-                  <Badge key={a.id} variant="secondary" className="text-xs">
+                  <Badge key={a.id} variant="secondary" className="text-xs gap-1 pr-1">
                     {a.chargeTitle}: <Money cents={a.amountCents} size="xs" inline />
+                    {isAdmin && onUnallocate && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onUnallocate({ id: a.id, chargeId: a.chargeId, amountCents: a.amountCents }, payment.id);
+                        }}
+                        className="ml-0.5 rounded-full p-0.5 hover:bg-destructive/20 hover:text-destructive transition-colors"
+                        title="Remove allocation"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
                   </Badge>
                 ))}
               </div>
@@ -220,24 +217,30 @@ function PaymentCardSkeleton() {
 }
 
 export default function PaymentsPage() {
-  const [showUnallocated, setShowUnallocated] = useState(false);
+  const [allocationFilter, setAllocationFilter] = useState<'all' | 'allocated' | 'unallocated'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [editingPayment, setEditingPayment] = useState<EditPaymentData | null>(null);
   const [deletingPayment, setDeletingPayment] = useState<any | null>(null);
-  const [allocatingPayment, setAllocatingPayment] = useState<any | null>(null);
+  const [chargeDialogPayment, setChargeDialogPayment] = useState<any | null>(null);
+  const [chargeDialogTab, setChargeDialogTab] = useState<'existing' | 'new'>('existing');
   const [selectedChargeId, setSelectedChargeId] = useState<string>('');
   const [allocationAmount, setAllocationAmount] = useState<number>(0);
-  const [creatingChargeFromPayment, setCreatingChargeFromPayment] = useState<CreateChargeFromPayment | null>(null);
+  const [expandedGroupKey, setExpandedGroupKey] = useState<string | null>(null);
+  const [newChargeCategory, setNewChargeCategory] = useState<string>('DUES');
+  const [newChargeTitle, setNewChargeTitle] = useState<string>('');
+  const [newChargeAmountCents, setNewChargeAmountCents] = useState<number>(0);
+  const [newChargeDueDate, setNewChargeDueDate] = useState<string>('');
   const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
   const [memberSearch, setMemberSearch] = useState('');
+  const [newMemberName, setNewMemberName] = useState('');
   const [selectedPayments, setSelectedPayments] = useState<Set<string>>(new Set());
 
   // State for similar payments allocation flow
   const [similarPaymentsDialog, setSimilarPaymentsDialog] = useState<{
-    chargeId: string;
+    chargeIds: string[];
     chargeTitle: string;
     sourcePaymentId: string;
     similarPayments: any[];
@@ -249,25 +252,31 @@ export default function PaymentsPage() {
   const currentMembership = user?.memberships.find((m) => m.orgId === currentOrgId);
   const isAdmin = currentMembership?.role === 'ADMIN' || currentMembership?.role === 'TREASURER';
   const { toast } = useToast();
-  const { data, isLoading } = usePayments(currentOrgId, {
-    unallocated: showUnallocated || undefined,
-  });
+  const { data, isLoading } = usePayments(currentOrgId);
 
   const updatePayment = useUpdatePayment();
   const deletePayment = useDeletePayment();
   const restorePayment = useRestorePayment();
   const allocatePayment = useAllocatePayment();
   const createCharge = useCreateCharge();
+  const createMembers = useCreateMembers();
   const autoAllocate = useAutoAllocateToCharge();
+  const removeAllocation = useRemoveAllocation();
 
   // Fetch charges for allocation and members for creating charges
   const { data: chargesData } = useCharges(currentOrgId, { status: 'OPEN' });
   const { data: membersData } = useMembers(currentOrgId);
   const openCharges = chargesData?.data || [];
   const members = membersData?.data || [];
+  const chargeGroups = useMemo(() => groupCharges(openCharges), [openCharges]);
 
-  // Filter payments by search query
+  // Filter payments by allocation status and search query
   const filteredPayments = data?.data.filter((payment) => {
+    // Allocation filter
+    if (allocationFilter === 'unallocated' && payment.unallocatedCents <= 0) return false;
+    if (allocationFilter === 'allocated' && payment.unallocatedCents > 0) return false;
+
+    // Search filter
     if (!searchQuery.trim()) return true;
     const query = searchQuery.toLowerCase();
     return (
@@ -293,7 +302,7 @@ export default function PaymentsPage() {
   // Reset page when filters or search changes
   useEffect(() => {
     setPage(1);
-  }, [showUnallocated, searchQuery]);
+  }, [allocationFilter, searchQuery]);
 
   // Calculate summary stats
   const totalPayments = filteredPayments.length;
@@ -313,10 +322,20 @@ export default function PaymentsPage() {
   const handleSaveEdit = () => {
     if (!editingPayment || !currentOrgId) return;
 
+    // Capture original values for undo
+    const original = data?.data.find((p) => p.id === editingPayment.id);
+    const undoData = original ? {
+      amountCents: original.amountCents,
+      paidAt: new Date(original.paidAt).toISOString().split('T')[0],
+      rawPayerName: original.rawPayerName || '',
+      memo: original.memo || '',
+    } : null;
+    const paymentId = editingPayment.id;
+
     updatePayment.mutate(
       {
         orgId: currentOrgId,
-        paymentId: editingPayment.id,
+        paymentId,
         data: {
           amountCents: editingPayment.amountCents,
           paidAt: editingPayment.paidAt,
@@ -326,7 +345,39 @@ export default function PaymentsPage() {
       },
       {
         onSuccess: () => {
-          toast({ title: 'Payment updated successfully' });
+          toast({
+            title: 'Payment updated',
+            action: undoData ? (
+              <button
+                onClick={() => {
+                  const redoData = { amountCents: editingPayment.amountCents, paidAt: editingPayment.paidAt, rawPayerName: editingPayment.rawPayerName, memo: editingPayment.memo };
+                  updatePayment.mutate(
+                    { orgId: currentOrgId!, paymentId, data: undoData },
+                    {
+                      onSuccess: () => toast({
+                        title: 'Change reverted',
+                        action: (
+                          <button
+                            onClick={() => updatePayment.mutate(
+                              { orgId: currentOrgId!, paymentId, data: redoData },
+                              { onSuccess: () => toast({ title: 'Payment updated' }) },
+                            )}
+                            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+                          >
+                            Redo
+                          </button>
+                        ),
+                      }),
+                      onError: () => toast({ title: 'Failed to undo', variant: 'destructive' }),
+                    },
+                  );
+                }}
+                className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+              >
+                Undo
+              </button>
+            ) : undefined,
+          });
           setEditingPayment(null);
         },
         onError: (error: any) => {
@@ -356,13 +407,12 @@ export default function PaymentsPage() {
             title: 'Payment deleted',
             description: 'You can undo this action.',
             action: (
-              <Button
-                variant="outline"
-                size="sm"
+              <button
                 onClick={() => handleRestorePayment(paymentId)}
+                className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
               >
                 Undo
-              </Button>
+              </button>
             ),
           });
           setDeletingPayment(null);
@@ -385,7 +435,20 @@ export default function PaymentsPage() {
       { orgId: currentOrgId, paymentId },
       {
         onSuccess: () => {
-          toast({ title: 'Payment restored' });
+          toast({
+            title: 'Payment restored',
+            action: (
+              <button
+                onClick={() => deletePayment.mutate(
+                  { orgId: currentOrgId!, paymentId },
+                  { onSuccess: () => toast({ title: 'Payment deleted' }) },
+                )}
+                className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+              >
+                Redo
+              </button>
+            ),
+          });
         },
         onError: (error: any) => {
           toast({
@@ -398,27 +461,151 @@ export default function PaymentsPage() {
     );
   };
 
-  const handleAllocate = (payment: any) => {
-    setAllocatingPayment(payment);
+  const handleUnallocate = (allocation: { id: string; chargeId: string; amountCents: number }, paymentId: string) => {
+    if (!currentOrgId) return;
+    removeAllocation.mutate(
+      { orgId: currentOrgId, allocationId: allocation.id },
+      {
+        onSuccess: () => {
+          toast({
+            title: 'Allocation removed',
+            action: (
+              <button
+                onClick={() => {
+                  allocatePayment.mutate(
+                    { orgId: currentOrgId!, paymentId, allocations: [{ chargeId: allocation.chargeId, amountCents: allocation.amountCents }] },
+                    {
+                      onSuccess: (result: any) => {
+                        const newAllocId = result?.allocations?.[0]?.id;
+                        toast({
+                          title: 'Allocation restored',
+                          action: newAllocId ? (
+                            <button
+                              onClick={() => removeAllocation.mutate(
+                                { orgId: currentOrgId!, allocationId: newAllocId },
+                                { onSuccess: () => toast({ title: 'Allocation removed' }) },
+                              )}
+                              className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+                            >
+                              Redo
+                            </button>
+                          ) : undefined,
+                        });
+                      },
+                      onError: () => toast({ title: 'Failed to restore allocation', variant: 'destructive' }),
+                    },
+                  );
+                }}
+                className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+              >
+                Undo
+              </button>
+            ),
+          });
+        },
+        onError: (error: any) => toast({ title: 'Error removing allocation', description: error.message || 'Please try again', variant: 'destructive' }),
+      },
+    );
+  };
+
+  const openChargeDialog = (payment: any, tab: 'existing' | 'new') => {
+    setChargeDialogPayment(payment);
+    setChargeDialogTab(tab);
     setSelectedChargeId('');
     setAllocationAmount(payment.unallocatedCents);
+    setExpandedGroupKey(null);
+    setNewChargeCategory('DUES');
+    setNewChargeTitle(payment.memo || 'Charge from payment');
+    setNewChargeAmountCents(payment.unallocatedCents);
+    setNewChargeDueDate(new Date().toISOString().split('T')[0]);
+    if (payment.membershipId) {
+      setSelectedMembers(new Set([payment.membershipId]));
+    } else {
+      setSelectedMembers(new Set());
+    }
+    setSelectAll(false);
+    setMemberSearch('');
+    setNewMemberName(payment.rawPayerName || '');
+  };
+
+  const closeChargeDialog = () => {
+    setChargeDialogPayment(null);
+    setSelectedChargeId('');
+    setAllocationAmount(0);
+    setExpandedGroupKey(null);
+    setSelectedMembers(new Set());
+    setSelectAll(false);
+    setMemberSearch('');
+    setNewMemberName('');
+  };
+
+  const handleInlineCreateMember = async () => {
+    if (!currentOrgId || !newMemberName.trim()) return;
+    try {
+      const created = await createMembers.mutateAsync({
+        orgId: currentOrgId,
+        members: [{ name: newMemberName.trim() }],
+      });
+      if (created.length > 0) {
+        setSelectedMembers((prev) => { const next = new Set(prev); next.add(created[0].id); return next; });
+        setNewMemberName('');
+        toast({ title: `Added ${created[0].name}` });
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Error adding member',
+        description: error.message || 'Please try again',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleConfirmAllocate = () => {
-    if (!allocatingPayment || !currentOrgId || !selectedChargeId) return;
+    if (!chargeDialogPayment || !currentOrgId || !selectedChargeId) return;
 
     allocatePayment.mutate(
       {
         orgId: currentOrgId,
-        paymentId: allocatingPayment.id,
+        paymentId: chargeDialogPayment.id,
         allocations: [{ chargeId: selectedChargeId, amountCents: allocationAmount }],
       },
       {
-        onSuccess: () => {
-          toast({ title: 'Payment allocated successfully' });
-          setAllocatingPayment(null);
-          setSelectedChargeId('');
-          setAllocationAmount(0);
+        onSuccess: (result: any) => {
+          const allocationId = result?.allocations?.[0]?.id;
+          const redoPaymentId = chargeDialogPayment.id;
+          const redoChargeId = selectedChargeId;
+          const redoAmount = allocationAmount;
+          toast({
+            title: 'Payment allocated',
+            action: allocationId ? (
+              <button
+                onClick={() => removeAllocation.mutate(
+                  { orgId: currentOrgId!, allocationId },
+                  {
+                    onSuccess: () => toast({
+                      title: 'Allocation removed',
+                      action: (
+                        <button
+                          onClick={() => allocatePayment.mutate(
+                            { orgId: currentOrgId!, paymentId: redoPaymentId, allocations: [{ chargeId: redoChargeId, amountCents: redoAmount }] },
+                            { onSuccess: () => toast({ title: 'Payment allocated' }) },
+                          )}
+                          className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+                        >
+                          Redo
+                        </button>
+                      ),
+                    }),
+                    onError: () => toast({ title: 'Failed to undo', variant: 'destructive' }),
+                  },
+                )}
+                className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+              >
+                Undo
+              </button>
+            ) : undefined,
+          });
+          closeChargeDialog();
         },
         onError: (error: any) => {
           toast({
@@ -461,34 +648,8 @@ export default function PaymentsPage() {
     }
   };
 
-  const handleCreateChargeFromPayment = (payment: any) => {
-    // Pre-select the member if payment has membershipId
-    if (payment.membershipId) {
-      setSelectedMembers(new Set([payment.membershipId]));
-    } else {
-      setSelectedMembers(new Set());
-    }
-    setSelectAll(false);
-    setMemberSearch('');
-
-    setCreatingChargeFromPayment({
-      payment,
-      category: 'DUES',
-      title: payment.memo || 'Charge from payment',
-      amountCents: payment.unallocatedCents,
-      dueDate: new Date().toISOString().split('T')[0],
-    });
-  };
-
-  const resetCreateChargeDialog = () => {
-    setCreatingChargeFromPayment(null);
-    setSelectedMembers(new Set());
-    setSelectAll(false);
-    setMemberSearch('');
-  };
-
   const handleConfirmCreateCharge = async () => {
-    if (!creatingChargeFromPayment || !currentOrgId) return;
+    if (!chargeDialogPayment || !currentOrgId) return;
 
     if (selectedMembers.size === 0) {
       toast({ title: 'Please select at least one member', variant: 'destructive' });
@@ -496,65 +657,63 @@ export default function PaymentsPage() {
     }
 
     try {
-      const sourcePayment = creatingChargeFromPayment.payment;
+      const sourcePayment = chargeDialogPayment;
 
-      // Create charges for all selected members
       const charges = await createCharge.mutateAsync({
         orgId: currentOrgId,
         data: {
           membershipIds: Array.from(selectedMembers),
-          category: creatingChargeFromPayment.category as any,
-          title: creatingChargeFromPayment.title,
-          amountCents: creatingChargeFromPayment.amountCents,
-          dueDate: creatingChargeFromPayment.dueDate
-            ? new Date(creatingChargeFromPayment.dueDate).toISOString()
+          category: newChargeCategory as any,
+          title: newChargeTitle,
+          amountCents: newChargeAmountCents,
+          dueDate: newChargeDueDate
+            ? new Date(newChargeDueDate).toISOString()
             : undefined,
         },
       });
 
       const chargeArray = Array.isArray(charges) ? charges : [charges];
-      const createdCharge = chargeArray[0]; // Use the first charge for allocation
+      const createdCharge = chargeArray[0];
 
-      // Immediately allocate the source payment to the created charge
-      if (sourcePayment && sourcePayment.unallocatedCents > 0) {
+      if (sourcePayment.unallocatedCents > 0) {
         try {
-          const allocationAmount = Math.min(sourcePayment.unallocatedCents, creatingChargeFromPayment.amountCents);
+          const allocAmt = Math.min(sourcePayment.unallocatedCents, newChargeAmountCents);
           await allocatePayment.mutateAsync({
             orgId: currentOrgId,
             paymentId: sourcePayment.id,
-            allocations: [{ chargeId: createdCharge.id, amountCents: allocationAmount }],
+            allocations: [{ chargeId: createdCharge.id, amountCents: allocAmt }],
           });
         } catch {
           // Ignore allocation error for source payment
         }
       }
 
-      // Find similar unallocated payments (sorted by amount similarity)
       const allPayments = data?.data || [];
       const similarPayments = allPayments
-        .filter((p) =>
-          p.id !== sourcePayment.id &&
-          p.unallocatedCents > 0
-        )
+        .filter((p) => p.id !== sourcePayment.id && p.unallocatedCents > 0)
         .map((p) => ({
           ...p,
-          amountDiff: Math.abs(p.unallocatedCents - creatingChargeFromPayment.amountCents),
+          amountDiff: Math.abs(p.unallocatedCents - newChargeAmountCents),
         }))
         .sort((a, b) => a.amountDiff - b.amountDiff)
-        .slice(0, 10); // Show top 10 similar payments
+        .slice(0, 10);
 
       toast({
         title: `Charge created`,
         description: `Payment from ${sourcePayment.rawPayerName || 'Unknown'} has been allocated.`,
       });
 
-      resetCreateChargeDialog();
+      closeChargeDialog();
 
-      // If there are similar payments, show the dialog
-      if (similarPayments.length > 0) {
+      // Collect all charge IDs (excluding the one the source payment was allocated to)
+      const remainingChargeIds = chargeArray
+        .filter((c: any) => c.id !== createdCharge.id)
+        .map((c: any) => c.id);
+
+      if (similarPayments.length > 0 && remainingChargeIds.length > 0) {
         setSimilarPaymentsDialog({
-          chargeId: createdCharge.id,
-          chargeTitle: creatingChargeFromPayment.title,
+          chargeIds: remainingChargeIds,
+          chargeTitle: newChargeTitle,
           sourcePaymentId: sourcePayment.id,
           similarPayments,
         });
@@ -574,22 +733,28 @@ export default function PaymentsPage() {
 
     let allocatedCount = 0;
     let totalAllocated = 0;
+    let failedCount = 0;
+    const availableChargeIds = [...similarPaymentsDialog.chargeIds];
+    let chargeIndex = 0;
 
     for (const paymentId of Array.from(selectedSimilarPayments)) {
+      if (chargeIndex >= availableChargeIds.length) break;
+
       const payment = similarPaymentsDialog.similarPayments.find((p) => p.id === paymentId);
       if (!payment) continue;
 
       try {
-        const allocationAmount = Math.min(payment.unallocatedCents, payment.unallocatedCents);
         await allocatePayment.mutateAsync({
           orgId: currentOrgId,
           paymentId,
-          allocations: [{ chargeId: similarPaymentsDialog.chargeId, amountCents: allocationAmount }],
+          allocations: [{ chargeId: availableChargeIds[chargeIndex], amountCents: payment.unallocatedCents }],
         });
         allocatedCount++;
-        totalAllocated += allocationAmount;
+        totalAllocated += payment.unallocatedCents;
+        chargeIndex++;
       } catch {
-        // Continue with other allocations
+        failedCount++;
+        chargeIndex++;
       }
     }
 
@@ -597,6 +762,13 @@ export default function PaymentsPage() {
       toast({
         title: `Allocated ${allocatedCount} payment${allocatedCount > 1 ? 's' : ''}`,
         description: `Total: $${(totalAllocated / 100).toFixed(2)} allocated to "${similarPaymentsDialog.chargeTitle}"`,
+      });
+    }
+    if (failedCount > 0 && allocatedCount === 0) {
+      toast({
+        title: 'Allocation failed',
+        description: 'No available charges remaining to allocate to.',
+        variant: 'destructive',
       });
     }
 
@@ -665,7 +837,23 @@ export default function PaymentsPage() {
           // Continue with other restorations
         }
       }
-      toast({ title: `Restored ${restoredCount} payment${restoredCount !== 1 ? 's' : ''}` });
+      toast({
+        title: `Restored ${restoredCount} payment${restoredCount !== 1 ? 's' : ''}`,
+        action: (
+          <button
+            onClick={async () => {
+              let redoneCount = 0;
+              for (const paymentId of deletedPaymentIds) {
+                try { await deletePayment.mutateAsync({ orgId: currentOrgId, paymentId }); redoneCount++; } catch { /* continue */ }
+              }
+              toast({ title: `Deleted ${redoneCount} payment${redoneCount !== 1 ? 's' : ''}` });
+            }}
+            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+          >
+            Redo
+          </button>
+        ),
+      });
     };
 
     toast({
@@ -673,7 +861,7 @@ export default function PaymentsPage() {
       action: (
         <button
           onClick={handleUndo}
-          className="text-xs font-medium text-primary hover:underline"
+          className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
         >
           Undo
         </button>
@@ -684,7 +872,7 @@ export default function PaymentsPage() {
   // Reset selection when filters change
   useEffect(() => {
     setSelectedPayments(new Set());
-  }, [showUnallocated, searchQuery, page]);
+  }, [allocationFilter, searchQuery, page]);
 
   return (
     <div className="space-y-8">
@@ -745,24 +933,16 @@ export default function PaymentsPage() {
       {/* Filter */}
       <FadeIn delay={0.2}>
         <div className="flex items-center justify-between gap-4">
-          <div className="flex gap-2">
-            <Button
-              variant={!showUnallocated ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setShowUnallocated(false)}
-              className={!showUnallocated ? 'bg-gradient-to-r from-primary to-blue-400' : ''}
-            >
-              All Payments
-            </Button>
-            <Button
-              variant={showUnallocated ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setShowUnallocated(true)}
-              className={showUnallocated ? 'bg-gradient-to-r from-primary to-blue-400' : ''}
-            >
-              Unallocated Only
-            </Button>
-          </div>
+          <Select value={allocationFilter} onValueChange={(v) => setAllocationFilter(v as any)}>
+            <SelectTrigger className="w-[160px] h-9 bg-secondary/30 border-border/50">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Payments</SelectItem>
+              <SelectItem value="allocated">Allocated</SelectItem>
+              <SelectItem value="unallocated">Unallocated</SelectItem>
+            </SelectContent>
+          </Select>
           <div className="relative w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -872,15 +1052,16 @@ export default function PaymentsPage() {
                     {isAllPaymentsSelected ? 'Deselect all' : 'Select all'}
                   </span>
                 </button>
-                {selectedPayments.size > 0 && (
-                  <button
-                    onClick={handleBulkDeletePayments}
-                    className="w-7 h-7 flex items-center justify-center transition-colors hover:text-destructive"
-                    title={`Delete ${selectedPayments.size} selected`}
-                  >
-                    <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
-                  </button>
-                )}
+                <button
+                  onClick={handleBulkDeletePayments}
+                  className={cn(
+                    "w-7 h-7 flex items-center justify-center transition-all hover:text-destructive",
+                    selectedPayments.size === 0 && "invisible"
+                  )}
+                  title={`Delete ${selectedPayments.size} selected`}
+                >
+                  <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
+                </button>
               </div>
             )}
             <StaggerChildren className="space-y-3">
@@ -890,8 +1071,8 @@ export default function PaymentsPage() {
                   payment={payment}
                   onEdit={handleEdit}
                   onDelete={handleDelete}
-                  onAllocate={handleAllocate}
-                  onCreateCharge={handleCreateChargeFromPayment}
+                  onApplyToCharge={(p) => openChargeDialog(p, 'existing')}
+                  onUnallocate={handleUnallocate}
                   isAdmin={isAdmin}
                   isSelected={selectedPayments.has(payment.id)}
                   onToggleSelect={() => togglePaymentSelection(payment.id)}
@@ -1044,263 +1225,412 @@ export default function PaymentsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Allocate Payment Dialog */}
-      <Dialog open={!!allocatingPayment} onOpenChange={(open) => !open && setAllocatingPayment(null)}>
-        <DialogContent>
+      {/* Apply to Charge Dialog */}
+      <Dialog open={!!chargeDialogPayment} onOpenChange={(open) => !open && closeChargeDialog()}>
+        <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle>Allocate Payment</DialogTitle>
+            <DialogTitle>
+              {chargeDialogPayment && chargeDialogPayment.unallocatedCents > 0 ? 'Apply to Charge' : 'Manage Allocations'}
+            </DialogTitle>
             <DialogDescription>
-              Allocate this payment to an existing open charge.
+              {chargeDialogPayment && chargeDialogPayment.unallocatedCents > 0
+                ? 'Allocate this payment to an existing charge or create a new one.'
+                : 'View and manage current allocations for this payment.'}
             </DialogDescription>
           </DialogHeader>
-          {allocatingPayment && (
-            <div className="space-y-4 py-4">
-              <div className="p-4 rounded-lg bg-secondary/30">
-                <p className="font-medium">{allocatingPayment.rawPayerName || 'Unknown Payer'}</p>
-                <p className="text-sm text-muted-foreground">
-                  Unallocated: <Money cents={allocatingPayment.unallocatedCents} size="xs" inline />
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label>Select Charge</Label>
-{openCharges.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-2">No open charges available</p>
-                ) : (
-                  <Select value={selectedChargeId} onValueChange={setSelectedChargeId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a charge" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {openCharges.map((charge) => (
-                        <SelectItem key={charge.id} value={charge.id}>
-                          {charge.title} - {charge.membership?.name || charge.membership?.user?.name || 'Unknown'} (
-                          <Money cents={charge.balanceDueCents} size="xs" inline /> due)
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label>Amount to Allocate ($)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={(allocationAmount / 100).toFixed(2)}
-                  onChange={(e) =>
-                    setAllocationAmount(Math.round(parseFloat(e.target.value || '0') * 100))
-                  }
-                />
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAllocatingPayment(null)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleConfirmAllocate}
-              disabled={allocatePayment.isPending || !selectedChargeId}
-              className="bg-gradient-to-r from-primary to-blue-400"
-            >
-              {allocatePayment.isPending ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Allocating...
-                </>
-              ) : (
-                'Allocate'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Create Charge from Payment Dialog */}
-      <Dialog
-        open={!!creatingChargeFromPayment}
-        onOpenChange={(open) => !open && resetCreateChargeDialog()}
-      >
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Create Charge from Payment</DialogTitle>
-            <DialogDescription>
-              Create a new charge and automatically allocate this payment to it.
-            </DialogDescription>
-          </DialogHeader>
-          {creatingChargeFromPayment && (
-            <div className="space-y-6 py-4">
-              {/* Payment Info Banner */}
+          {(() => {
+            // Use live payment data so allocations update after removal
+            const livePayment = chargeDialogPayment
+              ? data?.data.find((p) => p.id === chargeDialogPayment.id) || chargeDialogPayment
+              : null;
+            if (!livePayment) return null;
+            const hasUnallocatedFunds = livePayment.unallocatedCents > 0;
+            const hasAllocations = livePayment.allocations?.length > 0;
+            return (
+            <>
+              {/* Payment info banner */}
               <div className="p-4 rounded-xl bg-success/10 border border-success/20">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-muted-foreground">Payment from</p>
-                    <p className="font-medium">{creatingChargeFromPayment.payment.rawPayerName || 'Unknown Payer'}</p>
+                    <p className="font-medium">{livePayment.rawPayerName || 'Unknown Payer'}</p>
                   </div>
-                  <Money cents={creatingChargeFromPayment.payment.unallocatedCents} size="lg" className="text-success" />
-                </div>
-              </div>
-
-              {/* Charge Details */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-medium">Charge Details</h3>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Category</Label>
-                    <Select
-                      value={creatingChargeFromPayment.category}
-                      onValueChange={(v) =>
-                        setCreatingChargeFromPayment({ ...creatingChargeFromPayment, category: v })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CHARGE_CATEGORIES.map((cat) => (
-                          <SelectItem key={cat} value={cat}>
-                            {CHARGE_CATEGORY_LABELS[cat]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Title</Label>
-                    <Input
-                      placeholder="e.g., Spring 2025 Dues"
-                      value={creatingChargeFromPayment.title}
-                      onChange={(e) =>
-                        setCreatingChargeFromPayment({ ...creatingChargeFromPayment, title: e.target.value })
-                      }
-                    />
-                  </div>
-                </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Amount ($)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={(creatingChargeFromPayment.amountCents / 100).toFixed(2)}
-                      disabled
-                      className="bg-muted cursor-not-allowed"
-                    />
-                    <p className="text-xs text-muted-foreground">Amount is locked to match the payment</p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Due Date (optional)</Label>
-                    <Input
-                      type="date"
-                      value={creatingChargeFromPayment.dueDate}
-                      onChange={(e) =>
-                        setCreatingChargeFromPayment({ ...creatingChargeFromPayment, dueDate: e.target.value })
-                      }
-                    />
+                  <div className="text-right">
+                    <Money cents={livePayment.unallocatedCents} size="lg" className="text-success" />
+                    <p className="text-xs text-muted-foreground">unallocated</p>
                   </div>
                 </div>
               </div>
 
-              {/* Member Selection */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-medium">
-                  Select Members
-                  <span className="ml-2 text-muted-foreground font-normal">
-                    ({selectedMembers.size} selected)
-                  </span>
-                </h3>
-                {/* Search */}
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search members..."
-                    value={memberSearch}
-                    onChange={(e) => setMemberSearch(e.target.value)}
-                    className="pl-9"
-                  />
-                </div>
-                {members.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    No active members. Add members first.
-                  </p>
-                ) : (
-                  <div className="space-y-1 max-h-[200px] overflow-y-auto">
-                    {/* Select All Row */}
-                    <button
-                      type="button"
-                      onClick={toggleSelectAll}
-                      className={cn(
-                        'flex items-center gap-3 p-3 rounded-xl border text-left transition-all w-full',
-                        selectAll
-                          ? 'border-primary bg-primary/10'
-                          : 'border-border/50 hover:bg-secondary/50',
-                      )}
-                    >
-                      <div
-                        className={cn(
-                          'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors',
-                          selectAll
-                            ? 'bg-gradient-to-br from-primary to-blue-400 border-transparent'
-                            : 'border-muted-foreground/30',
-                        )}
-                      >
-                        {selectAll && <Check className="w-3 h-3 text-primary-foreground" />}
-                      </div>
-                      <Users className="w-4 h-4 text-muted-foreground" />
-                      <span className="font-medium text-muted-foreground">All Members</span>
-                      <span className="text-xs text-muted-foreground ml-auto">{members.length}</span>
-                    </button>
-
-                    {/* Member List */}
-                    {filteredMembers.filter((m) => m.id).map((member) => (
-                      <button
-                        key={member.id}
-                        type="button"
-                        onClick={() => toggleMember(member.id)}
-                        className={cn(
-                          'flex items-center gap-3 p-3 rounded-xl border text-left transition-all w-full',
-                          selectedMembers.has(member.id)
-                            ? 'border-primary bg-primary/10'
-                            : 'border-border/50 hover:bg-secondary/50',
-                        )}
-                      >
-                        <div
-                          className={cn(
-                            'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors',
-                            selectedMembers.has(member.id)
-                              ? 'bg-gradient-to-br from-primary to-blue-400 border-transparent'
-                              : 'border-muted-foreground/30',
-                          )}
-                        >
-                          {selectedMembers.has(member.id) && <Check className="w-3 h-3 text-primary-foreground" />}
+              {/* Current allocations */}
+              {hasAllocations && (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">Current Allocations</p>
+                  <div className="space-y-1">
+                    {livePayment.allocations.map((a: any) => (
+                      <div key={a.id} className="flex items-center justify-between p-2.5 rounded-lg border border-border/50 bg-secondary/20">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Badge variant="secondary" className="text-xs shrink-0">{a.chargeTitle}</Badge>
+                          <Money cents={a.amountCents} size="xs" inline />
                         </div>
-                        <AvatarGradient name={member.displayName || member.name || 'Unknown'} size="sm" />
-                        <span className="font-medium">{member.displayName || member.name || member.user?.name || 'Unknown'}</span>
-                      </button>
+                        <button
+                          onClick={() => handleUnallocate({ id: a.id, chargeId: a.chargeId, amountCents: a.amountCents }, livePayment.id)}
+                          className="ml-2 rounded-full p-1 hover:bg-destructive/20 hover:text-destructive transition-colors shrink-0"
+                          title="Remove allocation"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
                     ))}
                   </div>
-                )}
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={resetCreateChargeDialog}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleConfirmCreateCharge}
-              disabled={createCharge.isPending || allocatePayment.isPending || selectedMembers.size === 0}
-              className="bg-gradient-to-r from-primary to-blue-400"
-            >
-              {(createCharge.isPending || allocatePayment.isPending) ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Creating...
-                </>
-              ) : (
-                `Create Charge${selectedMembers.size > 1 ? 's' : ''} & Allocate`
+                </div>
               )}
+
+              {/* Tab switcher - only when there are unallocated funds */}
+              {hasUnallocatedFunds ? (
+                <>
+                  <div className="flex rounded-lg bg-secondary/50 p-1">
+                    <button
+                      onClick={() => setChargeDialogTab('existing')}
+                      className={cn(
+                        'flex-1 text-sm font-medium py-2 px-3 rounded-md transition-all',
+                        chargeDialogTab === 'existing'
+                          ? 'bg-background shadow-sm text-foreground'
+                          : 'text-muted-foreground hover:text-foreground'
+                      )}
+                    >
+                      Existing Charge
+                    </button>
+                    <button
+                      onClick={() => setChargeDialogTab('new')}
+                      className={cn(
+                        'flex-1 text-sm font-medium py-2 px-3 rounded-md transition-all',
+                        chargeDialogTab === 'new'
+                          ? 'bg-background shadow-sm text-foreground'
+                          : 'text-muted-foreground hover:text-foreground'
+                      )}
+                    >
+                      New Charge
+                    </button>
+                  </div>
+
+                  {/* Tab content */}
+                  <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 scrollbar-none" style={{ maxHeight: '50vh' }}>
+                    {chargeDialogTab === 'existing' ? (
+                  <div className="space-y-2 py-2">
+                    {chargeGroups.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-8">No open charges available</p>
+                    ) : (
+                      chargeGroups.map((group) => {
+                        const isSingleMember = group.charges.length === 1;
+                        const isExpanded = expandedGroupKey === group.key;
+
+                        if (isSingleMember) {
+                          const charge = group.charges[0];
+                          const memberName = charge.membership?.displayName || charge.membership?.name || charge.membership?.user?.name || 'Unknown';
+                          return (
+                            <button
+                              key={group.key}
+                              type="button"
+                              onClick={() => {
+                                setSelectedChargeId(charge.id);
+                                setAllocationAmount(Math.min(chargeDialogPayment.unallocatedCents, charge.balanceDueCents));
+                              }}
+                              className={cn(
+                                'flex items-center gap-3 p-3 rounded-xl border text-left transition-all w-full',
+                                selectedChargeId === charge.id
+                                  ? 'border-primary bg-primary/10'
+                                  : 'border-border/50 hover:bg-secondary/50',
+                              )}
+                            >
+                              <AvatarGradient name={memberName} size="sm" />
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-sm truncate">{charge.title}</p>
+                                <p className="text-xs text-muted-foreground">{memberName}</p>
+                              </div>
+                              <Money cents={charge.balanceDueCents} size="sm" />
+                            </button>
+                          );
+                        }
+
+                        // Multi-member group
+                        const hasSelectedCharge = group.charges.some((c: any) => selectedChargeId === c.id);
+                        return (
+                          <div key={group.key}>
+                            <button
+                              type="button"
+                              onClick={() => setExpandedGroupKey(isExpanded ? null : group.key)}
+                              className={cn(
+                                'flex items-center gap-3 p-3 rounded-xl border text-left transition-all w-full',
+                                hasSelectedCharge && !isExpanded
+                                  ? 'border-primary/50 bg-primary/5'
+                                  : 'border-border/50 hover:bg-secondary/50',
+                              )}
+                            >
+                              <div className="w-8 h-8 rounded-full bg-secondary/50 flex items-center justify-center shrink-0">
+                                <Users className="w-4 h-4 text-muted-foreground" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-sm truncate">{group.title}</p>
+                                <Badge variant="secondary" className="text-xs">{group.memberCount} members</Badge>
+                              </div>
+                              <Money cents={group.totalAmount - group.totalPaid} size="sm" />
+                              <ChevronDown className={cn(
+                                'w-4 h-4 text-muted-foreground transition-transform',
+                                isExpanded && 'rotate-180'
+                              )} />
+                            </button>
+                            {isExpanded && (
+                              <div className="ml-4 mt-1 space-y-1">
+                                {group.charges.map((charge: any) => {
+                                  const memberName = charge.membership?.displayName || charge.membership?.name || charge.membership?.user?.name || 'Unknown';
+                                  return (
+                                    <button
+                                      key={charge.id}
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedChargeId(charge.id);
+                                        setAllocationAmount(Math.min(chargeDialogPayment.unallocatedCents, charge.balanceDueCents));
+                                      }}
+                                      className={cn(
+                                        'flex items-center gap-3 p-3 rounded-xl border text-left transition-all w-full',
+                                        selectedChargeId === charge.id
+                                          ? 'border-primary bg-primary/10'
+                                          : 'border-border/50 hover:bg-secondary/50',
+                                      )}
+                                    >
+                                      <AvatarGradient name={memberName} size="sm" />
+                                      <div className="flex-1 min-w-0">
+                                        <p className="font-medium text-sm truncate">{memberName}</p>
+                                      </div>
+                                      <Money cents={charge.balanceDueCents} size="sm" />
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+
+                    {/* Allocation amount input */}
+                    {selectedChargeId && (
+                      <div className="space-y-2 pt-2 border-t border-border/30">
+                        <Label>Amount to Allocate ($)</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={(allocationAmount / 100).toFixed(2)}
+                          className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          onChange={(e) =>
+                            setAllocationAmount(Math.round(parseFloat(e.target.value || '0') * 100))
+                          }
+                        />
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* New Charge tab */
+                  <div className="space-y-4 py-2">
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3 min-w-0">
+                        <div className="space-y-1 min-w-0">
+                          <Label className="text-xs">Category</Label>
+                          <Select value={newChargeCategory} onValueChange={setNewChargeCategory}>
+                            <SelectTrigger className="h-9">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {CHARGE_CATEGORIES.map((cat) => (
+                                <SelectItem key={cat} value={cat}>
+                                  {CHARGE_CATEGORY_LABELS[cat]}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1 min-w-0">
+                          <Label className="text-xs">Title</Label>
+                          <Input
+                            placeholder="e.g., Spring 2025 Dues"
+                            value={newChargeTitle}
+                            onChange={(e) => setNewChargeTitle(e.target.value)}
+                            className="h-9 min-w-0"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 min-w-0">
+                        <div className="space-y-1 min-w-0">
+                          <Label className="text-xs">Amount ($)</Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={(newChargeAmountCents / 100).toFixed(2)}
+                            disabled
+                            className="h-9 bg-muted cursor-not-allowed [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Due Date (optional)</Label>
+                          <Input
+                            type="date"
+                            value={newChargeDueDate}
+                            onChange={(e) => setNewChargeDueDate(e.target.value)}
+                            className="h-9"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Member Selection */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-medium">
+                          Members
+                          <span className="ml-1 text-muted-foreground font-normal">
+                            ({selectedMembers.size})
+                          </span>
+                        </h3>
+                      </div>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          placeholder="Search members..."
+                          value={memberSearch}
+                          onChange={(e) => setMemberSearch(e.target.value)}
+                          className="pl-9 h-9"
+                        />
+                      </div>
+                      <div className="space-y-1 max-h-[200px] overflow-y-auto scrollbar-none">
+                        {/* Inline new member creation */}
+                        <div className="flex items-center gap-2 p-2 rounded-xl border border-dashed border-border/50">
+                          <Plus className="w-4 h-4 text-muted-foreground shrink-0" />
+                          <Input
+                            placeholder="New member name..."
+                            value={newMemberName}
+                            onChange={(e) => setNewMemberName(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleInlineCreateMember()}
+                            className="h-7 text-sm border-0 bg-transparent p-0 focus-visible:ring-0 shadow-none"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleInlineCreateMember}
+                            disabled={!newMemberName.trim() || createMembers.isPending}
+                            className="h-7 px-2 text-xs shrink-0"
+                          >
+                            {createMembers.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Add'}
+                          </Button>
+                        </div>
+                        {/* Select All */}
+                        {members.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={toggleSelectAll}
+                            className={cn(
+                              'flex items-center gap-3 p-2.5 rounded-xl border text-left transition-all w-full',
+                              selectAll
+                                ? 'border-primary bg-primary/10'
+                                : 'border-border/50 hover:bg-secondary/50',
+                            )}
+                          >
+                            <div
+                              className={cn(
+                                'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors',
+                                selectAll
+                                  ? 'bg-gradient-to-br from-primary to-blue-400 border-transparent'
+                                  : 'border-muted-foreground/30',
+                              )}
+                            >
+                              {selectAll && <Check className="w-3 h-3 text-primary-foreground" />}
+                            </div>
+                            <Users className="w-4 h-4 text-muted-foreground" />
+                            <span className="font-medium text-sm text-muted-foreground">All Members</span>
+                            <span className="text-xs text-muted-foreground ml-auto">{members.length}</span>
+                          </button>
+                        )}
+                        {/* Member List */}
+                        {filteredMembers.filter((m) => m.id).map((member) => (
+                          <button
+                            key={member.id}
+                            type="button"
+                            onClick={() => toggleMember(member.id)}
+                            className={cn(
+                              'flex items-center gap-3 p-2.5 rounded-xl border text-left transition-all w-full',
+                              selectedMembers.has(member.id)
+                                ? 'border-primary bg-primary/10'
+                                : 'border-border/50 hover:bg-secondary/50',
+                            )}
+                          >
+                            <div
+                              className={cn(
+                                'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors',
+                                selectedMembers.has(member.id)
+                                  ? 'bg-gradient-to-br from-primary to-blue-400 border-transparent'
+                                  : 'border-muted-foreground/30',
+                              )}
+                            >
+                              {selectedMembers.has(member.id) && <Check className="w-3 h-3 text-primary-foreground" />}
+                            </div>
+                            <AvatarGradient name={member.displayName || member.name || 'Unknown'} size="sm" />
+                            <span className="font-medium text-sm">{member.displayName || member.name || member.user?.name || 'Unknown'}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                  </div>
+                </>
+              ) : hasAllocations ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  Remove an allocation above to reallocate funds.
+                </p>
+              ) : null}
+            </>
+            );
+          })()}
+          <DialogFooter>
+            <Button variant="outline" onClick={closeChargeDialog}>
+              {chargeDialogPayment && (data?.data.find((p) => p.id === chargeDialogPayment.id) || chargeDialogPayment).unallocatedCents > 0
+                ? 'Cancel'
+                : 'Done'}
             </Button>
+            {chargeDialogPayment && (data?.data.find((p) => p.id === chargeDialogPayment.id) || chargeDialogPayment).unallocatedCents > 0 && (
+              chargeDialogTab === 'existing' ? (
+                <Button
+                  onClick={handleConfirmAllocate}
+                  disabled={allocatePayment.isPending || !selectedChargeId}
+                  className="bg-gradient-to-r from-primary to-blue-400"
+                >
+                  {allocatePayment.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Allocating...
+                    </>
+                  ) : (
+                    'Allocate'
+                  )}
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleConfirmCreateCharge}
+                  disabled={createCharge.isPending || allocatePayment.isPending || selectedMembers.size === 0}
+                  className="bg-gradient-to-r from-primary to-blue-400"
+                >
+                  {(createCharge.isPending || allocatePayment.isPending) ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    `Create Charge${selectedMembers.size > 1 ? 's' : ''} & Allocate`
+                  )}
+                </Button>
+              )
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1322,7 +1652,7 @@ export default function PaymentsPage() {
               <p className="text-sm text-muted-foreground">
                 Payments sorted by similarity to the charge amount. Select any to allocate:
               </p>
-              <div className="space-y-2 max-h-[300px] overflow-y-auto">
+              <div className="space-y-2 max-h-[300px] overflow-y-auto scrollbar-none">
                 {similarPaymentsDialog.similarPayments.map((payment) => (
                   <button
                     key={payment.id}

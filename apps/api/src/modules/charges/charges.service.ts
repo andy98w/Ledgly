@@ -70,7 +70,11 @@ export class ChargesService {
         },
       },
       allocations: {
-        select: { amountCents: true },
+        select: {
+          id: true,
+          amountCents: true,
+          payment: { select: { id: true, rawPayerName: true, paidAt: true } },
+        },
       },
     };
 
@@ -97,6 +101,10 @@ export class ChargesService {
           title: c.title, amountCents: c.amountCents, dueDate: c.dueDate, status: c.status, createdAt: c.createdAt,
           membership: { id: c.membership.id, name: c.membership.name, displayName: c.membership.name || c.membership.user?.name || c.membership.user?.email || 'Unknown' },
           allocatedCents, balanceDueCents: c.amountCents - allocatedCents,
+          allocations: c.allocations.map((a) => ({
+            id: a.id, amountCents: a.amountCents,
+            paymentId: a.payment.id, payerName: a.payment.rawPayerName, paidAt: a.payment.paidAt,
+          })),
         };
       });
 
@@ -125,6 +133,10 @@ export class ChargesService {
         title: c.title, amountCents: c.amountCents, dueDate: c.dueDate, status: c.status, createdAt: c.createdAt,
         membership: { id: c.membership.id, name: c.membership.name, displayName: c.membership.name || c.membership.user?.name || c.membership.user?.email || 'Unknown' },
         allocatedCents, balanceDueCents: c.amountCents - allocatedCents,
+        allocations: c.allocations.map((a) => ({
+          id: a.id, amountCents: a.amountCents,
+          paymentId: a.payment.id, payerName: a.payment.rawPayerName, paidAt: a.payment.paidAt,
+        })),
       };
     });
 

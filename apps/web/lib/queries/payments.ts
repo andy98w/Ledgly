@@ -152,6 +152,26 @@ export function useUnallocatedForMember(orgId: string | null, membershipId: stri
   });
 }
 
+export function useRemoveAllocation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      orgId,
+      allocationId,
+    }: {
+      orgId: string;
+      allocationId: string;
+    }) => api.delete(`/organizations/${orgId}/payments/allocations/${allocationId}`),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.payments.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.charges.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.members.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
+    },
+  });
+}
+
 export function useAutoAllocateToCharge() {
   const queryClient = useQueryClient();
 

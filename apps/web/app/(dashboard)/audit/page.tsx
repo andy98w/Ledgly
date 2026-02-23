@@ -2,12 +2,13 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { History, Receipt, CreditCard, Users, TrendingDown, Building2, Filter, Undo2, Redo2, Loader2, ChevronDown, ChevronRight } from 'lucide-react';
+import { History, Receipt, CreditCard, Users, TrendingDown, Building2, Filter, Undo2, Redo2, Loader2, ChevronDown, ChevronRight, ChevronLeft, Search } from 'lucide-react';
 import { useAuditLogs, useUndoAuditLog, useUndoBatch, useRedoAuditLog, useRedoBatch, type AuditLogEntry, type BatchedAuditLogEntry, type AuditLogItem } from '@/lib/queries/audit';
 import { useAuthStore } from '@/lib/stores/auth';
 import { formatRelativeDate } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select,
@@ -433,6 +434,9 @@ function AuditLogSkeleton() {
 export default function AuditLogPage() {
   const [entityTypeFilter, setEntityTypeFilter] = useState<string>('all');
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [searchQuery, setSearchQuery] = useState('');
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
   const user = useAuthStore((s) => s.user);
   const currentMembership = user?.memberships.find((m) => m.orgId === currentOrgId);
@@ -450,7 +454,28 @@ export default function AuditLogPage() {
   const redoMutation = useRedoAuditLog();
   const redoBatchMutation = useRedoBatch();
 
-  const logs = data?.data || [];
+  const allLogs = data?.data || [];
+
+  // Filter by search query
+  const logs = allLogs.filter((log) => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase();
+    const actorName = log.actor?.name?.toLowerCase() || '';
+    const entityType = log.entityType?.toLowerCase() || '';
+    const action = log.action?.toLowerCase() || '';
+    const description = ('batchDescription' in log ? (log as any).batchDescription : '')?.toLowerCase() || '';
+    const diffStr = 'diffJson' in log && log.diffJson ? JSON.stringify(log.diffJson).toLowerCase() : '';
+    return actorName.includes(query) || entityType.includes(query) || action.includes(query) || description.includes(query) || diffStr.includes(query);
+  });
+
+  const totalPages = Math.ceil(logs.length / pageSize);
+  const paginatedLogs = logs.slice((page - 1) * pageSize, page * pageSize);
+
+  // Reset page when filter changes
+  const handleFilterChange = (value: string) => {
+    setEntityTypeFilter(value);
+    setPage(1);
+  };
 
   const handleUndo = async (logId: string) => {
     if (!currentOrgId) return;
@@ -539,10 +564,10 @@ export default function AuditLogPage() {
 
       {/* Filter */}
       <FadeIn delay={0.1}>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-muted-foreground" />
-            <Select value={entityTypeFilter} onValueChange={setEntityTypeFilter}>
+            <Select value={entityTypeFilter} onValueChange={handleFilterChange}>
               <SelectTrigger className="w-48 bg-secondary/30 border-border/50">
                 <SelectValue placeholder="Filter by type" />
               </SelectTrigger>
@@ -556,8 +581,67 @@ export default function AuditLogPage() {
               </SelectContent>
             </Select>
           </div>
+          <div className="relative w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search actor, type, details..."
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
+              className="pl-9 h-9 bg-secondary/30 border-border/50"
+            />
+          </div>
         </div>
       </FadeIn>
+
+      {/* Pagination Controls - Top */}
+      {!isLoading && logs.length > 0 && (
+        <FadeIn delay={0.15}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Show</span>
+                <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}>
+                  <SelectTrigger className="w-[70px] h-8 bg-secondary/30 border-border/50">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-sm text-muted-foreground">per page</span>
+              </div>
+              <span className="text-sm text-muted-foreground">
+                {logs.length} total
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-sm text-muted-foreground min-w-[80px] text-center">
+                {page} / {totalPages || 1}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </FadeIn>
+      )}
 
       {/* Audit Log List */}
       {isLoading ? (
@@ -577,42 +661,71 @@ export default function AuditLogPage() {
             <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
               <History className="h-8 w-8 text-muted-foreground" />
             </div>
-            <h3 className="text-lg font-semibold mb-2">No activity yet</h3>
+            <h3 className="text-lg font-semibold mb-2">No activity found</h3>
             <p className="text-muted-foreground">
-              Changes to charges, payments, members, and expenses will appear here.
+              Try adjusting your filters or search.
             </p>
           </motion.div>
         </FadeIn>
       ) : (
-        <StaggerChildren className="space-y-3">
-          {logs.map((log) => {
-            const isBatch = 'isBatch' in log && log.isBatch;
+        <>
+          <StaggerChildren className="space-y-3">
+            {paginatedLogs.map((log) => {
+              const isBatch = 'isBatch' in log && log.isBatch;
 
-            if (isBatch) {
+              if (isBatch) {
+                return (
+                  <BatchAuditLogCard
+                    key={log.id}
+                    batch={log as BatchedAuditLogEntry}
+                    onUndo={handleUndo}
+                    onRedo={handleRedo}
+                    onUndoBatch={handleUndoBatch}
+                    onRedoBatch={handleRedoBatch}
+                    processingId={processingId}
+                  />
+                );
+              }
+
               return (
-                <BatchAuditLogCard
+                <AuditLogCard
                   key={log.id}
-                  batch={log as BatchedAuditLogEntry}
+                  log={log as AuditLogEntry}
                   onUndo={handleUndo}
                   onRedo={handleRedo}
-                  onUndoBatch={handleUndoBatch}
-                  onRedoBatch={handleRedoBatch}
                   processingId={processingId}
                 />
               );
-            }
+            })}
+          </StaggerChildren>
 
-            return (
-              <AuditLogCard
-                key={log.id}
-                log={log as AuditLogEntry}
-                onUndo={handleUndo}
-                onRedo={handleRedo}
-                processingId={processingId}
-              />
-            );
-          })}
-        </StaggerChildren>
+          {/* Pagination Controls - Bottom */}
+          {logs.length > pageSize && (
+            <div className="flex items-center justify-center gap-2 pt-4">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-sm text-muted-foreground min-w-[80px] text-center">
+                {page} / {totalPages}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

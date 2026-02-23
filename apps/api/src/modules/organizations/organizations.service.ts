@@ -18,6 +18,12 @@ export class OrganizationsService {
   constructor(private prisma: PrismaService) {}
 
   async create(userId: string, dto: CreateOrganizationDto) {
+    // Look up the user's name so the membership record has it
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true, email: true },
+    });
+
     const org = await this.prisma.organization.create({
       data: {
         name: dto.name,
@@ -27,6 +33,7 @@ export class OrganizationsService {
             userId,
             role: 'ADMIN',
             status: 'ACTIVE',
+            name: user?.name || user?.email || null,
           },
         },
       },

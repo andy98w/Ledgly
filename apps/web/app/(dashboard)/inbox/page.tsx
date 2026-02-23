@@ -27,7 +27,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { useAuthStore } from '@/lib/stores/auth';
-import { useMembers, useCreateMembers } from '@/lib/queries/members';
+import { useMembers, useCreateMembers, useDeleteMember } from '@/lib/queries/members';
 import {
   useGmailStatus,
   useGmailImports,
@@ -36,6 +36,7 @@ import {
   useConfirmImport,
   useIgnoreImport,
   useRestoreImport,
+  useUnconfirmImport,
   useDisconnectGmail,
   getGmailConnectUrl,
   type EmailImport,
@@ -338,7 +339,7 @@ export default function InboxPage() {
   const { data: gmailStatus, isLoading: statusLoading } = useGmailStatus(currentOrgId);
   const { data: importsData, isLoading: importsLoading } = useGmailImports(currentOrgId, 'pending');
   const { data: ignoredData, isLoading: ignoredLoading } = useGmailImports(currentOrgId, 'ignored');
-  const { data: autoConfirmedData } = useGmailImports(currentOrgId, 'auto_confirmed');
+  const { data: confirmedData } = useGmailImports(currentOrgId, 'confirmed');
   const { data: importStats } = useImportStats(currentOrgId);
   const { data: membersData } = useMembers(currentOrgId, { status: 'ACTIVE', limit: 100 });
 
@@ -347,18 +348,23 @@ export default function InboxPage() {
   const ignoreImport = useIgnoreImport();
   const restoreImport = useRestoreImport();
   const disconnectGmail = useDisconnectGmail();
+  const unconfirmImport = useUnconfirmImport();
   const createMembers = useCreateMembers();
+  const deleteMember = useDeleteMember();
 
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [ignoringId, setIgnoringId] = useState<string | null>(null);
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [selectedImports, setSelectedImports] = useState<Set<string>>(new Set());
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
-  const [autoConfirmedPage, setAutoConfirmedPage] = useState(1);
-  const [autoConfirmedPerPage, setAutoConfirmedPerPage] = useState(10);
-  const [autoConfirmedSearch, setAutoConfirmedSearch] = useState('');
+  const [unconfirmingId, setUnconfirmingId] = useState<string | null>(null);
+  const [selectedConfirmed, setSelectedConfirmed] = useState<Set<string>>(new Set());
+  const [isBulkUnconfirming, setIsBulkUnconfirming] = useState(false);
+  const [confirmedPage, setConfirmedPage] = useState(1);
+  const [confirmedPerPage, setConfirmedPerPage] = useState(20);
+  const [confirmedSearch, setConfirmedSearch] = useState('');
   const [pendingPage, setPendingPage] = useState(1);
-  const [pendingPerPage, setPendingPerPage] = useState(10);
+  const [pendingPerPage, setPendingPerPage] = useState(20);
   const [pendingSearch, setPendingSearch] = useState('');
 
   // Handle OAuth callback
@@ -427,7 +433,36 @@ export default function InboxPage() {
       { orgId: currentOrgId, importId, membershipId },
       {
         onSuccess: () => {
-          toast({ title: 'Payment confirmed!' });
+          toast({
+            title: 'Payment confirmed!',
+            action: (
+              <button
+                onClick={() => unconfirmImport.mutate(
+                  { orgId: currentOrgId!, importId },
+                  {
+                    onSuccess: () => toast({
+                      title: 'Moved back to pending',
+                      action: (
+                        <button
+                          onClick={() => confirmImport.mutate(
+                            { orgId: currentOrgId!, importId },
+                            { onSuccess: () => toast({ title: 'Payment confirmed!' }) },
+                          )}
+                          className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+                        >
+                          Redo
+                        </button>
+                      ),
+                    }),
+                    onError: () => toast({ title: 'Failed to undo', variant: 'destructive' }),
+                  },
+                )}
+                className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+              >
+                Undo
+              </button>
+            ),
+          });
           setConfirmingId(null);
         },
         onError: (error: any) => {
@@ -452,15 +487,32 @@ export default function InboxPage() {
           setIgnoringId(null);
           toast({
             title: 'Import ignored',
-            description: 'You can undo this action.',
             action: (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleRestore(importId)}
+              <button
+                onClick={() => restoreImport.mutate(
+                  { orgId: currentOrgId!, importId },
+                  {
+                    onSuccess: () => toast({
+                      title: 'Import restored',
+                      action: (
+                        <button
+                          onClick={() => ignoreImport.mutate(
+                            { orgId: currentOrgId!, importId },
+                            { onSuccess: () => toast({ title: 'Import ignored' }) },
+                          )}
+                          className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+                        >
+                          Redo
+                        </button>
+                      ),
+                    }),
+                    onError: () => toast({ title: 'Failed to undo', variant: 'destructive' }),
+                  },
+                )}
+                className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
               >
                 Undo
-              </Button>
+              </button>
             ),
           });
         },
@@ -512,6 +564,87 @@ export default function InboxPage() {
     );
   };
 
+  const handleUnconfirm = (importId: string) => {
+    if (!currentOrgId) return;
+    setUnconfirmingId(importId);
+    unconfirmImport.mutate(
+      { orgId: currentOrgId, importId },
+      {
+        onSuccess: () => {
+          toast({
+            title: 'Moved back to pending',
+            action: (
+              <button
+                onClick={() => confirmImport.mutate(
+                  { orgId: currentOrgId!, importId },
+                  {
+                    onSuccess: () => toast({
+                      title: 'Payment confirmed!',
+                      action: (
+                        <button
+                          onClick={() => unconfirmImport.mutate(
+                            { orgId: currentOrgId!, importId },
+                            { onSuccess: () => toast({ title: 'Moved back to pending' }) },
+                          )}
+                          className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+                        >
+                          Redo
+                        </button>
+                      ),
+                    }),
+                    onError: () => toast({ title: 'Failed to undo', variant: 'destructive' }),
+                  },
+                )}
+                className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+              >
+                Undo
+              </button>
+            ),
+          });
+          setUnconfirmingId(null);
+        },
+        onError: (error: any) => {
+          toast({
+            title: 'Error',
+            description: error.message,
+            variant: 'destructive',
+          });
+          setUnconfirmingId(null);
+        },
+      },
+    );
+  };
+
+  const handleBulkUnconfirm = async () => {
+    if (!currentOrgId || selectedConfirmed.size === 0) return;
+    setIsBulkUnconfirming(true);
+
+    const importIds = Array.from(selectedConfirmed);
+    let movedCount = 0;
+
+    for (const importId of importIds) {
+      try {
+        await unconfirmImport.mutateAsync({ orgId: currentOrgId, importId });
+        movedCount++;
+      } catch {
+        // Continue with others
+      }
+    }
+
+    setSelectedConfirmed(new Set());
+    setIsBulkUnconfirming(false);
+    toast({ title: `Moved ${movedCount} payment${movedCount !== 1 ? 's' : ''} to pending` });
+  };
+
+  const toggleConfirmedSelection = (importId: string) => {
+    setSelectedConfirmed((prev) => {
+      const next = new Set(prev);
+      if (next.has(importId)) next.delete(importId);
+      else next.add(importId);
+      return next;
+    });
+  };
+
   const handleCreateMember = async (name: string): Promise<string | null> => {
     if (!currentOrgId) return null;
     try {
@@ -519,8 +652,40 @@ export default function InboxPage() {
         orgId: currentOrgId,
         members: [{ name }],
       });
-      toast({ title: `Member "${name}" created` });
-      return result[0]?.id || null;
+      const createdId = result[0]?.id;
+      toast({
+        title: `Member "${name}" created`,
+        action: createdId ? (
+          <button
+            onClick={() => {
+              deleteMember.mutate(
+                { orgId: currentOrgId, memberId: createdId },
+                {
+                  onSuccess: () => toast({
+                    title: `${name} removed`,
+                    action: (
+                      <button
+                        onClick={() => createMembers.mutate(
+                          { orgId: currentOrgId!, members: [{ name }] },
+                          { onSuccess: () => toast({ title: `${name} re-added` }) },
+                        )}
+                        className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+                      >
+                        Redo
+                      </button>
+                    ),
+                  }),
+                  onError: () => toast({ title: 'Failed to undo', variant: 'destructive' }),
+                },
+              );
+            }}
+            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+          >
+            Undo
+          </button>
+        ) : undefined,
+      });
+      return createdId || null;
     } catch (error: any) {
       toast({
         title: 'Error creating member',
@@ -548,12 +713,12 @@ export default function InboxPage() {
     setIsBulkProcessing(true);
 
     const importIds = Array.from(selectedImports);
-    let approvedCount = 0;
+    const approvedIds: string[] = [];
 
     for (const importId of importIds) {
       try {
         await confirmImport.mutateAsync({ orgId: currentOrgId, importId });
-        approvedCount++;
+        approvedIds.push(importId);
       } catch (error) {
         // Continue with other approvals
       }
@@ -561,7 +726,47 @@ export default function InboxPage() {
 
     setSelectedImports(new Set());
     setIsBulkProcessing(false);
-    toast({ title: `Approved ${approvedCount} payment${approvedCount !== 1 ? 's' : ''}` });
+
+    const handleUndoBulkApprove = async () => {
+      let undoneCount = 0;
+      for (const importId of approvedIds) {
+        try {
+          await unconfirmImport.mutateAsync({ orgId: currentOrgId, importId });
+          undoneCount++;
+        } catch {
+          // Continue
+        }
+      }
+      toast({
+        title: `Moved ${undoneCount} payment${undoneCount !== 1 ? 's' : ''} back to pending`,
+        action: (
+          <button
+            onClick={async () => {
+              let redoneCount = 0;
+              for (const importId of approvedIds) {
+                try { await confirmImport.mutateAsync({ orgId: currentOrgId, importId }); redoneCount++; } catch { /* continue */ }
+              }
+              toast({ title: `Re-approved ${redoneCount} payment${redoneCount !== 1 ? 's' : ''}` });
+            }}
+            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+          >
+            Redo
+          </button>
+        ),
+      });
+    };
+
+    toast({
+      title: `Approved ${approvedIds.length} payment${approvedIds.length !== 1 ? 's' : ''}`,
+      action: approvedIds.length > 0 ? (
+        <button
+          onClick={handleUndoBulkApprove}
+          className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+        >
+          Undo
+        </button>
+      ) : undefined,
+    });
   };
 
   const handleBulkIgnore = async () => {
@@ -593,7 +798,23 @@ export default function InboxPage() {
           // Continue
         }
       }
-      toast({ title: `Restored ${restoredCount} import${restoredCount !== 1 ? 's' : ''}` });
+      toast({
+        title: `Restored ${restoredCount} import${restoredCount !== 1 ? 's' : ''}`,
+        action: (
+          <button
+            onClick={async () => {
+              let redoneCount = 0;
+              for (const importId of ignoredIds) {
+                try { await ignoreImport.mutateAsync({ orgId: currentOrgId, importId }); redoneCount++; } catch { /* continue */ }
+              }
+              toast({ title: `Re-ignored ${redoneCount} import${redoneCount !== 1 ? 's' : ''}` });
+            }}
+            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+          >
+            Redo
+          </button>
+        ),
+      });
     };
 
     toast({
@@ -601,7 +822,7 @@ export default function InboxPage() {
       action: (
         <button
           onClick={handleUndo}
-          className="text-xs font-medium text-primary hover:underline"
+          className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
         >
           Undo
         </button>
@@ -612,7 +833,7 @@ export default function InboxPage() {
   const isConnected = gmailStatus?.connected;
   const imports = importsData?.data || [];
   const ignored = ignoredData?.data || [];
-  const autoConfirmed = autoConfirmedData?.data || [];
+  const confirmed = confirmedData?.data || [];
   const members = membersData?.data || [];
 
   return (
@@ -778,7 +999,7 @@ export default function InboxPage() {
       {/* Stats Cards */}
       {isConnected && importStats && (
         <FadeIn delay={0.15}>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div className="rounded-xl border bg-card p-4">
               <div className="flex items-center gap-2 text-muted-foreground mb-1">
                 <Clock className="w-4 h-4" />
@@ -788,18 +1009,10 @@ export default function InboxPage() {
             </div>
             <div className="rounded-xl border bg-card p-4">
               <div className="flex items-center gap-2 text-success mb-1">
-                <Sparkles className="w-4 h-4" />
-                <span className="text-sm">Auto-confirmed</span>
-              </div>
-              <p className="text-2xl font-bold text-success">{importStats.autoConfirmed}</p>
-              <p className="text-xs text-muted-foreground">last 7 days</p>
-            </div>
-            <div className="rounded-xl border bg-card p-4">
-              <div className="flex items-center gap-2 text-primary mb-1">
                 <CheckCircle2 className="w-4 h-4" />
                 <span className="text-sm">Confirmed</span>
               </div>
-              <p className="text-2xl font-bold">{importStats.confirmed}</p>
+              <p className="text-2xl font-bold text-success">{importStats.autoConfirmed + importStats.confirmed}</p>
               <p className="text-xs text-muted-foreground">last 7 days</p>
             </div>
             <div className="rounded-xl border bg-card p-4">
@@ -905,10 +1118,9 @@ export default function InboxPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="5">5</SelectItem>
-                          <SelectItem value="10">10</SelectItem>
-                          <SelectItem value="25">25</SelectItem>
+                          <SelectItem value="20">20</SelectItem>
                           <SelectItem value="50">50</SelectItem>
+                          <SelectItem value="100">100</SelectItem>
                         </SelectContent>
                       </Select>
                       <span className="text-sm text-muted-foreground">per page</span>
@@ -1130,33 +1342,33 @@ export default function InboxPage() {
         </div>
       )}
 
-      {/* Auto-Confirmed Payments */}
-      {isConnected && autoConfirmed.length > 0 && (() => {
+      {/* Confirmed Payments */}
+      {isConnected && confirmed.length > 0 && (() => {
         // Filter by search
-        const filteredAutoConfirmed = autoConfirmedSearch
-          ? autoConfirmed.filter((item) =>
-              (item.parsedPayerName || '').toLowerCase().includes(autoConfirmedSearch.toLowerCase()) ||
-              (item.parsedMemo || '').toLowerCase().includes(autoConfirmedSearch.toLowerCase())
+        const filteredConfirmed = confirmedSearch
+          ? confirmed.filter((item) =>
+              (item.parsedPayerName || '').toLowerCase().includes(confirmedSearch.toLowerCase()) ||
+              (item.parsedMemo || '').toLowerCase().includes(confirmedSearch.toLowerCase())
             )
-          : autoConfirmed;
+          : confirmed;
 
         // Pagination
-        const totalPages = Math.ceil(filteredAutoConfirmed.length / autoConfirmedPerPage);
-        const startIndex = (autoConfirmedPage - 1) * autoConfirmedPerPage;
-        const paginatedAutoConfirmed = filteredAutoConfirmed.slice(startIndex, startIndex + autoConfirmedPerPage);
+        const totalPages = Math.ceil(filteredConfirmed.length / confirmedPerPage);
+        const startIndex = (confirmedPage - 1) * confirmedPerPage;
+        const paginatedConfirmed = filteredConfirmed.slice(startIndex, startIndex + confirmedPerPage);
 
         return (
           <div className="space-y-4">
             <FadeIn delay={0.3}>
               <div className="flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-success" />
-                <h2 className="text-lg font-semibold">Auto-Confirmed Payments</h2>
+                <h2 className="text-lg font-semibold">Confirmed Payments</h2>
                 <Badge variant="outline" className="border-success/30 text-success">
-                  {autoConfirmed.length}
+                  {confirmed.length}
                 </Badge>
               </div>
               <p className="text-sm text-muted-foreground">
-                These payments were automatically matched and allocated based on payer name and memo.
+                These payments were matched and confirmed. You can send them back to pending for re-review.
               </p>
             </FadeIn>
 
@@ -1166,20 +1378,19 @@ export default function InboxPage() {
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-muted-foreground">Show</span>
                   <Select
-                    value={String(autoConfirmedPerPage)}
+                    value={String(confirmedPerPage)}
                     onValueChange={(v) => {
-                      setAutoConfirmedPerPage(Number(v));
-                      setAutoConfirmedPage(1);
+                      setConfirmedPerPage(Number(v));
+                      setConfirmedPage(1);
                     }}
                   >
                     <SelectTrigger className="w-20 h-8 bg-secondary/30 border-border/50">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="5">5</SelectItem>
-                      <SelectItem value="10">10</SelectItem>
-                      <SelectItem value="25">25</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
                       <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
                     </SelectContent>
                   </Select>
                   <span className="text-sm text-muted-foreground">per page</span>
@@ -1188,10 +1399,10 @@ export default function InboxPage() {
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     placeholder="Search by name or memo..."
-                    value={autoConfirmedSearch}
+                    value={confirmedSearch}
                     onChange={(e) => {
-                      setAutoConfirmedSearch(e.target.value);
-                      setAutoConfirmedPage(1);
+                      setConfirmedSearch(e.target.value);
+                      setConfirmedPage(1);
                     }}
                     className="pl-10 h-9 bg-secondary/30 border-border/50 focus:border-primary"
                   />
@@ -1199,14 +1410,73 @@ export default function InboxPage() {
               </div>
             </FadeIn>
 
-            {filteredAutoConfirmed.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                No results found for &quot;{autoConfirmedSearch}&quot;
+            {(() => {
+              const confirmedPageIds = paginatedConfirmed.map((i) => i.id);
+              const isAllConfirmedSelected = confirmedPageIds.length > 0 && confirmedPageIds.every((id) => selectedConfirmed.has(id));
+
+              const toggleSelectAllConfirmed = () => {
+                if (isAllConfirmedSelected) {
+                  setSelectedConfirmed((prev) => {
+                    const next = new Set(prev);
+                    confirmedPageIds.forEach((id) => next.delete(id));
+                    return next;
+                  });
+                } else {
+                  setSelectedConfirmed((prev) => {
+                    const next = new Set(prev);
+                    confirmedPageIds.forEach((id) => next.add(id));
+                    return next;
+                  });
+                }
+              };
+
+              return filteredConfirmed.length === 0 ? (
+              <div className="rounded-xl border border-border/50 bg-card/50 py-12 text-center">
+                <div className="w-12 h-12 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-3">
+                  <Search className="h-6 w-6 text-muted-foreground" />
+                </div>
+                <h3 className="text-lg font-semibold mb-1">No payments found</h3>
+                <p className="text-sm text-muted-foreground">
+                  Try adjusting your search
+                </p>
               </div>
             ) : (
               <>
+                {/* Select All Row */}
+                <div className="rounded-xl border border-border/50 bg-secondary/20 p-3 flex items-center justify-between">
+                  <button
+                    onClick={toggleSelectAllConfirmed}
+                    className="flex items-center gap-3 transition-colors"
+                    title={isAllConfirmedSelected ? "Deselect all" : "Select all"}
+                  >
+                    {isAllConfirmedSelected ? (
+                      <CheckCircle2 className="w-5 h-5 text-primary" />
+                    ) : (
+                      <Circle className="w-5 h-5 text-muted-foreground hover:text-primary" />
+                    )}
+                    <span className="text-sm text-muted-foreground">
+                      {isAllConfirmedSelected ? 'Deselect all on page' : 'Select all on page'}
+                    </span>
+                  </button>
+                  <div className={`flex items-center gap-2 transition-opacity ${selectedConfirmed.size > 0 ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                    <button
+                      onClick={handleBulkUnconfirm}
+                      disabled={isBulkUnconfirming || selectedConfirmed.size === 0}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+                      title={`Move ${selectedConfirmed.size} to pending`}
+                    >
+                      {isBulkUnconfirming ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <Undo2 className="w-3 h-3" />
+                      )}
+                      Move to Pending
+                    </button>
+                  </div>
+                </div>
+
                 <StaggerChildren className="space-y-2">
-                  {paginatedAutoConfirmed.map((item) => {
+                  {paginatedConfirmed.map((item) => {
                     const isOutgoing = item.parsedDirection === 'outgoing';
                     return (
                       <StaggerItem key={item.id}>
@@ -1214,6 +1484,17 @@ export default function InboxPage() {
                           isOutgoing ? 'border-l-4 border-l-destructive/30' : 'border-l-4 border-l-success/30'
                         } bg-card/50`}>
                           <div className="flex items-center gap-3">
+                            <button
+                              onClick={() => toggleConfirmedSelection(item.id)}
+                              className="flex items-center justify-center transition-colors shrink-0"
+                              title={selectedConfirmed.has(item.id) ? "Deselect" : "Select"}
+                            >
+                              {selectedConfirmed.has(item.id) ? (
+                                <CheckCircle2 className="w-5 h-5 text-primary" />
+                              ) : (
+                                <Circle className="w-5 h-5 text-muted-foreground hover:text-primary" />
+                              )}
+                            </button>
                             <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
                               isOutgoing ? 'bg-destructive/10' : 'bg-success/10'
                             }`}>
@@ -1237,6 +1518,11 @@ export default function InboxPage() {
                                 >
                                   {isOutgoing ? 'Expense' : 'Payment'}
                                 </Badge>
+                                {item.status === 'AUTO_CONFIRMED' && (
+                                  <Badge variant="outline" className="text-xs border-success/30 text-success">
+                                    Auto
+                                  </Badge>
+                                )}
                               </div>
                               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                 <span>{new Date(item.emailDate).toLocaleDateString()}</span>
@@ -1259,9 +1545,24 @@ export default function InboxPage() {
                               </div>
                             </div>
                           </div>
-                          {item.parsedAmount && (
-                            <Money cents={item.parsedAmount} size="md" />
-                          )}
+                          <div className="flex items-center gap-3">
+                            {item.parsedAmount && (
+                              <Money cents={item.parsedAmount} size="md" />
+                            )}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-muted-foreground hover:text-foreground"
+                              onClick={() => handleUnconfirm(item.id)}
+                              disabled={unconfirmingId === item.id}
+                            >
+                              {unconfirmingId === item.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Undo2 className="w-4 h-4" />
+                              )}
+                            </Button>
+                          </div>
                         </div>
                       </StaggerItem>
                     );
@@ -1272,25 +1573,25 @@ export default function InboxPage() {
                 {totalPages > 1 && (
                   <div className="flex items-center justify-between pt-4">
                     <span className="text-sm text-muted-foreground">
-                      Showing {startIndex + 1}-{Math.min(startIndex + autoConfirmedPerPage, filteredAutoConfirmed.length)} of {filteredAutoConfirmed.length}
+                      Showing {startIndex + 1}-{Math.min(startIndex + confirmedPerPage, filteredConfirmed.length)} of {filteredConfirmed.length}
                     </span>
                     <div className="flex items-center gap-2">
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setAutoConfirmedPage((p) => Math.max(1, p - 1))}
-                        disabled={autoConfirmedPage === 1}
+                        onClick={() => setConfirmedPage((p) => Math.max(1, p - 1))}
+                        disabled={confirmedPage === 1}
                       >
                         <ChevronLeft className="w-4 h-4" />
                       </Button>
                       <span className="text-sm">
-                        Page {autoConfirmedPage} of {totalPages}
+                        Page {confirmedPage} of {totalPages}
                       </span>
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setAutoConfirmedPage((p) => Math.min(totalPages, p + 1))}
-                        disabled={autoConfirmedPage === totalPages}
+                        onClick={() => setConfirmedPage((p) => Math.min(totalPages, p + 1))}
+                        disabled={confirmedPage === totalPages}
                       >
                         <ChevronRight className="w-4 h-4" />
                       </Button>
@@ -1298,7 +1599,8 @@ export default function InboxPage() {
                   </div>
                 )}
               </>
-            )}
+            );
+          })()}
           </div>
         );
       })()}

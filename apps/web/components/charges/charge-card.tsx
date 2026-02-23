@@ -1,4 +1,4 @@
-import { AlertCircle, MoreHorizontal, Pencil, Trash2, Circle, CheckCircle2 } from 'lucide-react';
+import { AlertCircle, MoreHorizontal, Pencil, Trash2, Circle, CheckCircle2, X, Link2 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { CHARGE_CATEGORY_LABELS } from '@ledgly/shared';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,8 @@ interface ChargeCardProps {
   charge: any;
   onEdit: (charge: any) => void;
   onDelete: (charge: any) => void;
+  onUnallocate?: (allocation: { id: string; paymentId: string; amountCents: number }, chargeId: string) => void;
+  onAllocatePayment?: (charge: any) => void;
   nested?: boolean;
   isAdmin?: boolean;
   isSelected?: boolean;
@@ -28,6 +30,8 @@ export function ChargeCard({
   charge,
   onEdit,
   onDelete,
+  onUnallocate,
+  onAllocatePayment,
   nested = false,
   isAdmin = false,
   isSelected = false,
@@ -36,6 +40,7 @@ export function ChargeCard({
   const isPaid = charge.status === 'PAID';
   const isOverdue =
     !isPaid && charge.dueDate && new Date(charge.dueDate) < new Date();
+  const allocations = charge.allocations || [];
 
   const content = (
     <MotionCard className={nested ? 'border-border/30' : ''}>
@@ -111,6 +116,12 @@ export function ChargeCard({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  {!isPaid && onAllocatePayment && (
+                    <DropdownMenuItem onClick={() => onAllocatePayment(charge)}>
+                      <Link2 className="h-4 w-4 mr-2" />
+                      Allocate Payment
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem onClick={() => onEdit(charge)}>
                     <Pencil className="h-4 w-4 mr-2" />
                     Edit
@@ -127,6 +138,28 @@ export function ChargeCard({
             )}
           </div>
         </div>
+        {isAdmin && allocations.length > 0 && onUnallocate && (
+          <div className="mt-3 pt-3 border-t border-border/30">
+            <p className="text-xs text-muted-foreground mb-2">Payments applied:</p>
+            <div className="flex flex-wrap gap-1">
+              {allocations.map((a: any) => (
+                <Badge key={a.id} variant="secondary" className="text-xs gap-1 pr-1">
+                  {a.payerName || 'Payment'}: <Money cents={a.amountCents} size="xs" inline />
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUnallocate({ id: a.id, paymentId: a.paymentId, amountCents: a.amountCents }, charge.id);
+                    }}
+                    className="ml-0.5 rounded-full p-0.5 hover:bg-destructive/20 hover:text-destructive transition-colors"
+                    title="Remove allocation"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
       </MotionCardContent>
     </MotionCard>
   );

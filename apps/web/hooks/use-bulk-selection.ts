@@ -21,6 +21,19 @@ export function useBulkSelection(allIds: string[]) {
     );
   }, [allIds]);
 
+  const toggleGroup = useCallback((ids: string[]) => {
+    setSelected((prev) => {
+      const allSelected = ids.every((id) => prev.has(id));
+      const next = new Set(prev);
+      if (allSelected) {
+        ids.forEach((id) => next.delete(id));
+      } else {
+        ids.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  }, []);
+
   const clear = useCallback(() => {
     setSelected(new Set());
   }, []);
@@ -30,5 +43,5 @@ export function useBulkSelection(allIds: string[]) {
     [allIds, selected],
   );
 
-  return { selected, toggle, toggleAll, clear, isAllSelected };
+  return { selected, toggle, toggleAll, toggleGroup, clear, isAllSelected };
 }

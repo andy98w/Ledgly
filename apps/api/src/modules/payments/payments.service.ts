@@ -309,6 +309,20 @@ export class PaymentsService {
       await this.chargesService.updateChargeStatus(chargeId);
     }
 
+    // Audit log
+    const batch = createdAllocations.length > 1
+      ? this.auditService.createBatchContext(`Allocated payment to ${createdAllocations.length} charges`)
+      : undefined;
+    for (const alloc of createdAllocations) {
+      const charge = charges.find((c) => c.id === alloc.chargeId);
+      await this.auditService.logCreate(orgId, createdById, 'ALLOCATION', alloc.id, {
+        paymentId,
+        chargeId: alloc.chargeId,
+        chargeTitle: charge?.title,
+        amountCents: alloc.amountCents,
+      }, batch);
+    }
+
     return createdAllocations;
   }
 
@@ -444,9 +458,12 @@ export class PaymentsService {
     return { success: true };
   }
 
-  async removeAllocation(orgId: string, allocationId: string) {
+  async removeAllocation(orgId: string, allocationId: string, actorId?: string) {
     const allocation = await this.prisma.paymentAllocation.findFirst({
       where: { id: allocationId, orgId },
+      include: {
+        charge: { select: { title: true } },
+      },
     });
 
     if (!allocation) {
@@ -457,6 +474,16 @@ export class PaymentsService {
 
     // Update charge status
     await this.chargesService.updateChargeStatus(allocation.chargeId);
+
+    // Audit log
+    if (actorId) {
+      await this.auditService.logDelete(orgId, actorId, 'ALLOCATION', allocationId, {
+        paymentId: allocation.paymentId,
+        chargeId: allocation.chargeId,
+        chargeTitle: allocation.charge.title,
+        amountCents: allocation.amountCents,
+      });
+    }
 
     return { success: true };
   }
@@ -541,6 +568,16 @@ export class PaymentsService {
 
     // Update charge status
     await this.chargesService.updateChargeStatus(chargeId);
+
+    // Audit log
+    if (totalAllocated > 0) {
+      await this.auditService.logCreate(orgId, createdById, 'ALLOCATION', chargeId, {
+        chargeId,
+        chargeTitle: charge.title,
+        amountCents: totalAllocated,
+        autoAllocated: true,
+      });
+    }
 
     return { allocatedCents: totalAllocated };
   }

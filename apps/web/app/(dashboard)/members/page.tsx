@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Plus, Search, Users, AlertCircle, MoreHorizontal, Pencil, Trash2, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Info, Circle, CheckCircle2 } from 'lucide-react';
-import { formatDate } from '@/lib/utils';
+import { cn, formatDate } from '@/lib/utils';
 import { useMembers, useCreateMembers, useUpdateMember, useDeleteMember, useRestoreMember } from '@/lib/queries/members';
 import { useAuthStore } from '@/lib/stores/auth';
 import { Button } from '@/components/ui/button';
@@ -53,6 +53,7 @@ function MemberCard({
   onEdit,
   onDelete,
   isAdmin,
+  isSelf,
   isSelected,
   onToggleSelect,
 }: {
@@ -61,6 +62,7 @@ function MemberCard({
   onEdit: (member: MemberWithBalance) => void;
   onDelete: (member: MemberWithBalance) => void;
   isAdmin: boolean;
+  isSelf?: boolean;
   isSelected?: boolean;
   onToggleSelect?: () => void;
 }) {
@@ -91,13 +93,16 @@ function MemberCard({
             <Link href={`/members/${member.id}`} className="flex items-center gap-3 flex-1">
               <AvatarGradient name={member.displayName} size="md" />
               <div>
-                <p className="font-medium">{member.displayName}</p>
+                <p className="font-medium">
+                  {member.displayName}
+                  {isSelf && <span className="text-muted-foreground font-normal"> (You)</span>}
+                </p>
                 <div className="flex items-center gap-2 mt-1">
                   <Badge
-                    variant={member.status === 'ACTIVE' ? 'secondary' : 'outline'}
+                    variant={member.role === 'ADMIN' ? 'default' : member.role === 'TREASURER' ? 'secondary' : 'outline'}
                     className="text-xs"
                   >
-                    {member.status}
+                    {member.role === 'ADMIN' ? 'Admin' : member.role === 'TREASURER' ? 'Treasurer' : 'Member'}
                   </Badge>
                   <span className="text-xs text-muted-foreground">
                     Joined {formatDate(member.joinedAt)}
@@ -125,7 +130,7 @@ function MemberCard({
                   <Money cents={member.totalPaidCents} size="xs" inline /> paid
                 </p>
               </div>
-              {isAdmin && (
+              {isAdmin && !isSelf && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -191,24 +196,62 @@ function EditMemberDialog({
   const updateMember = useUpdateMember();
 
   // Reset form when member changes
-  useState(() => {
+  useEffect(() => {
     if (member) {
       setName(member.displayName);
       setRole(member.role);
     }
-  });
+  }, [member]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentOrgId || !member || !name.trim()) return;
 
+    // Capture original values for undo
+    const oldName = member.displayName;
+    const oldRole = member.role;
+    const memberId = member.id;
+
     try {
       await updateMember.mutateAsync({
         orgId: currentOrgId,
-        memberId: member.id,
+        memberId,
         data: { name: name.trim(), role },
       });
-      toast({ title: 'Member updated successfully' });
+      toast({
+        title: 'Member updated',
+        action: (
+          <button
+            onClick={() => {
+              const redoName = name.trim();
+              const redoRole = role;
+              updateMember.mutate(
+                { orgId: currentOrgId!, memberId, data: { name: oldName, role: oldRole } },
+                {
+                  onSuccess: () => toast({
+                    title: 'Change reverted',
+                    action: (
+                      <button
+                        onClick={() => updateMember.mutate(
+                          { orgId: currentOrgId!, memberId, data: { name: redoName, role: redoRole } },
+                          { onSuccess: () => toast({ title: 'Member updated' }) },
+                        )}
+                        className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+                      >
+                        Redo
+                      </button>
+                    ),
+                  }),
+                  onError: () => toast({ title: 'Failed to undo', variant: 'destructive' }),
+                },
+              );
+            }}
+            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+          >
+            Undo
+          </button>
+        ),
+      });
       onOpenChange(false);
     } catch (error: any) {
       toast({
@@ -280,17 +323,52 @@ function AddMemberDialog() {
   const { toast } = useToast();
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
   const createMembers = useCreateMembers();
+  const restoreMember = useRestoreMember();
+  const deleteMemberMutation = useDeleteMember();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentOrgId || !name.trim()) return;
 
     try {
-      await createMembers.mutateAsync({
+      const created = await createMembers.mutateAsync({
         orgId: currentOrgId,
         members: [{ name: name.trim(), email: email.trim() || undefined }],
       });
-      toast({ title: 'Member added successfully' });
+      const createdName = name.trim();
+      const createdId = created[0]?.id;
+      toast({
+        title: `${createdName} added`,
+        action: createdId ? (
+          <button
+            onClick={() => {
+              deleteMemberMutation.mutate(
+                { orgId: currentOrgId, memberId: createdId },
+                {
+                  onSuccess: () => toast({
+                    title: `${createdName} removed`,
+                    action: (
+                      <button
+                        onClick={() => restoreMember.mutate(
+                          { orgId: currentOrgId!, memberId: createdId },
+                          { onSuccess: () => toast({ title: `${createdName} restored` }) },
+                        )}
+                        className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+                      >
+                        Redo
+                      </button>
+                    ),
+                  }),
+                  onError: () => toast({ title: 'Failed to undo', variant: 'destructive' }),
+                },
+              );
+            }}
+            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+          >
+            Undo
+          </button>
+        ) : undefined,
+      });
       setOpen(false);
       setName('');
       setEmail('');
@@ -425,13 +503,12 @@ export default function MembersPage() {
             title: 'Member removed',
             description: `${member.displayName} has been removed.`,
             action: (
-              <Button
-                variant="outline"
-                size="sm"
+              <button
                 onClick={() => handleRestore(member.id, member.displayName)}
+                className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
               >
                 Undo
-              </Button>
+              </button>
             ),
           });
         },
@@ -453,7 +530,20 @@ export default function MembersPage() {
       { orgId: currentOrgId, memberId },
       {
         onSuccess: () => {
-          toast({ title: `${memberName} has been restored` });
+          toast({
+            title: `${memberName} has been restored`,
+            action: (
+              <button
+                onClick={() => deleteMember.mutate(
+                  { orgId: currentOrgId!, memberId },
+                  { onSuccess: () => toast({ title: `${memberName} removed` }) },
+                )}
+                className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+              >
+                Redo
+              </button>
+            ),
+          });
         },
         onError: (error: any) => {
           toast({
@@ -515,7 +605,23 @@ export default function MembersPage() {
           // Continue with other restorations
         }
       }
-      toast({ title: `Restored ${restoredCount} member${restoredCount !== 1 ? 's' : ''}` });
+      toast({
+        title: `Restored ${restoredCount} member${restoredCount !== 1 ? 's' : ''}`,
+        action: (
+          <button
+            onClick={async () => {
+              let redoneCount = 0;
+              for (const member of deletedMembers) {
+                try { await deleteMember.mutateAsync({ orgId: currentOrgId, memberId: member.id }); redoneCount++; } catch { /* continue */ }
+              }
+              toast({ title: `Removed ${redoneCount} member${redoneCount !== 1 ? 's' : ''}` });
+            }}
+            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+          >
+            Redo
+          </button>
+        ),
+      });
     };
 
     toast({
@@ -523,7 +629,7 @@ export default function MembersPage() {
       action: (
         <button
           onClick={handleUndo}
-          className="text-xs font-medium text-primary hover:underline"
+          className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
         >
           Undo
         </button>
@@ -656,7 +762,7 @@ export default function MembersPage() {
             <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
               <Users className="h-8 w-8 text-primary" />
             </div>
-            <h3 className="text-lg font-semibold mb-2">No members yet</h3>
+            <h3 className="text-lg font-semibold mb-2">No members found</h3>
             <p className="text-muted-foreground mb-6">
               Start by adding members to your organization
             </p>
@@ -682,15 +788,16 @@ export default function MembersPage() {
                   {isAllSelected ? 'Deselect all' : 'Select all'}
                 </span>
               </button>
-              {selectedRows.size > 0 && (
-                <button
-                  onClick={handleBulkDelete}
-                  className="w-7 h-7 flex items-center justify-center transition-colors hover:text-destructive"
-                  title={`Remove ${selectedRows.size} selected`}
-                >
-                  <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
-                </button>
-              )}
+              <button
+                onClick={handleBulkDelete}
+                className={cn(
+                  "w-7 h-7 flex items-center justify-center transition-all hover:text-destructive",
+                  selectedRows.size === 0 && "invisible"
+                )}
+                title={`Remove ${selectedRows.size} selected`}
+              >
+                <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
+              </button>
             </div>
           )}
           <StaggerChildren className="space-y-3">
@@ -702,6 +809,7 @@ export default function MembersPage() {
                 onEdit={handleEdit}
                 onDelete={handleDelete}
                 isAdmin={isAdmin}
+                isSelf={member.id === currentMembership?.id}
                 isSelected={selectedRows.has(member.id)}
                 onToggleSelect={() => toggleRowSelection(member.id)}
               />

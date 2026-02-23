@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { Plus, Receipt, TrendingDown, Trash2, MoreHorizontal, Loader2, Search, ChevronLeft, ChevronRight, Pencil, Info, Circle, CheckCircle2 } from 'lucide-react';
 import { useExpenses, useExpenseSummary, useDeleteExpense, useCreateExpense, useUpdateExpense, useRestoreExpense } from '@/lib/queries/expenses';
 import { useAuthStore } from '@/lib/stores/auth';
-import { formatDate, parseCents } from '@/lib/utils';
+import { cn, formatDate, parseCents } from '@/lib/utils';
 import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_LABELS, type ExpenseCategory } from '@ledgly/shared';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
@@ -282,6 +282,14 @@ export default function ExpensesPage() {
         action: (
           <button
             onClick={async () => {
+              const redoData = {
+                category: editExpenseData.category,
+                title: editExpenseData.title,
+                description: editExpenseData.description || undefined,
+                amountCents: parseCents(editExpenseData.amount),
+                date: editExpenseData.date,
+                vendor: editExpenseData.vendor || undefined,
+              };
               try {
                 await updateExpense.mutateAsync({
                   orgId: currentOrgId,
@@ -295,12 +303,25 @@ export default function ExpensesPage() {
                     vendor: originalExpense.vendor || undefined,
                   },
                 });
-                toast({ title: 'Expense restored' });
+                toast({
+                  title: 'Expense restored',
+                  action: (
+                    <button
+                      onClick={() => updateExpense.mutate(
+                        { orgId: currentOrgId!, expenseId: originalExpense.id, data: redoData },
+                        { onSuccess: () => toast({ title: 'Expense updated' }) },
+                      )}
+                      className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+                    >
+                      Redo
+                    </button>
+                  ),
+                });
               } catch (error) {
                 toast({ title: 'Failed to restore', variant: 'destructive' });
               }
             }}
-            className="text-xs font-medium text-primary hover:underline"
+            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
           >
             Undo
           </button>
@@ -329,7 +350,7 @@ export default function ExpensesPage() {
     }
 
     try {
-      await createExpense.mutateAsync({
+      const created: any = await createExpense.mutateAsync({
         orgId: currentOrgId,
         data: {
           category: newExpenseData.category,
@@ -341,7 +362,37 @@ export default function ExpensesPage() {
         },
       });
 
-      toast({ title: 'Expense created successfully' });
+      const createdId = created?.id;
+      toast({
+        title: 'Expense created',
+        action: createdId ? (
+          <button
+            onClick={() => deleteExpense.mutate(
+              { orgId: currentOrgId!, expenseId: createdId },
+              {
+                onSuccess: () => toast({
+                  title: 'Expense deleted',
+                  action: (
+                    <button
+                      onClick={() => restoreExpense.mutate(
+                        { orgId: currentOrgId!, expenseId: createdId },
+                        { onSuccess: () => toast({ title: 'Expense restored' }) },
+                      )}
+                      className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+                    >
+                      Redo
+                    </button>
+                  ),
+                }),
+                onError: () => toast({ title: 'Failed to undo', variant: 'destructive' }),
+              },
+            )}
+            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+          >
+            Undo
+          </button>
+        ) : undefined,
+      });
       resetCreateDialog();
     } catch (error: any) {
       toast({
@@ -456,7 +507,23 @@ export default function ExpensesPage() {
           // Continue with other restorations
         }
       }
-      toast({ title: `Restored ${restoredCount} expense${restoredCount !== 1 ? 's' : ''}` });
+      toast({
+        title: `Restored ${restoredCount} expense${restoredCount !== 1 ? 's' : ''}`,
+        action: (
+          <button
+            onClick={async () => {
+              let redoneCount = 0;
+              for (const expenseId of deletedExpenseIds) {
+                try { await deleteExpense.mutateAsync({ orgId: currentOrgId, expenseId }); redoneCount++; } catch { /* continue */ }
+              }
+              toast({ title: `Deleted ${redoneCount} expense${redoneCount !== 1 ? 's' : ''}` });
+            }}
+            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+          >
+            Redo
+          </button>
+        ),
+      });
     };
 
     toast({
@@ -464,7 +531,7 @@ export default function ExpensesPage() {
       action: (
         <button
           onClick={handleUndo}
-          className="text-xs font-medium text-primary hover:underline"
+          className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
         >
           Undo
         </button>
@@ -637,7 +704,7 @@ export default function ExpensesPage() {
             <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
               <Receipt className="h-8 w-8 text-muted-foreground" />
             </div>
-            <h3 className="text-lg font-semibold mb-2">No expenses yet</h3>
+            <h3 className="text-lg font-semibold mb-2">No expenses found</h3>
             <p className="text-muted-foreground mb-6">
               Start tracking your organization&apos;s spending
             </p>
@@ -669,15 +736,16 @@ export default function ExpensesPage() {
                     {isAllExpensesSelected ? 'Deselect all' : 'Select all'}
                   </span>
                 </button>
-                {selectedExpenses.size > 0 && (
-                  <button
-                    onClick={handleBulkDeleteExpenses}
-                    className="w-7 h-7 flex items-center justify-center transition-colors hover:text-destructive"
-                    title={`Delete ${selectedExpenses.size} selected`}
-                  >
-                    <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
-                  </button>
-                )}
+                <button
+                  onClick={handleBulkDeleteExpenses}
+                  className={cn(
+                    "w-7 h-7 flex items-center justify-center transition-all hover:text-destructive",
+                    selectedExpenses.size === 0 && "invisible"
+                  )}
+                  title={`Delete ${selectedExpenses.size} selected`}
+                >
+                  <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
+                </button>
               </div>
             )}
             <StaggerChildren className="space-y-3">

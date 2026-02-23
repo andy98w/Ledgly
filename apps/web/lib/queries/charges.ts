@@ -129,6 +129,7 @@ export function useVoidCharge() {
     onSettled: (_, __, { orgId }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.charges.all(orgId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.members.all(orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.payments.all(orgId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(orgId) });
     },
   });

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AlertCircle, MoreHorizontal, Pencil, Trash2, ChevronDown, ChevronRight, Users } from 'lucide-react';
+import { AlertCircle, MoreHorizontal, Pencil, Trash2, ChevronDown, ChevronRight, Users, Circle, CheckCircle2 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { CHARGE_CATEGORY_LABELS } from '@ledgly/shared';
 import { Button } from '@/components/ui/button';
@@ -25,9 +25,12 @@ interface ChargeGroupCardProps {
   onDelete: (charge: any) => void;
   onEditGroup: (group: ChargeGroup) => void;
   onDeleteGroup: (group: ChargeGroup) => void;
+  onUnallocate?: (allocation: { id: string; paymentId: string; amountCents: number }, chargeId: string) => void;
+  onAllocatePayment?: (charge: any) => void;
   isAdmin?: boolean;
   selectedCharges?: Set<string>;
   onToggleSelect?: (chargeId: string) => void;
+  onToggleSelectGroup?: (chargeIds: string[]) => void;
 }
 
 export function ChargeGroupCard({
@@ -36,9 +39,12 @@ export function ChargeGroupCard({
   onDelete,
   onEditGroup,
   onDeleteGroup,
+  onUnallocate,
+  onAllocatePayment,
   isAdmin = false,
   selectedCharges,
   onToggleSelect,
+  onToggleSelectGroup,
 }: ChargeGroupCardProps) {
   const [expanded, setExpanded] = useState(false);
 
@@ -49,6 +55,8 @@ export function ChargeGroupCard({
         charge={group.charges[0]}
         onEdit={onEdit}
         onDelete={onDelete}
+        onUnallocate={onUnallocate}
+        onAllocatePayment={onAllocatePayment}
         isAdmin={isAdmin}
         isSelected={selectedCharges?.has(group.charges[0].id)}
         onToggleSelect={onToggleSelect ? () => onToggleSelect(group.charges[0].id) : undefined}
@@ -61,12 +69,32 @@ export function ChargeGroupCard({
   const paidCount = group.charges.filter(c => c.status === 'PAID').length;
   const allPaid = paidCount === group.charges.length;
   const balanceDue = group.totalAmount - group.totalPaid;
+  const groupChargeIds = group.charges.map(c => c.id);
+  const isGroupSelected = selectedCharges
+    ? groupChargeIds.every(id => selectedCharges.has(id))
+    : false;
 
   return (
     <StaggerItem>
       <MotionCard>
         <MotionCardContent className="p-4">
           <div className="flex items-center justify-between">
+            {isAdmin && onToggleSelectGroup && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleSelectGroup(groupChargeIds);
+                }}
+                className="mr-3 flex items-center justify-center transition-colors shrink-0"
+                title={isGroupSelected ? "Deselect group" : "Select group"}
+              >
+                {isGroupSelected ? (
+                  <CheckCircle2 className="w-5 h-5 text-primary" />
+                ) : (
+                  <Circle className="w-5 h-5 text-muted-foreground hover:text-primary" />
+                )}
+              </button>
+            )}
             <button
               onClick={() => setExpanded(!expanded)}
               className="flex items-center gap-3 text-left flex-1"
@@ -167,6 +195,8 @@ export function ChargeGroupCard({
                       charge={charge}
                       onEdit={onEdit}
                       onDelete={onDelete}
+                      onUnallocate={onUnallocate}
+                      onAllocatePayment={onAllocatePayment}
                       nested
                       isAdmin={isAdmin}
                       isSelected={selectedCharges?.has(charge.id)}
