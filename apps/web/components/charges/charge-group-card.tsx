@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AlertCircle, MoreHorizontal, Pencil, Trash2, ChevronDown, ChevronRight, Users, Circle, CheckCircle2 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
@@ -33,7 +33,7 @@ interface ChargeGroupCardProps {
   onToggleSelectGroup?: (chargeIds: string[]) => void;
 }
 
-export function ChargeGroupCard({
+export const ChargeGroupCard = memo(function ChargeGroupCard({
   group,
   onEdit,
   onDelete,
@@ -211,4 +211,4 @@ export function ChargeGroupCard({
       </MotionCard>
     </StaggerItem>
   );
-}
+});

@@ -1,32 +1,28 @@
 'use client';
 
 import * as React from 'react';
-import { motion, type HTMLMotionProps } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
-interface MotionCardProps extends Omit<HTMLMotionProps<'div'>, 'ref'> {
+interface MotionCardProps extends React.HTMLAttributes<HTMLDivElement> {
   hover?: boolean;
   delay?: number;
 }
 
 const MotionCard = React.forwardRef<HTMLDivElement, MotionCardProps>(
-  ({ className, hover = true, delay = 0, children, ...props }, ref) => {
+  ({ className, hover = true, delay = 0, children, style, ...props }, ref) => {
     return (
-      <motion.div
+      <div
         ref={ref}
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay }}
-        whileHover={hover ? { y: -2, transition: { duration: 0.2 } } : undefined}
-        whileTap={hover ? { scale: 0.98 } : undefined}
         className={cn(
-          'rounded-xl border bg-card text-card-foreground shadow-sm transition-shadow hover:shadow-md',
+          'rounded-xl border bg-card text-card-foreground shadow-sm animate-in-up',
+          hover && 'transition-all hover:shadow-md hover:-translate-y-0.5',
           className,
         )}
+        style={delay ? { animationDelay: `${delay}s`, ...style } : style}
         {...props}
       >
         {children}
-      </motion.div>
+      </div>
     );
   },
 );

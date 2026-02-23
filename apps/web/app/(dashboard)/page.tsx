@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { motion } from 'framer-motion';
 import { ArrowRight, Users, Receipt, AlertTriangle, TrendingUp, Plus } from 'lucide-react';
 import { useDashboard } from '@/lib/queries/organizations';
 import { useAuthStore } from '@/lib/stores/auth';
@@ -204,10 +203,8 @@ export default function DashboardPage() {
       {/* Overdue Alert */}
       {stats.overdueCount > 0 && (
         <FadeIn delay={0.4}>
-          <motion.div
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="rounded-xl border border-destructive/30 bg-destructive/5 p-5"
+          <div
+            className="rounded-xl border border-destructive/30 bg-destructive/5 p-5 animate-in-scale"
           >
             <div className="flex items-start gap-4">
               <div className="p-2 rounded-lg bg-destructive/10">
@@ -223,7 +220,7 @@ export default function DashboardPage() {
                 </Button>
               </div>
             </div>
-          </motion.div>
+          </div>
         </FadeIn>
       )}
     </div>

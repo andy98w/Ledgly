@@ -1,6 +1,3 @@
-'use client';
-
-import { motion } from 'framer-motion';
 import { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Money } from './money';
@@ -27,15 +24,13 @@ export function StatCard({
   className,
 }: StatCardProps) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay }}
+    <div
       className={cn(
-        'relative overflow-hidden rounded-xl border bg-card p-5',
+        'relative overflow-hidden rounded-xl border bg-card p-5 animate-in-up',
         'hover:border-primary/30 transition-colors',
         className,
       )}
+      style={delay ? { animationDelay: `${delay}s` } : undefined}
     >
       {/* Subtle gradient overlay */}
       <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
@@ -60,6 +55,6 @@ export function StatCard({
           <p className="text-xs text-muted-foreground mt-2">{description}</p>
         )}
       </div>
-    </motion.div>
+    </div>
   );
 }

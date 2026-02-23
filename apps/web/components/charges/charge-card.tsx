@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { AlertCircle, MoreHorizontal, Pencil, Trash2, Circle, CheckCircle2, X, Link2 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { CHARGE_CATEGORY_LABELS } from '@ledgly/shared';
@@ -26,7 +27,7 @@ interface ChargeCardProps {
   onToggleSelect?: () => void;
 }
 
-export function ChargeCard({
+export const ChargeCard = memo(function ChargeCard({
   charge,
   onEdit,
   onDelete,
@@ -169,4 +170,4 @@ export function ChargeCard({
   }
 
   return <StaggerItem>{content}</StaggerItem>;
-}
+});

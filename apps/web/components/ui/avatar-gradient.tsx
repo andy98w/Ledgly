@@ -1,5 +1,4 @@
-'use client';
-
+import { memo } from 'react';
 import { cn } from '@/lib/utils';
 
 interface AvatarGradientProps {
@@ -42,7 +41,7 @@ function getInitials(name: string): string {
   return name.slice(0, 2).toUpperCase();
 }
 
-export function AvatarGradient({ name, size = 'md', className }: AvatarGradientProps) {
+export const AvatarGradient = memo(function AvatarGradient({ name, size = 'md', className }: AvatarGradientProps) {
   const gradient = getGradientForName(name);
   const initials = getInitials(name);
 
@@ -58,4 +57,4 @@ export function AvatarGradient({ name, size = 'md', className }: AvatarGradientP
       {initials}
     </div>
   );
-}
+});

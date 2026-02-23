@@ -195,8 +195,22 @@
     background-size: 200% 100%;
   }
 
-  .animate-count-up {
-    animation: count-up 0.6s ease-out;
+  /* CSS-based stagger animation (replaces Framer Motion stagger) */
+  .stagger-item {
+    animation: stagger-in 0.3s ease-out both;
+  }
+
+  .stagger-container > .stagger-item:nth-child(1) { animation-delay: 0ms; }
+  .stagger-container > .stagger-item:nth-child(2) { animation-delay: 30ms; }
+  .stagger-container > .stagger-item:nth-child(3) { animation-delay: 60ms; }
+  .stagger-container > .stagger-item:nth-child(4) { animation-delay: 90ms; }
+  .stagger-container > .stagger-item:nth-child(5) { animation-delay: 120ms; }
+  .stagger-container > .stagger-item:nth-child(n+6) { animation-delay: 150ms; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .stagger-item {
+      animation: none;
+    }
   }
 }
 
@@ -240,10 +254,10 @@
   }
 }
 
-@keyframes count-up {
+@keyframes stagger-in {
   from {
     opacity: 0;
-    transform: translateY(5px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
