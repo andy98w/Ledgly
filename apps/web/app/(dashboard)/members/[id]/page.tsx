@@ -1,8 +1,8 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
-import { ArrowLeft, Receipt, CreditCard, TrendingUp, Wallet, User } from 'lucide-react';
+
+import { ArrowLeft, Receipt, CreditCard, TrendingUp, Wallet, User, AlertCircle, Check } from 'lucide-react';
 import { useMember } from '@/lib/queries/members';
 import { useAuthStore } from '@/lib/stores/auth';
 import { formatDate } from '@/lib/utils';
@@ -14,6 +14,7 @@ import { AvatarGradient } from '@/components/ui/avatar-gradient';
 import { StatCard } from '@/components/ui/stat-card';
 import { MotionCard, MotionCardContent, MotionCardHeader, MotionCardTitle } from '@/components/ui/motion-card';
 import { FadeIn, StaggerChildren, StaggerItem } from '@/components/ui/page-transition';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 export default function MemberDetailPage() {
   const params = useParams();
@@ -47,11 +48,7 @@ export default function MemberDetailPage() {
   if (!member) {
     return (
       <FadeIn>
-        <motion.div
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="rounded-xl border border-border/50 bg-card/50 py-16 text-center"
-        >
+        <div className="rounded-xl border border-border/50 bg-card/50 py-16 text-center animate-in-scale">
           <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
             <User className="h-8 w-8 text-muted-foreground" />
           </div>
@@ -62,7 +59,7 @@ export default function MemberDetailPage() {
           <Button variant="outline" onClick={() => router.back()}>
             Go back
           </Button>
-        </motion.div>
+        </div>
       </FadeIn>
     );
   }
@@ -148,9 +145,9 @@ export default function MemberDetailPage() {
               <StaggerChildren className="space-y-3">
                 {member.charges?.map((charge: any) => (
                   <StaggerItem key={charge.id}>
-                    <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/30 hover:bg-secondary/50 transition-colors">
-                      <div>
-                        <p className="font-medium">{charge.title}</p>
+                    <div className="flex items-center justify-between gap-4 p-4 rounded-xl bg-secondary/30 hover:bg-secondary/50 transition-all duration-200">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium truncate" title={charge.title}>{charge.title}</p>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
                           <Badge variant="outline" className="text-xs">{charge.category}</Badge>
                           {charge.dueDate && (
@@ -162,13 +159,27 @@ export default function MemberDetailPage() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <Money cents={charge.amountCents} size="sm" />
-                        {charge.balanceDueCents > 0 ? (
+                        <div className="flex items-center justify-end gap-2">
+                          <Money cents={charge.amountCents} size="sm" />
+                          <TooltipProvider delayDuration={0}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span>
+                                  {charge.balanceDueCents > 0 ? (
+                                    <AlertCircle className="w-4 h-4 text-warning" />
+                                  ) : (
+                                    <Check className="w-4 h-4 text-success" />
+                                  )}
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>{charge.balanceDueCents > 0 ? 'Open' : 'Paid'}</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </div>
+                        {charge.balanceDueCents > 0 && (
                           <p className="text-sm text-destructive mt-1">
                             <Money cents={charge.balanceDueCents} size="xs" inline className="text-destructive" /> due
                           </p>
-                        ) : (
-                          <Badge variant="success" className="text-xs mt-1">Paid</Badge>
                         )}
                       </div>
                     </div>
@@ -200,24 +211,31 @@ export default function MemberDetailPage() {
               <StaggerChildren className="space-y-3">
                 {member.payments?.map((payment: any) => (
                   <StaggerItem key={payment.id}>
-                    <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/30 hover:bg-secondary/50 transition-colors">
-                      <div>
+                    <div className="flex items-center justify-between gap-4 p-4 rounded-xl bg-secondary/30 hover:bg-secondary/50 transition-all duration-200">
+                      <div className="min-w-0">
                         <Money cents={payment.amountCents} size="sm" />
-                        <p className="text-sm text-muted-foreground mt-1">
+                        <p className="text-sm text-muted-foreground mt-1 truncate">
                           {formatDate(payment.paidAt)} via {payment.source}
                         </p>
                       </div>
-                      <div className="text-right">
+                      <div className="text-right shrink-0">
                         {payment.allocations?.length > 0 ? (
                           <div className="space-y-1">
                             {payment.allocations.map((a: any) => (
-                              <Badge key={a.id} variant="secondary" className="text-xs">
-                                <Money cents={a.amountCents} size="xs" inline /> → {a.chargeTitle}
+                              <Badge key={a.id} variant="secondary" className="text-xs max-w-[180px]">
+                                <Money cents={a.amountCents} size="xs" inline /> → <span className="truncate">{a.chargeTitle}</span>
                               </Badge>
                             ))}
                           </div>
                         ) : (
-                          <Badge variant="warning" className="text-xs">Unallocated</Badge>
+                          <TooltipProvider delayDuration={0}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span><AlertCircle className="w-4 h-4 text-warning" /></span>
+                              </TooltipTrigger>
+                              <TooltipContent>Unallocated</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         )}
                       </div>
                     </div>

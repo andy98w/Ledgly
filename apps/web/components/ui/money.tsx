@@ -1,5 +1,8 @@
+'use client';
+
 import { memo } from 'react';
 import { cn } from '@/lib/utils';
+import { useAnimatedValue } from '@/hooks/use-animated-value';
 
 interface MoneyProps {
   cents: number;
@@ -27,11 +30,14 @@ export const Money = memo(function Money({
   cents,
   size = 'md',
   showSign = false,
+  animate = true,
   className,
   inline = false,
 }: MoneyProps) {
-  const isPositive = cents >= 0;
-  const formatted = currencyFormatter.format(Math.abs(cents) / 100);
+  const displayValue = useAnimatedValue(cents, animate);
+
+  const isPositive = displayValue >= 0;
+  const formatted = currencyFormatter.format(Math.abs(displayValue) / 100);
 
   const sign = showSign ? (isPositive ? '+' : '-') : isPositive ? '' : '-';
   const colorClass = showSign
@@ -43,7 +49,7 @@ export const Money = memo(function Money({
   return (
     <span
       className={cn(
-        'font-mono-numbers inline-flex items-baseline',
+        'font-mono-numbers inline-flex items-baseline whitespace-nowrap',
         sizeClasses[size],
         colorClass,
         className,

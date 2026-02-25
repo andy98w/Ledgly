@@ -1,22 +1,19 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect, useLayoutEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Table2, ArrowUpRight, ArrowDownRight, Download, Filter, Plus, DollarSign, Wallet, Search, Minus, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, Trash2, Circle, CheckCircle2 } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Download, Filter, Plus, DollarSign, Wallet, Search, Minus, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, Trash2, Circle, CheckCircle2, Link2, Loader2, CreditCard } from 'lucide-react';
 import { useCharges, useUpdateCharge, useCreateCharge, useVoidCharge, useRestoreCharge } from '@/lib/queries/charges';
 import { useExpenses, useUpdateExpense, useCreateExpense, useDeleteExpense, useRestoreExpense } from '@/lib/queries/expenses';
-import { usePayments, useUpdatePayment, useCreatePayment, useDeletePayment, useRestorePayment } from '@/lib/queries/payments';
+import { usePayments, useUpdatePayment, useCreatePayment, useDeletePayment, useRestorePayment, useAllocatePayment, useAutoAllocateToCharge } from '@/lib/queries/payments';
 import { useMembers } from '@/lib/queries/members';
 import { useAuthStore } from '@/lib/stores/auth';
 import { formatDate } from '@/lib/utils';
 import {
   CHARGE_CATEGORIES,
   CHARGE_CATEGORY_LABELS,
-  CHARGE_STATUS_LABELS,
   EXPENSE_CATEGORIES,
   EXPENSE_CATEGORY_LABELS,
   type ChargeCategory,
-  type ChargeStatus,
   type ExpenseCategory,
 } from '@ledgly/shared';
 import { Button } from '@/components/ui/button';
@@ -48,8 +45,15 @@ import { Label } from '@/components/ui/label';
 import { Money } from '@/components/ui/money';
 import { FadeIn } from '@/components/ui/page-transition';
 import { PageHeader } from '@/components/ui/page-header';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
+
+/** Strip "VENMO payment to " etc. prefixes from Gmail-imported expense titles */
+function cleanExpenseTitle(title: string): string {
+  const match = title.match(/^[A-Z]+ payment to (.+)$/);
+  return match ? match[1] : title;
+}
 
 interface SpreadsheetRow {
   id: string;
@@ -60,6 +64,7 @@ interface SpreadsheetRow {
   member?: string;
   membershipId?: string;
   incomeCents: number;
+  outstandingCents: number;
   expenseCents: number;
   status?: string;
   allocatedCents?: number;
@@ -157,33 +162,39 @@ function EditableCell({
     }
   };
 
-  const editingStyles = "h-6 text-xs !bg-transparent !border-0 !border-none !shadow-none !ring-0 !outline-none focus:!ring-0 focus:!border-0 focus:!outline-none focus-visible:!ring-0 focus-visible:!outline-none [&>span]:!ring-0";
-
   if (isEditing) {
     if (type === 'category') {
       const categories = rowType === 'charge' ? CHARGE_CATEGORIES : EXPENSE_CATEGORIES;
       const labels = rowType === 'charge' ? CHARGE_CATEGORY_LABELS : EXPENSE_CATEGORY_LABELS;
       return (
-        <div className="inline-block">
-          <Select
-            value={editValue}
-            onValueChange={(v) => {
-              setEditValue(v);
-              onSave(v);
-            }}
-          >
-            <SelectTrigger className={editingStyles}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
+        <Popover open={true} onOpenChange={(open) => !open && onCancel()}>
+          <PopoverTrigger asChild>
+            <button className="text-left px-1 py-0.5 rounded -mx-1">
+              <Badge variant="secondary" className="text-xs">
+                {labels[editValue as keyof typeof labels] || editValue}
+              </Badge>
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-48 p-1" align="start">
+            <div className="max-h-64 overflow-y-auto space-y-0.5">
               {categories.map((cat) => (
-                <SelectItem key={cat} value={cat}>
+                <button
+                  key={cat}
+                  onClick={() => {
+                    setEditValue(cat);
+                    onSave(cat);
+                  }}
+                  className={cn(
+                    'w-full text-left px-2 py-1.5 text-xs rounded hover:bg-secondary transition-colors',
+                    editValue === cat && 'bg-primary/10 text-primary'
+                  )}
+                >
                   {labels[cat as keyof typeof labels]}
-                </SelectItem>
+                </button>
               ))}
-            </SelectContent>
-          </Select>
-        </div>
+            </div>
+          </PopoverContent>
+        </Popover>
       );
     }
 
@@ -198,7 +209,7 @@ function EditableCell({
       return (
         <Popover open={true} onOpenChange={(open) => !open && onCancel()}>
           <PopoverTrigger asChild>
-            <button className="text-xs text-left">
+            <button className="text-left font-medium px-1 py-0.5 -mx-1 rounded hover:bg-secondary/50 transition-colors">
               {members.find((m) => m.id === editValue)?.displayName ||
                 members.find((m) => m.id === editValue)?.name ||
                 members.find((m) => m.id === editValue)?.user?.name ||
@@ -333,15 +344,35 @@ function EditableCell({
     return member?.displayName || member?.name || member?.user?.name || '-';
   };
 
+  // Truncated text with tooltip helper
+  const TruncatedText = ({ text, className: cls }: { text: string; className?: string }) => {
+    if (!text || text === '-') return <span className={cls}>{text || '-'}</span>;
+    return (
+      <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className={cn('block truncate', cls)}>{text}</span>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-xs">
+            <p className="text-sm">{text}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  };
+
   // Non-editing display
   if (!isAdmin) {
     if (type === 'date') {
       return <span className="text-muted-foreground">{formatDate(value as string)}</span>;
     }
     if (type === 'member') {
-      return <span>{getMemberDisplayValue()}</span>;
+      return <TruncatedText text={getMemberDisplayValue()} />;
     }
-    return <span>{type === 'money' ? <Money cents={value as number} size="sm" /> : value}</span>;
+    if (type === 'money') {
+      return <span><Money cents={value as number} size="sm" /></span>;
+    }
+    return <TruncatedText text={String(value)} />;
   }
 
   return (
@@ -351,7 +382,7 @@ function EditableCell({
       title="Click to edit"
     >
       {type === 'money' ? (
-        <Money cents={value as number} size="sm" className={column === 'income' ? 'text-success' : 'text-destructive'} />
+        <Money cents={value as number} size="sm" className={column === 'income' ? 'text-success' : column === 'outstanding' ? 'text-warning' : 'text-destructive'} />
       ) : type === 'category' ? (
         <Badge variant="secondary" className="text-xs">
           {rowType === 'charge'
@@ -361,9 +392,9 @@ function EditableCell({
       ) : type === 'date' ? (
         <span className="text-muted-foreground">{formatDate(value as string)}</span>
       ) : type === 'member' ? (
-        <span className="font-medium">{getMemberDisplayValue()}</span>
+        <TruncatedText text={getMemberDisplayValue()} className="font-medium" />
       ) : (
-        <span className="font-medium">{value || '-'}</span>
+        <TruncatedText text={String(value || '-')} className="font-medium" />
       )}
     </button>
   );
@@ -372,11 +403,12 @@ function EditableCell({
 export default function SpreadsheetPage() {
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<'date' | 'amount' | 'type' | 'category' | 'member' | 'status' | 'income' | 'expense'>('date');
+  const [sortBy, setSortBy] = useState<'date' | 'amount' | 'type' | 'category' | 'member' | 'status' | 'income' | 'outstanding' | 'expense'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [editingCell, setEditingCell] = useState<EditingCell>(null);
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showAllocateDialog, setShowAllocateDialog] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [newRowType, setNewRowType] = useState<'charge' | 'expense' | 'payment'>('charge');
@@ -416,6 +448,8 @@ export default function SpreadsheetPage() {
   const createMembers = useCreateMembers();
   const deleteOneMember = useDeleteMember();
   const restoreMember = useRestoreMember();
+  const allocatePayment = useAllocatePayment();
+  const autoAllocate = useAutoAllocateToCharge();
 
   const isLoading = chargesLoading || expensesLoading || paymentsLoading;
   const members = membersData?.data || [];
@@ -447,17 +481,20 @@ export default function SpreadsheetPage() {
     if (chargesData?.data) {
       for (const charge of chargesData.data) {
         if (typeFilter !== 'all' && typeFilter !== 'charge') continue;
+        const c = charge as any;
         allRows.push({
           id: charge.id,
           date: typeof charge.createdAt === 'string' ? charge.createdAt : new Date(charge.createdAt).toISOString(),
           type: 'charge',
           category: charge.category,
           description: charge.title,
-          member: charge.membership?.name || charge.membership?.user?.name || undefined,
+          member: c.membership?.displayName || charge.membership?.name || charge.membership?.user?.name || undefined,
           membershipId: charge.membershipId,
-          incomeCents: charge.amountCents,
+          incomeCents: c.allocatedCents || 0,
+          outstandingCents: c.balanceDueCents ?? charge.amountCents,
           expenseCents: 0,
           status: charge.status,
+          allocatedCents: c.allocatedCents || 0,
         });
       }
     }
@@ -466,14 +503,16 @@ export default function SpreadsheetPage() {
     if (expensesData?.data) {
       for (const expense of expensesData.data) {
         if (typeFilter !== 'all' && typeFilter !== 'expense') continue;
+        const cleanedTitle = cleanExpenseTitle(expense.title);
         allRows.push({
           id: expense.id,
           date: typeof expense.date === 'string' ? expense.date : new Date(expense.date).toISOString(),
           type: 'expense',
           category: expense.category,
-          description: expense.description || expense.title,
+          description: expense.description || cleanedTitle,
           member: expense.vendor || undefined,
           incomeCents: 0,
+          outstandingCents: 0,
           expenseCents: expense.amountCents,
         });
       }
@@ -483,6 +522,8 @@ export default function SpreadsheetPage() {
     if (paymentsData?.data) {
       for (const payment of paymentsData.data) {
         if (typeFilter !== 'all' && typeFilter !== 'payment') continue;
+        // Skip fully-unallocated payments
+        if (payment.unallocatedCents === payment.amountCents) continue;
         // Use rawPayerName for payments
         const memberName = payment.rawPayerName || undefined;
         allRows.push({
@@ -494,6 +535,7 @@ export default function SpreadsheetPage() {
           member: memberName,
           membershipId: undefined,
           incomeCents: payment.amountCents,
+          outstandingCents: 0,
           expenseCents: 0,
           allocatedCents: payment.allocatedCents,
           unallocatedCents: payment.unallocatedCents,
@@ -530,6 +572,14 @@ export default function SpreadsheetPage() {
           comparison = bHasIncome - aHasIncome; // Income rows first
           if (comparison === 0) {
             comparison = a.incomeCents - b.incomeCents;
+          }
+          break;
+        case 'outstanding':
+          const aHasOutstanding = a.outstandingCents > 0 ? 1 : 0;
+          const bHasOutstanding = b.outstandingCents > 0 ? 1 : 0;
+          comparison = bHasOutstanding - aHasOutstanding;
+          if (comparison === 0) {
+            comparison = a.outstandingCents - b.outstandingCents;
           }
           break;
         case 'expense':
@@ -576,14 +626,21 @@ export default function SpreadsheetPage() {
     setSelectedRows(new Set());
   }, [typeFilter, searchQuery, sortBy, sortOrder, pageSize]);
 
-  // Calculate totals
+  // Calculate totals — separate realized income (payments) from outstanding (charges)
   const totals = useMemo(() => {
-    const totalIncome = rows.reduce((sum, r) => sum + r.incomeCents, 0);
-    const totalExpenses = rows.reduce((sum, r) => sum + r.expenseCents, 0);
+    let income = 0;
+    let outstanding = 0;
+    let expenses = 0;
+    for (const r of rows) {
+      income += r.incomeCents;
+      outstanding += r.outstandingCents;
+      expenses += r.expenseCents;
+    }
     return {
-      income: totalIncome,
-      expenses: totalExpenses,
-      net: totalIncome - totalExpenses,
+      income,
+      outstanding,
+      expenses,
+      net: income - expenses,
     };
   }, [rows]);
 
@@ -995,21 +1052,26 @@ export default function SpreadsheetPage() {
 
   const isAllSelected = paginatedRows.length > 0 && selectedRows.size === paginatedRows.length;
 
+  const selectedOutstandingCharges = useMemo(
+    () => paginatedRows.filter((r) => selectedRows.has(r.id) && r.type === 'charge' && r.outstandingCents > 0),
+    [paginatedRows, selectedRows],
+  );
+
   const handleExportCSV = () => {
-    const headers = ['Date', 'Type', 'Category', 'Description', 'Member/Vendor', 'Income', 'Expense', 'Status'];
+    const headers = ['Date', 'Type', 'Member/Vendor', 'Category', 'Description', 'Income', 'Outstanding', 'Expense'];
     const csvRows = [
       headers.join(','),
       ...rows.map((row) => [
         formatDate(row.date),
         row.type,
+        row.member || '',
         row.type === 'charge'
           ? CHARGE_CATEGORY_LABELS[row.category as ChargeCategory] || row.category
           : EXPENSE_CATEGORY_LABELS[row.category as ExpenseCategory] || row.category,
         `"${row.description}"`,
-        row.member || '',
         row.incomeCents ? (row.incomeCents / 100).toFixed(2) : '',
+        row.outstandingCents ? (row.outstandingCents / 100).toFixed(2) : '',
         row.expenseCents ? (row.expenseCents / 100).toFixed(2) : '',
-        row.status || '',
       ].join(',')),
     ];
 
@@ -1023,13 +1085,12 @@ export default function SpreadsheetPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-tour="spreadsheet-view">
       {/* Header */}
       <FadeIn>
         <PageHeader
           title="Spreadsheet"
           helpText={`Combined view of all charges, expenses, and payments in one place. ${isAdmin ? 'Click on any cell to edit values directly. Use the selection checkboxes to select multiple rows, then click the trash icon to delete. Sort by clicking column headers.' : 'View all your organization\'s financial transactions.'}`}
-          icon={<Table2 className="h-6 w-6 text-primary-foreground" />}
           actions={
             <Button variant="outline" onClick={handleExportCSV}>
               <Download className="w-4 h-4 mr-2" />
@@ -1041,13 +1102,20 @@ export default function SpreadsheetPage() {
 
       {/* Summary Cards */}
       <FadeIn delay={0.1}>
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-4">
           <div className="rounded-xl border bg-card p-4">
             <div className="flex items-center gap-2 text-success mb-2">
               <ArrowUpRight className="w-4 h-4" />
-              <span className="text-sm font-medium">Total Income</span>
+              <span className="text-sm font-medium">Income</span>
             </div>
             <Money cents={totals.income} size="lg" className="text-success" />
+          </div>
+          <div className="rounded-xl border bg-card p-4">
+            <div className="flex items-center gap-2 text-warning mb-2">
+              <Wallet className="w-4 h-4" />
+              <span className="text-sm font-medium">Outstanding</span>
+            </div>
+            <Money cents={totals.outstanding} size="lg" className="text-warning" />
           </div>
           <div className="rounded-xl border bg-card p-4">
             <div className="flex items-center gap-2 text-destructive mb-2">
@@ -1156,22 +1224,39 @@ export default function SpreadsheetPage() {
               <thead>
                 <tr className="border-b bg-secondary/30">
                   {isAdmin && (
-                    <th className="w-16 px-2 py-3">
-                      <div className="w-7 h-7 flex items-center justify-center">
+                    <th className="w-16 pl-5 pr-2 py-3">
+                      <div className="w-14 h-7 flex items-center gap-1">
                         {selectedRows.size > 0 && (
                           <button
                             onClick={handleDeleteSelected}
-                            className="w-7 h-7 flex items-center justify-center transition-colors hover:text-destructive"
+                            className="w-7 h-7 shrink-0 flex items-center justify-center transition-colors hover:text-destructive"
                             title={`Delete ${selectedRows.size} selected`}
                           >
                             <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
                           </button>
                         )}
+                        {selectedOutstandingCharges.length > 0 && (
+                          <TooltipProvider delayDuration={300}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  onClick={() => setShowAllocateDialog(true)}
+                                  className="w-7 h-7 shrink-0 flex items-center justify-center transition-colors hover:text-primary"
+                                >
+                                  <Link2 className="w-4 h-4 text-muted-foreground hover:text-primary" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom">
+                                Allocate {selectedOutstandingCharges.length} charge{selectedOutstandingCharges.length !== 1 ? 's' : ''}
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
                       </div>
                     </th>
                   )}
                   <th
-                    className="text-left px-4 py-3 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none w-28"
+                    className="text-left px-5 py-3 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none w-28"
                     onClick={() => {
                       if (sortBy === 'date') {
                         setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -1189,44 +1274,7 @@ export default function SpreadsheetPage() {
                     </span>
                   </th>
                   <th
-                    className="text-left px-4 py-3 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none w-24"
-                    onClick={() => {
-                      if (sortBy === 'type') {
-                        setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-                      } else {
-                        setSortBy('type');
-                        setSortOrder('asc');
-                      }
-                    }}
-                  >
-                    <span className="flex items-center gap-1">
-                      Type
-                      {sortBy === 'type' && (
-                        sortOrder === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-                      )}
-                    </span>
-                  </th>
-                  <th
-                    className="text-left px-4 py-3 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none w-28"
-                    onClick={() => {
-                      if (sortBy === 'category') {
-                        setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-                      } else {
-                        setSortBy('category');
-                        setSortOrder('asc');
-                      }
-                    }}
-                  >
-                    <span className="flex items-center gap-1">
-                      Category
-                      {sortBy === 'category' && (
-                        sortOrder === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-                      )}
-                    </span>
-                  </th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Description</th>
-                  <th
-                    className="text-left px-4 py-3 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none w-36"
+                    className="text-left px-5 py-3 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none w-36"
                     onClick={() => {
                       if (sortBy === 'member') {
                         setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -1244,7 +1292,26 @@ export default function SpreadsheetPage() {
                     </span>
                   </th>
                   <th
-                    className="text-right px-4 py-3 font-medium text-success cursor-pointer hover:text-success/80 select-none w-24"
+                    className="text-left px-5 py-3 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none w-28"
+                    onClick={() => {
+                      if (sortBy === 'category') {
+                        setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+                      } else {
+                        setSortBy('category');
+                        setSortOrder('asc');
+                      }
+                    }}
+                  >
+                    <span className="flex items-center gap-1">
+                      Category
+                      {sortBy === 'category' && (
+                        sortOrder === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                      )}
+                    </span>
+                  </th>
+                  <th className="text-left px-5 py-3 font-medium text-muted-foreground w-48 max-w-[12rem]">Description</th>
+                  <th
+                    className="text-right px-5 py-3 font-medium text-success cursor-pointer hover:text-success/80 select-none w-24"
                     onClick={() => {
                       if (sortBy === 'income') {
                         setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -1263,7 +1330,26 @@ export default function SpreadsheetPage() {
                     </span>
                   </th>
                   <th
-                    className="text-right px-4 py-3 font-medium text-destructive cursor-pointer hover:text-destructive/80 select-none w-24"
+                    className="text-right px-5 py-3 font-medium text-warning cursor-pointer hover:text-warning/80 select-none w-24"
+                    onClick={() => {
+                      if (sortBy === 'outstanding') {
+                        setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+                      } else {
+                        setSortBy('outstanding');
+                        setSortOrder('desc');
+                      }
+                    }}
+                  >
+                    <span className="flex items-center justify-end gap-1">
+                      <Wallet className="h-3 w-3" />
+                      Outstanding
+                      {sortBy === 'outstanding' && (
+                        sortOrder === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                      )}
+                    </span>
+                  </th>
+                  <th
+                    className="text-right pl-5 pr-8 py-3 font-medium text-destructive cursor-pointer hover:text-destructive/80 select-none w-24"
                     onClick={() => {
                       if (sortBy === 'expense') {
                         setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -1281,31 +1367,13 @@ export default function SpreadsheetPage() {
                       )}
                     </span>
                   </th>
-                  <th
-                    className="text-left px-4 py-3 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none w-24"
-                    onClick={() => {
-                      if (sortBy === 'status') {
-                        setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-                      } else {
-                        setSortBy('status');
-                        setSortOrder('asc');
-                      }
-                    }}
-                  >
-                    <span className="flex items-center gap-1">
-                      Status
-                      {sortBy === 'status' && (
-                        sortOrder === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-                      )}
-                    </span>
-                  </th>
                 </tr>
               </thead>
               <tbody>
                 {/* Add Row */}
                 {isAdmin && !isLoading && (
                   <tr className="border-b border-border/50 bg-secondary/20 hover:bg-secondary/40 transition-colors">
-                    <td className="px-2 py-2">
+                    <td className="pl-5 pr-2 py-2">
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => setShowAddDialog(true)}
@@ -1327,45 +1395,42 @@ export default function SpreadsheetPage() {
                         </button>
                       </div>
                     </td>
-                    <td colSpan={8}></td>
+                    <td colSpan={7}></td>
                   </tr>
                 )}
                 {isLoading ? (
                   Array.from({ length: 5 }).map((_, i) => (
                     <tr key={i} className="border-b border-border/50">
-                      {isAdmin && <td className="px-2 py-3"><Skeleton className="h-7 w-14" /></td>}
-                      <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
-                      <td className="px-4 py-3"><Skeleton className="h-5 w-16" /></td>
-                      <td className="px-4 py-3"><Skeleton className="h-5 w-20" /></td>
-                      <td className="px-4 py-3"><Skeleton className="h-4 w-40" /></td>
-                      <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
-                      <td className="px-4 py-3"><Skeleton className="h-4 w-16 ml-auto" /></td>
-                      <td className="px-4 py-3"><Skeleton className="h-4 w-16 ml-auto" /></td>
-                      <td className="px-4 py-3"><Skeleton className="h-5 w-16" /></td>
+                      {isAdmin && <td className="pl-5 pr-2 py-3"><Skeleton className="h-7 w-14" /></td>}
+                      <td className="px-5 py-3"><Skeleton className="h-4 w-20" /></td>
+                      <td className="px-5 py-3"><Skeleton className="h-5 w-20" /></td>
+                      <td className="px-5 py-3"><Skeleton className="h-4 w-40" /></td>
+                      <td className="px-5 py-3"><Skeleton className="h-4 w-24" /></td>
+                      <td className="px-5 py-3"><Skeleton className="h-4 w-16 ml-auto" /></td>
+                      <td className="px-5 py-3"><Skeleton className="h-4 w-16 ml-auto" /></td>
+                      <td className="pl-5 pr-8 py-3"><Skeleton className="h-4 w-16 ml-auto" /></td>
                     </tr>
                   ))
                 ) : paginatedRows.length === 0 ? (
                   <tr>
-                    <td colSpan={isAdmin ? 9 : 8} className="px-4 py-12 text-center text-muted-foreground">
+                    <td colSpan={isAdmin ? 8 : 7} className="px-4 py-12 text-center text-muted-foreground">
                       No transactions found
                     </td>
                   </tr>
                 ) : (
                   paginatedRows.map((row, index) => (
-                    <motion.tr
+                    <tr
                       key={row.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.02 }}
                       className={cn(
+                        'animate-in-up',
                         'border-b border-border/50 hover:bg-secondary/30 transition-colors',
-                        row.type === 'charge' && 'bg-success/5',
+                        row.type === 'charge' && 'bg-warning/5',
                         row.type === 'expense' && 'bg-destructive/5',
                         row.type === 'payment' && 'bg-success/5',
                       )}
                     >
                       {isAdmin && (
-                        <td className="px-2 py-2">
+                        <td className="pl-5 pr-2 py-2">
                           <div className="flex items-center gap-1">
                             <button
                               onClick={() => handleDeleteRow(row)}
@@ -1388,7 +1453,7 @@ export default function SpreadsheetPage() {
                           </div>
                         </td>
                       )}
-                      <td className="px-4 py-3 w-28">
+                      <td className="px-5 py-3 w-28">
                         <EditableCell
                           value={row.date}
                           type="date"
@@ -1401,56 +1466,7 @@ export default function SpreadsheetPage() {
                           column="date"
                         />
                       </td>
-                      <td className="px-4 py-3 w-24">
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            row.type === 'charge' && 'bg-success/10 text-success border-success/30',
-                            row.type === 'expense' && 'bg-destructive/10 text-destructive border-destructive/30',
-                            row.type === 'payment' && 'bg-success/10 text-success border-success/30',
-                          )}
-                        >
-                          {row.type === 'charge' ? (
-                            <ArrowUpRight className="w-3 h-3 mr-1" />
-                          ) : row.type === 'expense' ? (
-                            <ArrowDownRight className="w-3 h-3 mr-1" />
-                          ) : (
-                            <Wallet className="w-3 h-3 mr-1" />
-                          )}
-                          {row.type === 'charge' ? 'Charge' : row.type === 'expense' ? 'Expense' : 'Payment'}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3 w-28">
-                        {row.type === 'payment' ? (
-                          <span className="text-xs text-muted-foreground">{row.category}</span>
-                        ) : (
-                          <EditableCell
-                            value={row.category}
-                            type="category"
-                            isEditing={editingCell?.rowId === row.id && editingCell?.column === 'category'}
-                            onEdit={() => setEditingCell({ rowId: row.id, column: 'category' })}
-                            onSave={(v) => handleSaveCell(row, 'category', v)}
-                            onCancel={() => setEditingCell(null)}
-                            isAdmin={isAdmin}
-                            rowType={row.type}
-                            column="category"
-                          />
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <EditableCell
-                          value={row.description}
-                          type="text"
-                          isEditing={editingCell?.rowId === row.id && editingCell?.column === 'description'}
-                          onEdit={() => setEditingCell({ rowId: row.id, column: 'description' })}
-                          onSave={(v) => handleSaveCell(row, 'description', v)}
-                          onCancel={() => setEditingCell(null)}
-                          isAdmin={isAdmin}
-                          rowType={row.type}
-                          column="description"
-                        />
-                      </td>
-                      <td className="px-4 py-3 w-36">
+                      <td className="px-5 py-3 w-36">
                         {row.type === 'charge' || row.type === 'payment' ? (
                           <EditableCell
                             value={row.membershipId || ''}
@@ -1479,10 +1495,86 @@ export default function SpreadsheetPage() {
                           />
                         )}
                       </td>
-                      <td className="px-4 py-3 text-right w-24">
-                        {row.incomeCents > 0 ? (
+                      <td className="px-5 py-3 w-28">
+                        {row.type === 'payment' ? (
+                          <span className="text-xs text-muted-foreground">{row.category}</span>
+                        ) : (
                           <EditableCell
-                            value={row.incomeCents}
+                            value={row.category}
+                            type="category"
+                            isEditing={editingCell?.rowId === row.id && editingCell?.column === 'category'}
+                            onEdit={() => setEditingCell({ rowId: row.id, column: 'category' })}
+                            onSave={(v) => handleSaveCell(row, 'category', v)}
+                            onCancel={() => setEditingCell(null)}
+                            isAdmin={isAdmin}
+                            rowType={row.type}
+                            column="category"
+                          />
+                        )}
+                      </td>
+                      <td className="px-5 py-3 w-48 max-w-[12rem]">
+                        <EditableCell
+                          value={row.description}
+                          type="text"
+                          isEditing={editingCell?.rowId === row.id && editingCell?.column === 'description'}
+                          onEdit={() => setEditingCell({ rowId: row.id, column: 'description' })}
+                          onSave={(v) => handleSaveCell(row, 'description', v)}
+                          onCancel={() => setEditingCell(null)}
+                          isAdmin={isAdmin}
+                          rowType={row.type}
+                          column="description"
+                        />
+                      </td>
+                      <td className="px-5 py-3 text-right w-24">
+                        {row.incomeCents > 0 ? (
+                          row.type === 'charge' ? (
+                            // Charge income = allocated payments (not editable, show payer tooltip)
+                            <TooltipProvider delayDuration={300}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span>
+                                    <Money cents={row.incomeCents} size="sm" className="text-success" />
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="max-w-xs">
+                                  {(() => {
+                                    const charge = chargesMap.get(row.id);
+                                    const allocs = charge?.allocations || [];
+                                    if (allocs.length === 0) return <p className="text-xs">Allocated</p>;
+                                    return (
+                                      <div className="space-y-1">
+                                        {allocs.map((a: any) => (
+                                          <p key={a.id} className="text-xs">
+                                            {a.payerName || 'Unknown'} &mdash; <Money cents={a.amountCents} size="sm" inline />
+                                          </p>
+                                        ))}
+                                      </div>
+                                    );
+                                  })()}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          ) : (
+                            <EditableCell
+                              value={row.incomeCents}
+                              type="money"
+                              isEditing={editingCell?.rowId === row.id && editingCell?.column === 'amount'}
+                              onEdit={() => setEditingCell({ rowId: row.id, column: 'amount' })}
+                              onSave={(v) => handleSaveCell(row, 'amount', v)}
+                              onCancel={() => setEditingCell(null)}
+                              isAdmin={isAdmin}
+                              rowType={row.type}
+                              column="income"
+                            />
+                          )
+                        ) : (
+                          <span className="text-muted-foreground/30">-</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3 text-right w-24">
+                        {row.outstandingCents > 0 ? (
+                          <EditableCell
+                            value={row.outstandingCents}
                             type="money"
                             isEditing={editingCell?.rowId === row.id && editingCell?.column === 'amount'}
                             onEdit={() => setEditingCell({ rowId: row.id, column: 'amount' })}
@@ -1490,13 +1582,13 @@ export default function SpreadsheetPage() {
                             onCancel={() => setEditingCell(null)}
                             isAdmin={isAdmin}
                             rowType={row.type}
-                            column="income"
+                            column="outstanding"
                           />
                         ) : (
                           <span className="text-muted-foreground/30">-</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-right w-24">
+                      <td className="pl-5 pr-8 py-3 text-right w-24">
                         {row.expenseCents > 0 ? (
                           <EditableCell
                             value={row.expenseCents}
@@ -1513,35 +1605,7 @@ export default function SpreadsheetPage() {
                           <span className="text-muted-foreground/30">-</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 w-24">
-                        {row.status && (
-                          <Badge
-                            variant="outline"
-                            className={cn(
-                              'text-xs',
-                              row.status === 'PAID' && 'bg-success/10 text-success border-success/30',
-                              row.status === 'OPEN' && 'bg-warning/10 text-warning border-warning/30',
-                              row.status === 'PARTIALLY_PAID' && 'bg-blue-500/10 text-blue-400 border-blue-500/30',
-                              row.status === 'VOID' && 'bg-muted text-muted-foreground',
-                            )}
-                          >
-                            {CHARGE_STATUS_LABELS[row.status as ChargeStatus] || row.status}
-                          </Badge>
-                        )}
-                        {row.type === 'payment' && row.unallocatedCents !== undefined && (
-                          <Badge
-                            variant="outline"
-                            className={cn(
-                              'text-xs',
-                              row.unallocatedCents > 0 && 'bg-warning/10 text-warning border-warning/30',
-                              row.unallocatedCents === 0 && 'bg-success/10 text-success border-success/30',
-                            )}
-                          >
-                            {row.unallocatedCents > 0 ? 'Unallocated' : 'Allocated'}
-                          </Badge>
-                        )}
-                      </td>
-                    </motion.tr>
+                    </tr>
                   ))
                 )}
               </tbody>
@@ -1549,16 +1613,18 @@ export default function SpreadsheetPage() {
               {!isLoading && rows.length > 0 && (
                 <tfoot>
                   <tr className="bg-secondary/50 font-medium">
-                    <td className="px-4 py-3" colSpan={isAdmin ? 6 : 5}>
+                    <td className="px-5 py-3" colSpan={isAdmin ? 5 : 4}>
                       <span className="text-muted-foreground">Total ({rows.length} transactions)</span>
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-5 py-3 text-right">
                       <Money cents={totals.income} size="sm" className="text-success font-semibold" />
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-5 py-3 text-right">
+                      <Money cents={totals.outstanding} size="sm" className="text-warning font-semibold" />
+                    </td>
+                    <td className="px-5 py-3 text-right">
                       <Money cents={totals.expenses} size="sm" className="text-destructive font-semibold" />
                     </td>
-                    <td className="px-4 py-3"></td>
                   </tr>
                 </tfoot>
               )}
@@ -1764,6 +1830,259 @@ export default function SpreadsheetPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Allocate Payments Dialog */}
+      <AllocatePaymentsDialog
+        open={showAllocateDialog}
+        onOpenChange={setShowAllocateDialog}
+        charges={selectedOutstandingCharges}
+        chargesMap={chargesMap}
+        payments={(paymentsData?.data || []).filter((p: any) => p.unallocatedCents > 0)}
+        orgId={currentOrgId}
+        allocatePayment={allocatePayment}
+        autoAllocate={autoAllocate}
+        onSuccess={() => {
+          setSelectedRows(new Set());
+          setShowAllocateDialog(false);
+        }}
+        toast={toast}
+      />
     </div>
+  );
+}
+
+function AllocatePaymentsDialog({
+  open,
+  onOpenChange,
+  charges,
+  chargesMap,
+  payments,
+  orgId,
+  allocatePayment,
+  autoAllocate,
+  onSuccess,
+  toast,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  charges: SpreadsheetRow[];
+  chargesMap: Map<string, any>;
+  payments: any[];
+  orgId: string | null;
+  allocatePayment: ReturnType<typeof useAllocatePayment>;
+  autoAllocate: ReturnType<typeof useAutoAllocateToCharge>;
+  onSuccess: () => void;
+  toast: ReturnType<typeof useToast>['toast'];
+}) {
+  const [selectedPaymentId, setSelectedPaymentId] = useState('');
+  const [paymentSearch, setPaymentSearch] = useState('');
+  const [isAutoAllocating, setIsAutoAllocating] = useState(false);
+
+  const filteredPayments = useMemo(() => {
+    if (!paymentSearch.trim()) return payments;
+    const q = paymentSearch.toLowerCase();
+    return payments.filter(
+      (p: any) =>
+        p.rawPayerName?.toLowerCase().includes(q) ||
+        p.memo?.toLowerCase().includes(q),
+    );
+  }, [payments, paymentSearch]);
+
+  const selectedPayment = payments.find((p: any) => p.id === selectedPaymentId);
+
+  // Compute allocation preview: distribute payment funds across charges in order
+  const allocationPreview = useMemo(() => {
+    if (!selectedPayment) return [];
+    let remaining = selectedPayment.unallocatedCents;
+    return charges.map((charge) => {
+      const amount = Math.min(remaining, charge.outstandingCents);
+      remaining -= amount;
+      return { chargeId: charge.id, description: charge.description, member: charge.member, outstandingCents: charge.outstandingCents, allocateCents: amount };
+    });
+  }, [selectedPayment, charges]);
+
+  const totalToAllocate = allocationPreview.reduce((sum, a) => sum + a.allocateCents, 0);
+  const remainingAfter = selectedPayment ? selectedPayment.unallocatedCents - totalToAllocate : 0;
+
+  const handleClose = () => {
+    setSelectedPaymentId('');
+    setPaymentSearch('');
+    onOpenChange(false);
+  };
+
+  const handleManualAllocate = async () => {
+    if (!orgId || !selectedPaymentId || totalToAllocate <= 0) return;
+    const allocations = allocationPreview
+      .filter((a) => a.allocateCents > 0)
+      .map((a) => ({ chargeId: a.chargeId, amountCents: a.allocateCents }));
+    try {
+      await allocatePayment.mutateAsync({ orgId, paymentId: selectedPaymentId, allocations });
+      toast({ title: `Allocated payment to ${allocations.length} charge${allocations.length !== 1 ? 's' : ''}` });
+      setSelectedPaymentId('');
+      setPaymentSearch('');
+      onSuccess();
+    } catch (error: any) {
+      toast({ title: 'Allocation failed', description: error.message || 'Please try again', variant: 'destructive' });
+    }
+  };
+
+  const handleAutoAllocateAll = async () => {
+    if (!orgId) return;
+    setIsAutoAllocating(true);
+    let successCount = 0;
+    for (const charge of charges) {
+      try {
+        await autoAllocate.mutateAsync({ orgId, chargeId: charge.id });
+        successCount++;
+      } catch {
+        // continue with remaining charges
+      }
+    }
+    setIsAutoAllocating(false);
+    if (successCount > 0) {
+      toast({ title: `Auto-allocated ${successCount} charge${successCount !== 1 ? 's' : ''}` });
+      setSelectedPaymentId('');
+      setPaymentSearch('');
+      onSuccess();
+    } else {
+      toast({ title: 'No payments could be auto-allocated', description: 'No matching unallocated payments found for these members', variant: 'destructive' });
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o ? handleClose() : onOpenChange(o)}>
+      <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Allocate Payments</DialogTitle>
+          <DialogDescription>
+            {charges.length} outstanding charge{charges.length !== 1 ? 's' : ''} selected
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* Selected charges summary */}
+        <div className="space-y-1.5 max-h-32 overflow-y-auto">
+          {charges.map((charge) => (
+            <div key={charge.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-warning/10 border border-warning/20">
+              <div className="min-w-0">
+                <p className="text-sm font-medium truncate">{charge.description}</p>
+                <p className="text-xs text-muted-foreground">{charge.member || 'No member'}</p>
+              </div>
+              <Money cents={charge.outstandingCents} size="sm" className="text-warning shrink-0 ml-2" />
+            </div>
+          ))}
+        </div>
+
+        {/* Payment search */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search payments..."
+            value={paymentSearch}
+            onChange={(e) => setPaymentSearch(e.target.value)}
+            className="pl-9 h-9"
+          />
+        </div>
+
+        {/* Payment list */}
+        <div className="flex-1 overflow-y-auto min-h-0 scrollbar-none" style={{ maxHeight: '30vh' }}>
+          <div className="space-y-2 py-1">
+            {filteredPayments.length === 0 ? (
+              <div className="text-center py-8">
+                <CreditCard className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">
+                  {paymentSearch ? 'No matching payments found' : 'No unallocated payments available'}
+                </p>
+              </div>
+            ) : (
+              filteredPayments.map((payment: any) => (
+                <button
+                  key={payment.id}
+                  type="button"
+                  onClick={() => setSelectedPaymentId(payment.id)}
+                  className={cn(
+                    'flex items-center gap-3 p-3 rounded-xl border text-left transition-all w-full',
+                    selectedPaymentId === payment.id
+                      ? 'border-primary bg-primary/10'
+                      : 'border-border/50 hover:bg-secondary/50',
+                  )}
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">{payment.rawPayerName || 'Unknown Payer'}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatDate(payment.paidAt)}
+                      {payment.memo && ` \u2022 "${payment.memo}"`}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <Money cents={payment.unallocatedCents} size="sm" />
+                    <p className="text-xs text-muted-foreground">available</p>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Allocation preview */}
+        {selectedPayment && (
+          <div className="space-y-2 pt-2 border-t border-border/30">
+            <p className="text-xs font-medium text-muted-foreground">Allocation Preview</p>
+            <div className="space-y-1 max-h-24 overflow-y-auto">
+              {allocationPreview.map((a) => (
+                <div key={a.chargeId} className="flex items-center justify-between text-xs px-2 py-1 rounded bg-secondary/30">
+                  <span className="truncate mr-2">{a.description}</span>
+                  {a.allocateCents > 0 ? (
+                    <Money cents={a.allocateCents} size="sm" className="text-success shrink-0" />
+                  ) : (
+                    <span className="text-muted-foreground shrink-0">$0.00</span>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center justify-between text-xs text-muted-foreground px-2">
+              <span>Remaining on payment after</span>
+              <Money cents={remainingAfter} size="sm" />
+            </div>
+          </div>
+        )}
+
+        <DialogFooter className="flex-row gap-2 sm:justify-between">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleAutoAllocateAll}
+            disabled={isAutoAllocating || allocatePayment.isPending}
+          >
+            {isAutoAllocating ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Auto-Allocating...
+              </>
+            ) : (
+              'Auto-Allocate All'
+            )}
+          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={handleClose}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleManualAllocate}
+              disabled={allocatePayment.isPending || !selectedPaymentId || totalToAllocate <= 0}
+            >
+              {allocatePayment.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Allocating...
+                </>
+              ) : (
+                'Allocate'
+              )}
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

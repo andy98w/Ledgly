@@ -1,8 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { History, Receipt, CreditCard, Users, TrendingDown, Building2, Filter, Undo2, Redo2, Loader2, ChevronDown, ChevronRight, ChevronLeft, Search } from 'lucide-react';
+import { History, Receipt, CreditCard, Users, TrendingDown, Building2, Link2, Filter, Undo2, Redo2, Loader2, ChevronDown, ChevronRight, ChevronLeft, Search } from 'lucide-react';
 import { useAuditLogs, useUndoAuditLog, useUndoBatch, useRedoAuditLog, useRedoBatch, type AuditLogEntry, type BatchedAuditLogEntry, type AuditLogItem } from '@/lib/queries/audit';
 import { useAuthStore } from '@/lib/stores/auth';
 import { formatRelativeDate } from '@/lib/utils';
@@ -30,6 +29,7 @@ const entityTypeIcons: Record<string, typeof Receipt> = {
   MEMBER: Users,
   EXPENSE: TrendingDown,
   ORGANIZATION: Building2,
+  ALLOCATION: Link2,
 };
 
 const entityTypeLabels: Record<string, string> = {
@@ -38,13 +38,25 @@ const entityTypeLabels: Record<string, string> = {
   MEMBER: 'Member',
   EXPENSE: 'Expense',
   ORGANIZATION: 'Organization',
+  ALLOCATION: 'Allocation',
 };
 
 const actionColors: Record<string, string> = {
   CREATE: 'bg-success/10 text-success border-success/30',
+  RESTORE: 'bg-purple-500/10 text-purple-400 border-purple-500/30',
   UPDATE: 'bg-blue-500/10 text-blue-400 border-blue-500/30',
   DELETE: 'bg-destructive/10 text-destructive border-destructive/30',
 };
+
+/** Detect if a CREATE audit entry is actually a restore (undo of a delete) */
+function getDisplayAction(log: AuditLogEntry): string {
+  if (log.action === 'CREATE' && log.diffJson?.new) {
+    if (log.diffJson.new.restored === true || log.diffJson.new.action === 'restore') {
+      return 'RESTORE';
+    }
+  }
+  return log.action;
+}
 
 const formatValue = (value: any): string => {
   if (value === null || value === undefined) return 'null';
@@ -61,26 +73,103 @@ const formatValue = (value: any): string => {
   return String(value);
 };
 
+/** Build a detail string from entity-specific diffJson data */
+function buildEntityDetail(data: Record<string, any>, entityType: string): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+
+  // Title (charges, expenses)
+  if (data.title) {
+    parts.push(<span key="title" className="font-medium text-foreground/80">"{data.title}"</span>);
+  }
+
+  // Payer name (payments)
+  if (data.rawPayerName) {
+    parts.push(<span key="payer" className="font-medium text-foreground/80">from {data.rawPayerName}</span>);
+  }
+
+  // Member name (charges, members)
+  if (data.memberName) {
+    parts.push(<span key="member" className="text-foreground/70">{data.memberName}</span>);
+  }
+
+  // Role (members)
+  if (data.role) {
+    parts.push(<span key="role" className="text-foreground/60">({data.role.toLowerCase()})</span>);
+  }
+
+  // Amount
+  if (data.amountCents) {
+    parts.push(<span key="amount" className="text-foreground/70">${(data.amountCents / 100).toFixed(2)}</span>);
+  }
+
+  // Category (charges, expenses)
+  if (data.category) {
+    parts.push(<span key="cat" className="text-foreground/50">[{data.category}]</span>);
+  }
+
+  // Vendor (expenses)
+  if (data.vendor) {
+    parts.push(<span key="vendor" className="text-foreground/50">{data.vendor}</span>);
+  }
+
+  // Memo (payments)
+  if (data.memo) {
+    parts.push(<span key="memo" className="text-foreground/50 italic">"{data.memo}"</span>);
+  }
+
+  // Charge title (allocations)
+  if (data.chargeTitle && entityType === 'ALLOCATION') {
+    parts.push(<span key="charge" className="font-medium text-foreground/80">→ "{data.chargeTitle}"</span>);
+  }
+
+  // Auto-allocated flag
+  if (data.autoAllocated) {
+    parts.push(<span key="auto" className="text-foreground/50">(auto)</span>);
+  }
+
+  return parts;
+}
+
 function renderDiff(log: AuditLogEntry) {
   if (!log.diffJson) return null;
 
+  const displayAction = getDisplayAction(log);
+
   if (log.action === 'CREATE' && log.diffJson.new) {
-    const memberName = log.diffJson.new.memberName;
+    const isRestore = displayAction === 'RESTORE';
+    const parts = buildEntityDetail(log.diffJson.new, log.entityType);
+
+    if (parts.length === 0) return null;
+
     return (
-      <div className="mt-2 text-xs text-muted-foreground">
-        <span className="text-success">Created</span>
-        {log.diffJson.new.title && ` "${log.diffJson.new.title}"`}
-        {log.diffJson.new.amountCents && ` for $${(log.diffJson.new.amountCents / 100).toFixed(2)}`}
-        {memberName && <> &middot; <span className="text-foreground/70">{memberName}</span></>}
+      <div className="mt-2 text-xs text-muted-foreground flex flex-wrap items-center gap-1">
+        <span className={isRestore ? 'text-purple-400' : 'text-success'}>
+          {isRestore ? 'Restored' : 'Created'}
+        </span>
+        {parts.map((part, i) => (
+          <span key={i} className="flex items-center gap-1">
+            {i > 0 && <span className="text-muted-foreground/50">&middot;</span>}
+            {part}
+          </span>
+        ))}
       </div>
     );
   }
 
   if (log.action === 'DELETE' && log.diffJson.deleted) {
+    const parts = buildEntityDetail(log.diffJson.deleted, log.entityType);
+
+    if (parts.length === 0) return null;
+
     return (
-      <div className="mt-2 text-xs text-muted-foreground">
+      <div className="mt-2 text-xs text-muted-foreground flex flex-wrap items-center gap-1">
         <span className="text-destructive">Deleted</span>
-        {log.diffJson.deleted.title && ` "${log.diffJson.deleted.title}"`}
+        {parts.map((part, i) => (
+          <span key={i} className="flex items-center gap-1">
+            {i > 0 && <span className="text-muted-foreground/50">&middot;</span>}
+            {part}
+          </span>
+        ))}
       </div>
     );
   }
@@ -123,7 +212,7 @@ function UndoRedoButton({
   isProcessing: boolean;
 }) {
   const isUndoable = (log.action === 'CREATE' || log.action === 'DELETE') &&
-    (log.entityType === 'CHARGE' || log.entityType === 'EXPENSE');
+    (log.entityType === 'CHARGE' || log.entityType === 'EXPENSE' || log.entityType === 'PAYMENT' || log.entityType === 'MEMBER' || log.entityType === 'ALLOCATION');
 
   if (!isUndoable) return null;
 
@@ -186,6 +275,7 @@ function AuditLogCard({
   processingId: string | null;
 }) {
   const Icon = entityTypeIcons[log.entityType] || Receipt;
+  const displayAction = getDisplayAction(log);
 
   return (
     <StaggerItem>
@@ -200,8 +290,8 @@ function AuditLogCard({
                 <span className="font-medium text-sm">
                   {entityTypeLabels[log.entityType] || log.entityType}
                 </span>
-                <Badge variant="outline" className={cn('text-xs', actionColors[log.action])}>
-                  {log.action}
+                <Badge variant="outline" className={cn('text-xs', actionColors[displayAction] || actionColors[log.action])}>
+                  {displayAction}
                 </Badge>
                 {log.undone && (
                   <Badge variant="outline" className="text-xs bg-muted text-muted-foreground">
@@ -255,8 +345,12 @@ function BatchAuditLogCard({
   const allUndone = batch.undone;
   const someUndone = items.some((i) => i.undone);
 
+  // Detect if the batch is a restore by checking the first item
+  const firstItem = items[0];
+  const batchDisplayAction = firstItem ? getDisplayAction(firstItem) : batch.action;
+
   const isUndoable = (batch.action === 'CREATE' || batch.action === 'DELETE') &&
-    (batch.entityType === 'CHARGE' || batch.entityType === 'EXPENSE');
+    (batch.entityType === 'CHARGE' || batch.entityType === 'EXPENSE' || batch.entityType === 'PAYMENT' || batch.entityType === 'MEMBER' || batch.entityType === 'ALLOCATION');
 
   const isBatchProcessing = processingId === batch.id;
 
@@ -276,8 +370,8 @@ function BatchAuditLogCard({
                 <span className="font-medium text-sm">
                   {entityTypeLabels[batch.entityType] || batch.entityType}
                 </span>
-                <Badge variant="outline" className={cn('text-xs', actionColors[batch.action])}>
-                  {batch.action}
+                <Badge variant="outline" className={cn('text-xs', actionColors[batchDisplayAction] || actionColors[batch.action])}>
+                  {batchDisplayAction}
                 </Badge>
                 <Badge variant="secondary" className="text-xs">
                   {batch.itemCount} members
@@ -365,52 +459,42 @@ function BatchAuditLogCard({
             </div>
           </div>
 
-          <AnimatePresence>
-            {expanded && items.length > 0 && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="overflow-hidden"
-              >
-                <div className="mt-4 pt-4 border-t border-border/30 space-y-2">
-                  {items.map((item) => {
-                    const memberName = item.diffJson?.new?.memberName || item.diffJson?.deleted?.memberName;
-                    return (
-                      <div
-                        key={item.id}
-                        className={cn(
-                          'flex items-center gap-3 p-3 rounded-lg bg-secondary/20',
-                          item.undone && 'opacity-50',
+          {expanded && items.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-border/30 space-y-2">
+              {items.map((item) => {
+                const memberName = item.diffJson?.new?.memberName || item.diffJson?.deleted?.memberName;
+                return (
+                  <div
+                    key={item.id}
+                    className={cn(
+                      'flex items-center gap-3 p-3 rounded-lg bg-secondary/20',
+                      item.undone && 'opacity-50',
+                    )}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        {memberName && (
+                          <span className="text-sm font-medium">{memberName}</span>
                         )}
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            {memberName && (
-                              <span className="text-sm font-medium">{memberName}</span>
-                            )}
-                            {item.undone && (
-                              <Badge variant="outline" className="text-xs bg-muted text-muted-foreground">
-                                Undone
-                              </Badge>
-                            )}
-                          </div>
-                          {renderDiff(item)}
-                        </div>
-                        <UndoRedoButton
-                          log={item}
-                          onUndo={onUndo}
-                          onRedo={onRedo}
-                          isProcessing={processingId === item.id}
-                        />
+                        {item.undone && (
+                          <Badge variant="outline" className="text-xs bg-muted text-muted-foreground">
+                            Undone
+                          </Badge>
+                        )}
                       </div>
-                    );
-                  })}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                      {renderDiff(item)}
+                    </div>
+                    <UndoRedoButton
+                      log={item}
+                      onUndo={onUndo}
+                      onRedo={onRedo}
+                      isProcessing={processingId === item.id}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </MotionCardContent>
       </MotionCard>
     </StaggerItem>
@@ -544,7 +628,7 @@ export default function AuditLogPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8" data-tour="audit-list">
       {/* Header */}
       <FadeIn>
         <div className="flex items-center justify-between">
@@ -578,6 +662,7 @@ export default function AuditLogPage() {
                 <SelectItem value="EXPENSE">Expenses</SelectItem>
                 <SelectItem value="MEMBER">Members</SelectItem>
                 <SelectItem value="ORGANIZATION">Organization</SelectItem>
+                <SelectItem value="ALLOCATION">Allocations</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -653,11 +738,7 @@ export default function AuditLogPage() {
         </div>
       ) : logs.length === 0 ? (
         <FadeIn delay={0.2}>
-          <motion.div
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="rounded-xl border border-border/50 bg-card/50 py-16 text-center"
-          >
+          <div className="rounded-xl border border-border/50 bg-card/50 py-16 text-center animate-in-scale">
             <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
               <History className="h-8 w-8 text-muted-foreground" />
             </div>
@@ -665,7 +746,7 @@ export default function AuditLogPage() {
             <p className="text-muted-foreground">
               Try adjusting your filters or search.
             </p>
-          </motion.div>
+          </div>
         </FadeIn>
       ) : (
         <>

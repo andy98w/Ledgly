@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, Users, Receipt, AlertTriangle, TrendingUp, Plus } from 'lucide-react';
+import { ArrowRight, Users, Receipt, AlertTriangle, AlertCircle, Check, TrendingUp, Plus } from 'lucide-react';
 import { useDashboard } from '@/lib/queries/organizations';
 import { useAuthStore } from '@/lib/stores/auth';
 import { formatCents, formatRelativeDate } from '@/lib/utils';
@@ -13,6 +13,8 @@ import { Money } from '@/components/ui/money';
 import { AvatarGradient } from '@/components/ui/avatar-gradient';
 import { MotionCard, MotionCardHeader, MotionCardTitle, MotionCardContent } from '@/components/ui/motion-card';
 import { FadeIn, StaggerChildren, StaggerItem } from '@/components/ui/page-transition';
+import { PageHeader } from '@/components/ui/page-header';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 function StatCardSkeleton() {
   return (
@@ -54,17 +56,17 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
       {/* Header */}
       <FadeIn>
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground mt-1">Overview of your organization finances</p>
-        </div>
+        <PageHeader
+          title="Dashboard"
+          helpText="Overview of your organization finances — outstanding charges, collections, member count, and overdue items."
+        />
       </FadeIn>
 
       {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div data-tour="dashboard-stats" className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Outstanding"
           value={stats.totalOutstandingCents}
@@ -101,7 +103,7 @@ export default function DashboardPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Quick Actions */}
         <FadeIn delay={0.2}>
-          <MotionCard hover={false}>
+          <MotionCard hover={false} data-tour="quick-actions">
             <MotionCardHeader>
               <MotionCardTitle className="text-lg">Quick Actions</MotionCardTitle>
             </MotionCardHeader>
@@ -167,14 +169,14 @@ export default function DashboardPage() {
                 <StaggerChildren className="space-y-3">
                   {stats.recentPayments.slice(0, 5).map((payment: any, index: number) => (
                     <StaggerItem key={payment.id}>
-                      <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors">
-                        <div className="flex items-center gap-3">
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 hover:bg-secondary transition-all duration-200">
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
                           <AvatarGradient
                             name={payment.rawPayerName || 'Unknown'}
                             size="sm"
                           />
-                          <div>
-                            <p className="font-medium text-sm">
+                          <div className="min-w-0">
+                            <p className="font-medium text-sm truncate">
                               {payment.rawPayerName || 'Payment'}
                             </p>
                             <p className="text-xs text-muted-foreground">
@@ -184,11 +186,20 @@ export default function DashboardPage() {
                         </div>
                         <div className="flex items-center gap-2">
                           <Money cents={payment.amountCents} size="sm" />
-                          {payment.unallocatedCents > 0 && (
-                            <Badge variant="warning" className="text-xs">
-                              Unallocated
-                            </Badge>
-                          )}
+                          <TooltipProvider delayDuration={0}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span>
+                                  {payment.unallocatedCents > 0 ? (
+                                    <AlertCircle className="w-4 h-4 text-warning" />
+                                  ) : (
+                                    <Check className="w-4 h-4 text-success" />
+                                  )}
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>{payment.unallocatedCents > 0 ? 'Unallocated' : 'Allocated'}</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         </div>
                       </div>
                     </StaggerItem>

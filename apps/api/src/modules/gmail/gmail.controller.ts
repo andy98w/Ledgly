@@ -150,12 +150,14 @@ export class GmailController {
   }
 
   @Post('imports/:importId/ignore')
+  @Roles('ADMIN', 'TREASURER')
   async ignoreImport(@Param('importId') importId: string) {
     await this.gmailService.ignoreImport(importId);
     return { success: true };
   }
 
   @Post('imports/:importId/restore')
+  @Roles('ADMIN', 'TREASURER')
   async restoreImport(@Param('importId') importId: string) {
     await this.gmailService.restoreImport(importId);
     return { success: true };

@@ -100,6 +100,7 @@ export function useCreateExpense() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.expenses.all(variables.orgId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all(variables.orgId) });
     },
   });
 }
@@ -128,6 +129,7 @@ export function useUpdateExpense() {
     onSuccess: (_, variables) => {
       // Only invalidate expenses — no cross-domain impact
       queryClient.invalidateQueries({ queryKey: queryKeys.expenses.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all(variables.orgId) });
     },
   });
 }
@@ -141,6 +143,24 @@ export function useDeleteExpense() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.expenses.all(variables.orgId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all(variables.orgId) });
+    },
+  });
+}
+
+export function useBulkDeleteExpenses() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ orgId, expenseIds }: { orgId: string; expenseIds: string[] }) =>
+      api.post<{ success: boolean; deletedCount: number }>(
+        `/organizations/${orgId}/expenses/bulk-delete`,
+        { expenseIds },
+      ),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.expenses.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all(variables.orgId) });
     },
   });
 }
@@ -154,6 +174,7 @@ export function useRestoreExpense() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.expenses.all(variables.orgId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all(variables.orgId) });
     },
   });
 }

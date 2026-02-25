@@ -219,7 +219,7 @@ export class ExpensesService {
     return updated;
   }
 
-  async delete(orgId: string, expenseId: string, actorId?: string) {
+  async delete(orgId: string, expenseId: string, actorId?: string, batch?: { batchId: string; batchDescription: string }) {
     const expense = await this.prisma.expense.findFirst({
       where: { id: expenseId, orgId, deletedAt: null },
     });
@@ -240,10 +240,30 @@ export class ExpensesService {
         amountCents: expense.amountCents,
         category: expense.category,
         vendor: expense.vendor,
-      });
+      }, batch);
     }
 
     return { success: true };
+  }
+
+  async bulkDelete(orgId: string, expenseIds: string[], actorId: string) {
+    if (expenseIds.length === 0) return { success: true, deletedCount: 0 };
+
+    const batch = expenseIds.length > 1
+      ? this.auditService.createBatchContext(`Deleted ${expenseIds.length} expenses`)
+      : undefined;
+
+    let deletedCount = 0;
+    for (const expenseId of expenseIds) {
+      try {
+        await this.delete(orgId, expenseId, actorId, batch);
+        deletedCount++;
+      } catch {
+        // Skip not-found expenses
+      }
+    }
+
+    return { success: true, deletedCount };
   }
 
   async restore(orgId: string, expenseId: string, actorId?: string) {
@@ -267,7 +287,7 @@ export class ExpensesService {
         amountCents: expense.amountCents,
         category: expense.category,
         vendor: expense.vendor,
-        action: 'restore',
+        restored: true,
       });
     }
 

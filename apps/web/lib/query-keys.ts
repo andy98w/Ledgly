@@ -39,4 +39,13 @@ export const queryKeys = {
   dashboard: {
     all: (orgId: string | null) => ['organizations', orgId, 'dashboard'] as const,
   },
+  gmail: {
+    all: (orgId: string | null) => ['organizations', orgId, 'gmail'] as const,
+    status: (orgId: string | null) => ['organizations', orgId, 'gmail', 'status'] as const,
+    imports: (orgId: string | null, status?: string) =>
+      status
+        ? (['organizations', orgId, 'gmail', 'imports', status] as const)
+        : (['organizations', orgId, 'gmail', 'imports'] as const),
+    stats: (orgId: string | null) => ['organizations', orgId, 'gmail', 'imports', 'stats'] as const,
+  },
 };

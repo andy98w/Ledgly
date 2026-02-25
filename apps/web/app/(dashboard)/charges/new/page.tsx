@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { motion } from 'framer-motion';
 import { ArrowLeft, Check, Receipt, Search } from 'lucide-react';
 import { useCreateCharge } from '@/lib/queries/charges';
 import { useMembers } from '@/lib/queries/members';
@@ -305,13 +304,11 @@ export default function NewChargePage() {
               ) : (
                 <div className="space-y-1">
                   {/* Select All Row */}
-                  <motion.button
+                  <button
                     type="button"
                     onClick={toggleSelectAll}
-                    whileHover={{ scale: 1.005 }}
-                    whileTap={{ scale: 0.995 }}
                     className={cn(
-                      'flex items-center gap-3 p-3 rounded-xl border text-left transition-all w-full',
+                      'flex items-center gap-3 p-3 rounded-xl border text-left transition-all w-full hover:scale-[1.005] active:scale-[0.995] transition-transform',
                       selectAll
                         ? 'border-primary bg-primary/10'
                         : 'border-border/50 hover:bg-secondary/50',
@@ -331,7 +328,7 @@ export default function NewChargePage() {
                     <span className="text-xs text-muted-foreground ml-auto">
                       {membersData?.data.length}
                     </span>
-                  </motion.button>
+                  </button>
 
                   {/* Member Rows */}
                   <StaggerChildren className="space-y-1">
@@ -339,13 +336,11 @@ export default function NewChargePage() {
                       const isSelected = selectedMembers.has(member.id);
                       return (
                         <StaggerItem key={member.id}>
-                          <motion.button
+                          <button
                             type="button"
                             onClick={() => toggleMember(member.id)}
-                            whileHover={{ scale: 1.005 }}
-                            whileTap={{ scale: 0.995 }}
                             className={cn(
-                              'flex items-center gap-3 p-3 rounded-xl border text-left transition-all w-full',
+                              'flex items-center gap-3 p-3 rounded-xl border text-left transition-all w-full hover:scale-[1.005] active:scale-[0.995] transition-transform',
                               isSelected
                                 ? 'border-primary bg-primary/10'
                                 : 'border-border/50 hover:bg-secondary/50',
@@ -363,7 +358,7 @@ export default function NewChargePage() {
                             </div>
                             <AvatarGradient name={member.displayName} size="sm" />
                             <span className="font-medium">{member.displayName}</span>
-                          </motion.button>
+                          </button>
                         </StaggerItem>
                       );
                     })}

@@ -60,8 +60,8 @@ export function useCreateCharge() {
     }) => api.post(`/organizations/${orgId}/charges`, data),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.charges.all(variables.orgId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.members.all(variables.orgId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all(variables.orgId) });
     },
   });
 }
@@ -86,7 +86,7 @@ export function useUpdateCharge() {
     }) => api.patch(`/organizations/${orgId}/charges/${chargeId}`, data),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.charges.all(variables.orgId) });
-      // Only invalidate members if amount changed (affects balances)
+      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all(variables.orgId) });
       if (variables.data.amountCents !== undefined) {
         queryClient.invalidateQueries({ queryKey: queryKeys.members.all(variables.orgId) });
       }
@@ -131,6 +131,26 @@ export function useVoidCharge() {
       queryClient.invalidateQueries({ queryKey: queryKeys.members.all(orgId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.payments.all(orgId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all(orgId) });
+    },
+  });
+}
+
+export function useBulkVoidCharges() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ orgId, chargeIds }: { orgId: string; chargeIds: string[] }) =>
+      api.post<{ success: boolean; voidedCount: number }>(
+        `/organizations/${orgId}/charges/bulk-void`,
+        { chargeIds },
+      ),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.charges.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.members.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.payments.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all(variables.orgId) });
     },
   });
 }
@@ -145,6 +165,7 @@ export function useRestoreCharge() {
       queryClient.invalidateQueries({ queryKey: queryKeys.charges.all(variables.orgId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.members.all(variables.orgId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all(variables.orgId) });
     },
   });
 }

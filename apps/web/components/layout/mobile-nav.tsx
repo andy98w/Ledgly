@@ -6,7 +6,7 @@ import { LayoutDashboard, Users, Receipt, CreditCard, Inbox } from 'lucide-react
 import { cn } from '@/lib/utils';
 
 const navItems = [
-  { href: '/', label: 'Home', icon: LayoutDashboard },
+  { href: '/dashboard', label: 'Home', icon: LayoutDashboard },
   { href: '/members', label: 'Members', icon: Users },
   { href: '/charges', label: 'Charges', icon: Receipt },
   { href: '/payments', label: 'Payments', icon: CreditCard },
@@ -26,12 +26,15 @@ export function MobileNav() {
               key={item.href}
               href={item.href}
               className={cn(
-                'flex flex-col items-center justify-center flex-1 h-full touch-target transition-colors',
+                'relative flex flex-col items-center justify-center flex-1 h-full touch-target transition-colors',
                 isActive ? 'text-primary' : 'text-muted-foreground',
               )}
             >
-              <item.icon className="h-5 w-5" />
+              <item.icon className={cn('h-5 w-5 transition-transform duration-150', isActive && 'scale-110')} />
               <span className="text-xs mt-1">{item.label}</span>
+              {isActive && (
+                <span className="absolute bottom-1.5 w-1 h-1 rounded-full bg-primary" />
+              )}
             </Link>
           );
         })}

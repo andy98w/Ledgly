@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback, memo } from 'react';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+
 import { Plus, Search, Users, AlertCircle, MoreHorizontal, Pencil, Trash2, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Info, Circle, CheckCircle2 } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import { useMembers, useCreateMembers, useUpdateMember, useDeleteMember, useRestoreMember } from '@/lib/queries/members';
@@ -47,7 +47,7 @@ import {
 } from '@/components/ui/tooltip';
 import type { MemberWithBalance } from '@ledgly/shared';
 
-function MemberCard({
+const MemberCard = memo(function MemberCard({
   member,
   index,
   onEdit,
@@ -90,10 +90,10 @@ function MemberCard({
                 )}
               </button>
             )}
-            <Link href={`/members/${member.id}`} className="flex items-center gap-3 flex-1">
+            <Link href={`/members/${member.id}`} className="flex items-center gap-3 flex-1 min-w-0">
               <AvatarGradient name={member.displayName} size="md" />
-              <div>
-                <p className="font-medium">
+              <div className="min-w-0">
+                <p className="font-medium truncate">
                   {member.displayName}
                   {isSelf && <span className="text-muted-foreground font-normal"> (You)</span>}
                 </p>
@@ -130,7 +130,7 @@ function MemberCard({
                   <Money cents={member.totalPaidCents} size="xs" inline /> paid
                 </p>
               </div>
-              {isAdmin && !isSelf && (
+              {isAdmin && !isSelf ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -151,6 +151,8 @@ function MemberCard({
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+              ) : (
+                <div className="w-8 h-8" />
               )}
             </div>
           </div>
@@ -158,7 +160,7 @@ function MemberCard({
       </MotionCard>
     </StaggerItem>
   );
-}
+});
 
 function MemberCardSkeleton() {
   return (
@@ -487,12 +489,12 @@ export default function MembersPage() {
     setSelectedRows(new Set());
   }, [search, sortBy, sortOrder, pageSize]);
 
-  const handleEdit = (member: MemberWithBalance) => {
+  const handleEdit = useCallback((member: MemberWithBalance) => {
     setEditingMember(member);
     setEditDialogOpen(true);
-  };
+  }, []);
 
-  const handleDelete = (member: MemberWithBalance) => {
+  const handleDelete = useCallback((member: MemberWithBalance) => {
     if (!currentOrgId) return;
 
     deleteMember.mutate(
@@ -521,9 +523,9 @@ export default function MembersPage() {
         },
       },
     );
-  };
+  }, [currentOrgId, deleteMember, restoreMember, toast]);
 
-  const handleRestore = (memberId: string, memberName: string) => {
+  const handleRestore = useCallback((memberId: string, memberName: string) => {
     if (!currentOrgId) return;
 
     restoreMember.mutate(
@@ -554,9 +556,9 @@ export default function MembersPage() {
         },
       },
     );
-  };
+  }, [currentOrgId, restoreMember, deleteMember, toast]);
 
-  const toggleRowSelection = (memberId: string) => {
+  const toggleRowSelection = useCallback((memberId: string) => {
     setSelectedRows((prev) => {
       const next = new Set(prev);
       if (next.has(memberId)) {
@@ -566,22 +568,25 @@ export default function MembersPage() {
       }
       return next;
     });
-  };
+  }, []);
+
+  const selectableMembers = paginatedMembers.filter((m) => m.id !== currentMembership?.id);
 
   const toggleSelectAll = () => {
-    if (selectedRows.size === paginatedMembers.length) {
+    if (selectedRows.size === selectableMembers.length) {
       setSelectedRows(new Set());
     } else {
-      setSelectedRows(new Set(paginatedMembers.map((m) => m.id)));
+      setSelectedRows(new Set(selectableMembers.map((m) => m.id)));
     }
   };
 
-  const isAllSelected = paginatedMembers.length > 0 && selectedRows.size === paginatedMembers.length;
+  const isAllSelected = selectableMembers.length > 0 && selectedRows.size === selectableMembers.length;
 
   const handleBulkDelete = async () => {
     if (!currentOrgId || selectedRows.size === 0) return;
 
-    const membersToDelete = paginatedMembers.filter((m) => selectedRows.has(m.id));
+    // Never delete yourself
+    const membersToDelete = paginatedMembers.filter((m) => selectedRows.has(m.id) && m.id !== currentMembership?.id);
     const deletedMembers: Array<{ id: string; name: string }> = [];
 
     for (const member of membersToDelete) {
@@ -638,7 +643,7 @@ export default function MembersPage() {
   };
 
   return (
-    <div className="space-y-8">
+    <div data-tour="members-list" className="space-y-8">
       {/* Header */}
       <FadeIn>
         <div className="flex items-center justify-between">
@@ -754,11 +759,7 @@ export default function MembersPage() {
         </div>
       ) : sortedMembers.length === 0 ? (
         <FadeIn delay={0.2}>
-          <motion.div
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="rounded-xl border border-border/50 bg-card/50 py-16 text-center"
-          >
+          <div className="rounded-xl border border-border/50 bg-card/50 py-16 text-center animate-in-scale">
             <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
               <Users className="h-8 w-8 text-primary" />
             </div>
@@ -767,7 +768,7 @@ export default function MembersPage() {
               Start by adding members to your organization
             </p>
             <AddMemberDialog />
-          </motion.div>
+          </div>
         </FadeIn>
       ) : (
         <div className="space-y-3">

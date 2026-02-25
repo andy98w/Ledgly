@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { IsString, IsArray, IsEnum, IsNumber, IsOptional } from 'class-validator';
+import { IsString, IsArray, IsEnum, IsNumber, IsOptional, IsInt, Min, Max } from 'class-validator';
 import { ChargeCategory, ChargeStatus } from '@prisma/client';
 import { ChargesService } from './charges.service';
 import { Roles } from '../../common/decorators';
@@ -17,7 +17,9 @@ class CreateChargeDto {
   @IsString()
   title: string;
 
-  @IsNumber()
+  @IsInt()
+  @Min(1)
+  @Max(99_999_999)
   amountCents: number;
 
   @IsString()
@@ -30,7 +32,9 @@ class UpdateChargeDto {
   @IsOptional()
   title?: string;
 
-  @IsNumber()
+  @IsInt()
+  @Min(1)
+  @Max(99_999_999)
   @IsOptional()
   amountCents?: number;
 
@@ -113,6 +117,13 @@ export class ChargesController {
   async void(@Param('orgId') orgId: string, @Param('id') id: string, @Req() req: any) {
     const actorId = req.membership.id;
     return this.chargesService.void(orgId, id, actorId);
+  }
+
+  @Post('bulk-void')
+  @Roles('ADMIN', 'TREASURER')
+  async bulkVoid(@Param('orgId') orgId: string, @Body() body: { chargeIds: string[] }, @Req() req: any) {
+    const actorId = req.membership.id;
+    return this.chargesService.bulkVoid(orgId, body.chargeIds, actorId);
   }
 
   @Post(':id/restore')

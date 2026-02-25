@@ -29,6 +29,12 @@ export class RolesGuard implements CanActivate {
       return false;
     }
 
+    // Skip DB query if membership was already resolved by a prior guard
+    const existing = request.membership;
+    if (existing && existing.orgId === orgId && existing.userId === user.userId && existing.status === 'ACTIVE') {
+      return requiredRoles.includes(existing.role);
+    }
+
     const membership = await this.prisma.membership.findFirst({
       where: {
         orgId,

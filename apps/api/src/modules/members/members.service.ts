@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { MembershipRole, MembershipStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -71,6 +71,9 @@ export class MembersService {
 
     if (status) {
       where.status = status;
+    } else {
+      // By default, exclude removed members
+      where.status = { not: 'LEFT' };
     }
 
     if (search) {
@@ -315,6 +318,20 @@ export class MembersService {
     return created;
   }
 
+  private async assertNotLastAdmin(orgId: string, membershipId: string) {
+    const member = await this.prisma.membership.findFirst({
+      where: { id: membershipId, orgId },
+    });
+    if (member?.role !== 'ADMIN') return;
+
+    const adminCount = await this.prisma.membership.count({
+      where: { orgId, role: 'ADMIN', status: 'ACTIVE' },
+    });
+    if (adminCount <= 1) {
+      throw new BadRequestException('Cannot remove or demote the last admin. Promote another member first.');
+    }
+  }
+
   async update(orgId: string, membershipId: string, dto: UpdateMemberDto, actorId?: string) {
     const member = await this.prisma.membership.findFirst({
       where: { id: membershipId, orgId },
@@ -322,6 +339,13 @@ export class MembersService {
 
     if (!member) {
       throw new NotFoundException('Member not found');
+    }
+
+    // Guard: prevent demoting or removing the last admin
+    const isDemoting = dto.role && dto.role !== 'ADMIN' && member.role === 'ADMIN';
+    const isLeaving = dto.status === 'LEFT' && member.status === 'ACTIVE' && member.role === 'ADMIN';
+    if (isDemoting || isLeaving) {
+      await this.assertNotLastAdmin(orgId, membershipId);
     }
 
     const updated = await this.prisma.membership.update({
@@ -367,12 +391,22 @@ export class MembersService {
   }
 
   async remove(orgId: string, membershipId: string, actorId?: string) {
+    // Prevent self-deletion
+    if (actorId && actorId === membershipId) {
+      throw new BadRequestException('You cannot remove yourself');
+    }
+
     const member = await this.prisma.membership.findFirst({
       where: { id: membershipId, orgId },
     });
 
     if (!member) {
       throw new NotFoundException('Member not found');
+    }
+
+    // Guard: prevent removing the last admin
+    if (member.role === 'ADMIN') {
+      await this.assertNotLastAdmin(orgId, membershipId);
     }
 
     // Soft delete - mark as left

@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { IsString, IsNumber, IsOptional } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsInt, Min, Max } from 'class-validator';
 import { ExpensesService } from './expenses.service';
 import { Roles } from '../../common/decorators';
 import { RolesGuard } from '../../common/guards';
@@ -16,7 +16,9 @@ class CreateExpenseDto {
   @IsOptional()
   description?: string;
 
-  @IsNumber()
+  @IsInt()
+  @Min(1)
+  @Max(99_999_999)
   amountCents: number;
 
   @IsString()
@@ -44,7 +46,9 @@ class UpdateExpenseDto {
   @IsOptional()
   description?: string;
 
-  @IsNumber()
+  @IsInt()
+  @Min(1)
+  @Max(99_999_999)
   @IsOptional()
   amountCents?: number;
 
@@ -132,6 +136,13 @@ export class ExpensesController {
   async delete(@Param('orgId') orgId: string, @Param('id') id: string, @Req() req: any) {
     const actorId = req.membership.id;
     return this.expensesService.delete(orgId, id, actorId);
+  }
+
+  @Post('bulk-delete')
+  @Roles('ADMIN', 'TREASURER')
+  async bulkDelete(@Param('orgId') orgId: string, @Body() body: { expenseIds: string[] }, @Req() req: any) {
+    const actorId = req.membership.id;
+    return this.expensesService.bulkDelete(orgId, body.expenseIds, actorId);
   }
 
   @Post(':id/restore')

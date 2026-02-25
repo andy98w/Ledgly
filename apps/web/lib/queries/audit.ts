@@ -62,6 +62,7 @@ export function useAuditLogs(
         `/organizations/${orgId}/audit${queryString ? `?${queryString}` : ''}`,
       ),
     enabled: !!orgId,
+    refetchOnMount: 'always',
   });
 }
 

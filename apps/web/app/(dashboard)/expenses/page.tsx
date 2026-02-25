@@ -1,9 +1,15 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { useState, useMemo, useEffect, useCallback, memo } from 'react';
+
 import { Plus, Receipt, TrendingDown, Trash2, MoreHorizontal, Loader2, Search, ChevronLeft, ChevronRight, Pencil, Info, Circle, CheckCircle2 } from 'lucide-react';
-import { useExpenses, useExpenseSummary, useDeleteExpense, useCreateExpense, useUpdateExpense, useRestoreExpense } from '@/lib/queries/expenses';
+import { useExpenses, useExpenseSummary, useDeleteExpense, useCreateExpense, useUpdateExpense, useRestoreExpense, useBulkDeleteExpenses } from '@/lib/queries/expenses';
+
+/** Strip "VENMO payment to " etc. prefixes from Gmail-imported expense titles */
+function cleanExpenseTitle(title: string): string {
+  const match = title.match(/^[A-Z]+ payment to (.+)$/);
+  return match ? match[1] : title;
+}
 import { useAuthStore } from '@/lib/stores/auth';
 import { cn, formatDate, parseCents } from '@/lib/utils';
 import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_LABELS, type ExpenseCategory } from '@ledgly/shared';
@@ -56,7 +62,7 @@ const categoryColors: Record<string, string> = {
   OTHER: 'bg-gray-500/10 text-gray-400 border-gray-500/30',
 };
 
-function ExpenseCard({
+const ExpenseCard = memo(function ExpenseCard({
   expense,
   onEdit,
   onDelete,
@@ -96,9 +102,9 @@ function ExpenseCard({
               <div className="w-10 h-10 rounded-xl bg-destructive/10 flex items-center justify-center">
                 <TrendingDown className="w-5 h-5 text-destructive" />
               </div>
-              <div className="space-y-1 flex-1">
-                <div className="flex items-center gap-2">
-                  <p className="font-medium">{expense.title}</p>
+              <div className="min-w-0 space-y-1 flex-1">
+                <div className="flex items-center gap-2 min-w-0">
+                  <p className="font-medium truncate" title={cleanExpenseTitle(expense.title)}>{cleanExpenseTitle(expense.title)}</p>
                   <Badge
                     variant="outline"
                     className={categoryColors[expense.category] || categoryColors.OTHER}
@@ -108,7 +114,7 @@ function ExpenseCard({
                 </div>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <span>{formatDate(expense.date)}</span>
-                  {expense.vendor && (
+                  {expense.vendor && expense.vendor !== cleanExpenseTitle(expense.title) && expense.vendor !== expense.title && (
                     <>
                       <span className="opacity-30">•</span>
                       <span>{expense.vendor}</span>
@@ -125,7 +131,7 @@ function ExpenseCard({
             </div>
             <div className="flex items-center gap-3">
               <Money cents={expense.amountCents} size="sm" className="text-destructive" />
-              {isAdmin && (
+              {isAdmin ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -146,6 +152,8 @@ function ExpenseCard({
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+              ) : (
+                <div className="w-8 h-8" />
               )}
             </div>
           </div>
@@ -153,7 +161,7 @@ function ExpenseCard({
       </MotionCard>
     </StaggerItem>
   );
-}
+});
 
 function ExpenseCardSkeleton() {
   return (
@@ -208,6 +216,7 @@ export default function ExpensesPage() {
   const { data: summary } = useExpenseSummary(currentOrgId);
   const deleteExpense = useDeleteExpense();
   const restoreExpense = useRestoreExpense();
+  const bulkDeleteExpenses = useBulkDeleteExpenses();
   const createExpense = useCreateExpense();
   const updateExpense = useUpdateExpense();
   const [selectedExpenses, setSelectedExpenses] = useState<Set<string>>(new Set());
@@ -224,7 +233,7 @@ export default function ExpensesPage() {
     });
   };
 
-  const handleEdit = (expense: any) => {
+  const handleEdit = useCallback((expense: any) => {
     setEditingExpense(expense);
     setEditExpenseData({
       category: expense.category,
@@ -234,7 +243,7 @@ export default function ExpensesPage() {
       date: expense.date.split('T')[0],
       vendor: expense.vendor || '',
     });
-  };
+  }, []);
 
   const resetEditDialog = () => {
     setEditingExpense(null);
@@ -433,9 +442,9 @@ export default function ExpensesPage() {
     setPage(1);
   }, [categoryFilter, searchQuery]);
 
-  const handleDelete = (expense: any) => {
+  const handleDelete = useCallback((expense: any) => {
     setDeletingExpense(expense);
-  };
+  }, []);
 
   const handleConfirmDelete = () => {
     if (!deletingExpense || !currentOrgId) return;
@@ -484,59 +493,45 @@ export default function ExpensesPage() {
     if (!currentOrgId || selectedExpenses.size === 0) return;
 
     const expenseIds = Array.from(selectedExpenses);
-    const deletedExpenseIds: string[] = [];
 
-    for (const expenseId of expenseIds) {
-      try {
-        await deleteExpense.mutateAsync({ orgId: currentOrgId, expenseId });
-        deletedExpenseIds.push(expenseId);
-      } catch (error) {
-        // Continue with other deletions
-      }
-    }
+    try {
+      const result = await bulkDeleteExpenses.mutateAsync({ orgId: currentOrgId, expenseIds });
+      const deletedCount = result.deletedCount;
+      setSelectedExpenses(new Set());
 
-    setSelectedExpenses(new Set());
-
-    const handleUndo = async () => {
-      let restoredCount = 0;
-      for (const expenseId of deletedExpenseIds) {
-        try {
-          await restoreExpense.mutateAsync({ orgId: currentOrgId, expenseId });
-          restoredCount++;
-        } catch (error) {
-          // Continue with other restorations
-        }
-      }
       toast({
-        title: `Restored ${restoredCount} expense${restoredCount !== 1 ? 's' : ''}`,
+        title: `Deleted ${deletedCount} expense${deletedCount !== 1 ? 's' : ''}`,
         action: (
           <button
             onClick={async () => {
-              let redoneCount = 0;
-              for (const expenseId of deletedExpenseIds) {
-                try { await deleteExpense.mutateAsync({ orgId: currentOrgId, expenseId }); redoneCount++; } catch { /* continue */ }
+              let restoredCount = 0;
+              for (const expenseId of expenseIds) {
+                try { await restoreExpense.mutateAsync({ orgId: currentOrgId, expenseId }); restoredCount++; } catch { /* continue */ }
               }
-              toast({ title: `Deleted ${redoneCount} expense${redoneCount !== 1 ? 's' : ''}` });
+              toast({
+                title: `Restored ${restoredCount} expense${restoredCount !== 1 ? 's' : ''}`,
+                action: (
+                  <button
+                    onClick={async () => {
+                      const redoResult = await bulkDeleteExpenses.mutateAsync({ orgId: currentOrgId, expenseIds });
+                      toast({ title: `Deleted ${redoResult.deletedCount} expense${redoResult.deletedCount !== 1 ? 's' : ''}` });
+                    }}
+                    className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+                  >
+                    Redo
+                  </button>
+                ),
+              });
             }}
             className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
           >
-            Redo
+            Undo
           </button>
         ),
       });
-    };
-
-    toast({
-      title: `Deleted ${deletedExpenseIds.length} expense${deletedExpenseIds.length !== 1 ? 's' : ''}`,
-      action: (
-        <button
-          onClick={handleUndo}
-          className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-        >
-          Undo
-        </button>
-      ),
-    });
+    } catch {
+      setSelectedExpenses(new Set());
+    }
   };
 
   // Reset selection when filters change
@@ -545,7 +540,7 @@ export default function ExpensesPage() {
   }, [categoryFilter, searchQuery, page]);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8" data-tour="expenses-list">
       {/* Header */}
       <FadeIn>
         <div className="flex items-center justify-between">
@@ -696,11 +691,7 @@ export default function ExpensesPage() {
         </div>
       ) : expenses.length === 0 ? (
         <FadeIn delay={0.3}>
-          <motion.div
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="rounded-xl border border-border/50 bg-card/50 py-16 text-center"
-          >
+          <div className="rounded-xl border border-border/50 bg-card/50 py-16 text-center animate-in-scale">
             <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
               <Receipt className="h-8 w-8 text-muted-foreground" />
             </div>
@@ -714,7 +705,7 @@ export default function ExpensesPage() {
             >
               Add your first expense
             </Button>
-          </motion.div>
+          </div>
         </FadeIn>
       ) : (
         <>

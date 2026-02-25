@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ChargesService } from '../charges/charges.service';
 import { AuditService } from '../audit/audit.service';
@@ -51,6 +52,22 @@ export class PaymentsService {
       where.membershipId = membershipId;
     }
 
+    // Move unallocated filter into the where clause so pagination counts are correct.
+    // Pre-fetch IDs of payments with unallocated funds and constrain via `id: { in: ... }`.
+    if (unallocated === true) {
+      const unallocatedIds = await this.prisma.$queryRaw<{ id: string }[]>`
+        SELECT p.id FROM payments p
+        WHERE p.org_id = ${orgId}
+          AND p.deleted_at IS NULL
+          AND p.amount_cents > (
+            SELECT COALESCE(SUM(pa.amount_cents), 0)
+            FROM payment_allocations pa
+            WHERE pa.payment_id = p.id
+          )
+      `;
+      where.id = { in: unallocatedIds.map((r) => r.id) };
+    }
+
     const includeOpts = {
       allocations: {
         include: {
@@ -86,8 +103,7 @@ export class PaymentsService {
       });
 
       const hasMore = items.length > limit;
-      let data = items.slice(0, limit).map(mapPayment);
-      if (unallocated === true) data = data.filter((p) => p.unallocatedCents > 0);
+      const data = items.slice(0, limit).map(mapPayment);
 
       return {
         data,
@@ -107,8 +123,7 @@ export class PaymentsService {
       this.prisma.payment.count({ where }),
     ]);
 
-    let data = payments.map(mapPayment);
-    if (unallocated === true) data = data.filter((p) => p.unallocatedCents > 0);
+    const data = payments.map(mapPayment);
 
     return {
       data,
@@ -195,31 +210,67 @@ export class PaymentsService {
   }
 
   async create(orgId: string, createdById: string, dto: CreatePaymentDto) {
-    // Validate membership if provided
-    if (dto.membershipId) {
-      const membership = await this.prisma.membership.findFirst({
-        where: { id: dto.membershipId, orgId },
+    const paidAtDate = new Date(dto.paidAt + 'T12:00:00');
+    const startOfDay = new Date(paidAtDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(paidAtDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    // Wrap duplicate check + create in a transaction to prevent TOCTOU race
+    const payment = await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.payment.findFirst({
+        where: {
+          orgId,
+          rawPayerName: dto.rawPayerName || null,
+          amountCents: dto.amountCents,
+          paidAt: { gte: startOfDay, lte: endOfDay },
+          deletedAt: null,
+        },
       });
 
-      if (!membership) {
-        throw new BadRequestException('Invalid member');
+      if (existing) {
+        throw new ConflictException(
+          'A payment with the same payer, amount, and date already exists',
+        );
       }
-    }
 
-    const payment = await this.prisma.payment.create({
-      data: {
-        orgId,
-        membershipId: dto.membershipId,
-        amountCents: dto.amountCents,
-        paidAt: new Date(dto.paidAt + 'T12:00:00'),
-        source: 'manual',
-        rawPayerName: dto.rawPayerName,
-        memo: dto.memo,
-        createdById,
-      },
+      // Hard-delete any soft-deleted duplicates to prevent restore from creating duplicates later
+      await tx.payment.deleteMany({
+        where: {
+          orgId,
+          rawPayerName: dto.rawPayerName || null,
+          amountCents: dto.amountCents,
+          paidAt: { gte: startOfDay, lte: endOfDay },
+          deletedAt: { not: null },
+        },
+      });
+
+      // Validate membership if provided
+      if (dto.membershipId) {
+        const membership = await tx.membership.findFirst({
+          where: { id: dto.membershipId, orgId },
+        });
+
+        if (!membership) {
+          throw new BadRequestException('Invalid member');
+        }
+      }
+
+      return tx.payment.create({
+        data: {
+          orgId,
+          membershipId: dto.membershipId,
+          amountCents: dto.amountCents,
+          paidAt: paidAtDate,
+          source: 'manual',
+          rawPayerName: dto.rawPayerName,
+          memo: dto.memo,
+          createdById,
+        },
+      });
     });
 
-    // Log audit entry for create
+    // Audit log (best-effort, outside tx)
     await this.auditService.logCreate(orgId, createdById, 'PAYMENT', payment.id, {
       amountCents: payment.amountCents,
       paidAt: payment.paidAt,
@@ -231,62 +282,59 @@ export class PaymentsService {
   }
 
   async allocate(orgId: string, paymentId: string, createdById: string, dto: AllocatePaymentDto) {
-    const payment = await this.prisma.payment.findFirst({
-      where: { id: paymentId, orgId, deletedAt: null },
-      include: {
-        allocations: {
-          select: { amountCents: true },
-        },
-      },
-    });
-
-    if (!payment) {
-      throw new NotFoundException('Payment not found');
-    }
-
-    // Calculate current allocated and requested
-    const currentAllocated = payment.allocations.reduce((sum, a) => sum + a.amountCents, 0);
-    const requestedAllocation = dto.allocations.reduce((sum, a) => sum + a.amountCents, 0);
-    const availableToAllocate = payment.amountCents - currentAllocated;
-
-    if (requestedAllocation > availableToAllocate) {
-      throw new BadRequestException(
-        `Cannot allocate ${requestedAllocation} cents. Only ${availableToAllocate} cents available.`,
-      );
-    }
-
-    // Validate all charges exist and belong to this org
     const chargeIds = dto.allocations.map((a) => a.chargeId);
-    const charges = await this.prisma.charge.findMany({
-      where: { id: { in: chargeIds }, orgId, status: { not: 'VOID' } },
-      include: {
-        allocations: {
-          select: { amountCents: true },
-        },
-      },
-    });
 
-    if (charges.length !== chargeIds.length) {
-      throw new BadRequestException('Some charges are invalid or voided');
-    }
+    const { createdAllocations, charges, paymentRawPayerName } = await this.prisma.$transaction(async (tx) => {
+      // Lock the payment row
+      await tx.$queryRaw`SELECT 1 FROM payments WHERE id = ${paymentId} FOR UPDATE`;
 
-    // Validate allocation amounts don't exceed charge balances
-    for (const alloc of dto.allocations) {
-      const charge = charges.find((c) => c.id === alloc.chargeId);
-      if (!charge) continue;
+      // Lock all charge rows
+      for (const cId of chargeIds) {
+        await tx.$queryRaw`SELECT 1 FROM charges WHERE id = ${cId} FOR UPDATE`;
+      }
 
-      const chargeAllocated = charge.allocations.reduce((sum, a) => sum + a.amountCents, 0);
-      const chargeBalance = charge.amountCents - chargeAllocated;
+      const payment = await tx.payment.findFirst({
+        where: { id: paymentId, orgId, deletedAt: null },
+        include: { allocations: { select: { amountCents: true } } },
+      });
 
-      if (alloc.amountCents > chargeBalance) {
+      if (!payment) {
+        throw new NotFoundException('Payment not found');
+      }
+
+      const currentAllocated = payment.allocations.reduce((sum, a) => sum + a.amountCents, 0);
+      const requestedAllocation = dto.allocations.reduce((sum, a) => sum + a.amountCents, 0);
+      const availableToAllocate = payment.amountCents - currentAllocated;
+
+      if (requestedAllocation > availableToAllocate) {
         throw new BadRequestException(
-          `Cannot allocate ${alloc.amountCents} to charge "${charge.title}". Only ${chargeBalance} cents remaining.`,
+          `Cannot allocate ${requestedAllocation} cents. Only ${availableToAllocate} cents available.`,
         );
       }
-    }
 
-    // Create allocations in a transaction
-    const createdAllocations = await this.prisma.$transaction(async (tx) => {
+      const txCharges = await tx.charge.findMany({
+        where: { id: { in: chargeIds }, orgId, status: { not: 'VOID' } },
+        include: { allocations: { select: { amountCents: true } } },
+      });
+
+      if (txCharges.length !== chargeIds.length) {
+        throw new BadRequestException('Some charges are invalid or voided');
+      }
+
+      for (const alloc of dto.allocations) {
+        const charge = txCharges.find((c) => c.id === alloc.chargeId);
+        if (!charge) continue;
+
+        const chargeAllocated = charge.allocations.reduce((sum, a) => sum + a.amountCents, 0);
+        const chargeBalance = charge.amountCents - chargeAllocated;
+
+        if (alloc.amountCents > chargeBalance) {
+          throw new BadRequestException(
+            `Cannot allocate ${alloc.amountCents} to charge "${charge.title}". Only ${chargeBalance} cents remaining.`,
+          );
+        }
+      }
+
       const allocations = await Promise.all(
         dto.allocations.map((alloc) =>
           tx.paymentAllocation.create({
@@ -301,15 +349,15 @@ export class PaymentsService {
         ),
       );
 
-      return allocations;
+      // Update charge statuses inside the transaction
+      for (const cId of chargeIds) {
+        await this.chargesService.updateChargeStatus(cId, createdById, tx);
+      }
+
+      return { createdAllocations: allocations, charges: txCharges, paymentRawPayerName: payment.rawPayerName };
     });
 
-    // Update charge statuses
-    for (const chargeId of chargeIds) {
-      await this.chargesService.updateChargeStatus(chargeId);
-    }
-
-    // Audit log
+    // Audit log (best-effort, outside tx)
     const batch = createdAllocations.length > 1
       ? this.auditService.createBatchContext(`Allocated payment to ${createdAllocations.length} charges`)
       : undefined;
@@ -320,6 +368,7 @@ export class PaymentsService {
         chargeId: alloc.chargeId,
         chargeTitle: charge?.title,
         amountCents: alloc.amountCents,
+        rawPayerName: paymentRawPayerName,
       }, batch);
     }
 
@@ -389,46 +438,63 @@ export class PaymentsService {
     return updated;
   }
 
-  async delete(orgId: string, paymentId: string, actorId?: string) {
-    const payment = await this.prisma.payment.findFirst({
-      where: { id: paymentId, orgId, deletedAt: null },
-      include: {
-        allocations: {
-          select: { chargeId: true },
-        },
-      },
-    });
+  async delete(orgId: string, paymentId: string, actorId?: string, batch?: { batchId: string; batchDescription: string }) {
+    const { affectedChargeIds, paymentData } = await this.prisma.$transaction(async (tx) => {
+      const payment = await tx.payment.findFirst({
+        where: { id: paymentId, orgId, deletedAt: null },
+        include: { allocations: { select: { chargeId: true } } },
+      });
 
-    if (!payment) {
-      throw new NotFoundException('Payment not found');
-    }
+      if (!payment) {
+        throw new NotFoundException('Payment not found');
+      }
 
-    const affectedChargeIds = payment.allocations.map((a) => a.chargeId);
+      const chargeIds = payment.allocations.map((a) => a.chargeId);
 
-    // Soft delete payment and delete allocations
-    await this.prisma.$transaction([
-      this.prisma.paymentAllocation.deleteMany({ where: { paymentId } }),
-      this.prisma.payment.update({
+      // Delete allocations and soft-delete payment
+      await tx.paymentAllocation.deleteMany({ where: { paymentId } });
+      await tx.payment.update({
         where: { id: paymentId },
         data: { deletedAt: new Date() },
-      }),
-    ]);
-
-    // Update charge statuses
-    for (const chargeId of affectedChargeIds) {
-      await this.chargesService.updateChargeStatus(chargeId);
-    }
-
-    // Log audit entry for delete
-    if (actorId) {
-      await this.auditService.logDelete(orgId, actorId, 'PAYMENT', paymentId, {
-        amountCents: payment.amountCents,
-        paidAt: payment.paidAt,
-        rawPayerName: payment.rawPayerName,
       });
+
+      // Update charge statuses inside the transaction
+      for (const chargeId of chargeIds) {
+        await this.chargesService.updateChargeStatus(chargeId, actorId, tx);
+      }
+
+      return {
+        affectedChargeIds: chargeIds,
+        paymentData: { amountCents: payment.amountCents, paidAt: payment.paidAt, rawPayerName: payment.rawPayerName },
+      };
+    });
+
+    // Audit log (best-effort, outside tx)
+    if (actorId) {
+      await this.auditService.logDelete(orgId, actorId, 'PAYMENT', paymentId, paymentData, batch);
     }
 
     return { success: true };
+  }
+
+  async bulkDelete(orgId: string, paymentIds: string[], actorId: string) {
+    if (paymentIds.length === 0) return { success: true, deletedCount: 0 };
+
+    const batch = paymentIds.length > 1
+      ? this.auditService.createBatchContext(`Deleted ${paymentIds.length} payments`)
+      : undefined;
+
+    let deletedCount = 0;
+    for (const paymentId of paymentIds) {
+      try {
+        await this.delete(orgId, paymentId, actorId, batch);
+        deletedCount++;
+      } catch {
+        // Skip not-found payments
+      }
+    }
+
+    return { success: true, deletedCount };
   }
 
   async restore(orgId: string, paymentId: string, actorId?: string) {
@@ -438,6 +504,30 @@ export class PaymentsService {
 
     if (!payment) {
       throw new NotFoundException('Deleted payment not found');
+    }
+
+    // Check for an existing active payment with the same fingerprint to prevent duplicates
+    const paidAtDate = new Date(payment.paidAt);
+    const startOfDay = new Date(paidAtDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(paidAtDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const activeDuplicate = await this.prisma.payment.findFirst({
+      where: {
+        orgId,
+        id: { not: paymentId },
+        rawPayerName: payment.rawPayerName,
+        amountCents: payment.amountCents,
+        paidAt: { gte: startOfDay, lte: endOfDay },
+        deletedAt: null,
+      },
+    });
+
+    if (activeDuplicate) {
+      throw new ConflictException(
+        'An active payment with the same payer, amount, and date already exists',
+      );
     }
 
     await this.prisma.payment.update({
@@ -458,38 +548,274 @@ export class PaymentsService {
     return { success: true };
   }
 
-  async removeAllocation(orgId: string, allocationId: string, actorId?: string) {
-    const allocation = await this.prisma.paymentAllocation.findFirst({
-      where: { id: allocationId, orgId },
-      include: {
-        charge: { select: { title: true } },
-      },
-    });
+  async removeAllocation(orgId: string, allocationId: string, actorId?: string, batch?: { batchId: string; batchDescription: string }) {
+    const allocationData = await this.prisma.$transaction(async (tx) => {
+      const allocation = await tx.paymentAllocation.findFirst({
+        where: { id: allocationId, orgId },
+        include: {
+          charge: { select: { title: true } },
+          payment: { select: { rawPayerName: true } },
+        },
+      });
 
-    if (!allocation) {
-      throw new NotFoundException('Allocation not found');
-    }
+      if (!allocation) {
+        throw new NotFoundException('Allocation not found');
+      }
 
-    await this.prisma.paymentAllocation.delete({ where: { id: allocationId } });
+      await tx.paymentAllocation.delete({ where: { id: allocationId } });
 
-    // Update charge status
-    await this.chargesService.updateChargeStatus(allocation.chargeId);
+      // Update charge status inside the transaction
+      await this.chargesService.updateChargeStatus(allocation.chargeId, actorId, tx);
 
-    // Audit log
-    if (actorId) {
-      await this.auditService.logDelete(orgId, actorId, 'ALLOCATION', allocationId, {
+      return {
         paymentId: allocation.paymentId,
         chargeId: allocation.chargeId,
         chargeTitle: allocation.charge.title,
         amountCents: allocation.amountCents,
-      });
+        rawPayerName: allocation.payment?.rawPayerName,
+      };
+    });
+
+    // Audit log (best-effort, outside tx)
+    if (actorId) {
+      await this.auditService.logDelete(orgId, actorId, 'ALLOCATION', allocationId, allocationData, batch);
     }
 
     return { success: true };
   }
 
-  async getUnallocatedForMember(orgId: string, membershipId: string) {
-    const payments = await this.prisma.payment.findMany({
+  async restoreAllocation(orgId: string, allocationId: string, data: { paymentId: string; chargeId: string; amountCents: number; createdById: string }) {
+    // Check if allocation already exists (prevents duplicate on double-redo)
+    const existing = await this.prisma.paymentAllocation.findUnique({
+      where: { id: allocationId },
+    });
+
+    if (existing) {
+      // Already exists, just update charge status and return
+      await this.chargesService.updateChargeStatus(data.chargeId, data.createdById);
+      return existing;
+    }
+
+    // Re-create the allocation with its original ID
+    const allocation = await this.prisma.paymentAllocation.create({
+      data: {
+        id: allocationId,
+        orgId,
+        paymentId: data.paymentId,
+        chargeId: data.chargeId,
+        amountCents: data.amountCents,
+        createdById: data.createdById,
+      },
+    });
+
+    // Update charge status
+    await this.chargesService.updateChargeStatus(data.chargeId, data.createdById);
+
+    // Audit log for the restored allocation
+    const charge = await this.prisma.charge.findUnique({
+      where: { id: data.chargeId },
+      select: { title: true },
+    });
+    const payment = await this.prisma.payment.findUnique({
+      where: { id: data.paymentId },
+      select: { rawPayerName: true },
+    });
+
+    await this.auditService.logCreate(orgId, data.createdById, 'ALLOCATION', allocationId, {
+      paymentId: data.paymentId,
+      chargeId: data.chargeId,
+      chargeTitle: charge?.title,
+      amountCents: data.amountCents,
+      rawPayerName: payment?.rawPayerName,
+      restored: true,
+    });
+
+    return allocation;
+  }
+
+  async bulkRemoveAllocations(orgId: string, allocationIds: string[], actorId: string) {
+    if (allocationIds.length === 0) {
+      return { success: true, removedCount: 0 };
+    }
+
+    const batch = allocationIds.length > 1
+      ? this.auditService.createBatchContext(`Removed ${allocationIds.length} allocations`)
+      : undefined;
+
+    let removedCount = 0;
+    for (const allocationId of allocationIds) {
+      try {
+        await this.removeAllocation(orgId, allocationId, actorId, batch);
+        removedCount++;
+      } catch {
+        // Skip not-found allocations
+      }
+    }
+
+    return { success: true, removedCount };
+  }
+
+  private calculateNameSimilarity(a: string, b: string): number {
+    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, ' ').trim();
+    const na = normalize(a);
+    const nb = normalize(b);
+    if (!na || !nb) return 0;
+    if (na === nb) return 1;
+    // Check if one contains the other
+    if (na.includes(nb) || nb.includes(na)) return 0.85;
+    // Check if all parts of one name appear in the other
+    const partsA = na.split(/\s+/).filter(Boolean);
+    const partsB = nb.split(/\s+/).filter(Boolean);
+    const matchingParts = partsA.filter((p) => partsB.some((q) => q.includes(p) || p.includes(q)));
+    if (matchingParts.length > 0) return matchingParts.length / Math.max(partsA.length, partsB.length);
+    return 0;
+  }
+
+  async autoAllocatePayment(orgId: string, paymentId: string, createdById: string) {
+    // Pre-tx: read-only member matching (idempotent, safe outside tx)
+    const prePayment = await this.prisma.payment.findFirst({
+      where: { id: paymentId, orgId, deletedAt: null },
+      include: { allocations: { select: { amountCents: true } } },
+    });
+
+    if (!prePayment) return { allocated: false, reason: 'Payment not found' };
+
+    const preAllocated = prePayment.allocations.reduce((sum, a) => sum + a.amountCents, 0);
+    if (prePayment.amountCents - preAllocated <= 0) return { allocated: false, reason: 'Fully allocated' };
+
+    let membershipId = prePayment.membershipId;
+
+    if (!membershipId && prePayment.rawPayerName) {
+      const memberships = await this.prisma.membership.findMany({
+        where: { orgId, status: 'ACTIVE' },
+        include: { user: { select: { name: true } } },
+      });
+
+      let bestMatch: { id: string; score: number } | null = null;
+      for (const m of memberships) {
+        const memberName = m.name || m.user?.name || '';
+        if (!memberName) continue;
+        const score = this.calculateNameSimilarity(prePayment.rawPayerName, memberName);
+        if (score >= 0.7 && (!bestMatch || score > bestMatch.score)) {
+          bestMatch = { id: m.id, score };
+        }
+      }
+
+      if (bestMatch) {
+        membershipId = bestMatch.id;
+        // Link the payment to the member (can happen before tx)
+        await this.prisma.payment.update({
+          where: { id: paymentId },
+          data: { membershipId },
+        });
+      }
+    }
+
+    if (!membershipId) return { allocated: false, reason: 'No matching member found' };
+
+    const finalMembershipId = membershipId;
+
+    // Transaction: lock payment, read charges, create allocations, update statuses
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Lock the payment row
+      await tx.$queryRaw`SELECT 1 FROM payments WHERE id = ${paymentId} FOR UPDATE`;
+
+      const payment = await tx.payment.findFirst({
+        where: { id: paymentId, orgId, deletedAt: null },
+        include: { allocations: { select: { amountCents: true } } },
+      });
+
+      if (!payment) return { allocated: false as const, reason: 'Payment not found' };
+
+      const allocatedCents = payment.allocations.reduce((sum, a) => sum + a.amountCents, 0);
+      let remainingCents = payment.amountCents - allocatedCents;
+
+      if (remainingCents <= 0) return { allocated: false as const, reason: 'Fully allocated' };
+
+      const charges = await tx.charge.findMany({
+        where: { orgId, membershipId: finalMembershipId, status: { in: ['OPEN', 'PARTIALLY_PAID'] } },
+        include: { allocations: { select: { amountCents: true } } },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      if (charges.length === 0) return { allocated: false as const, reason: 'No open charges for member' };
+
+      let totalAllocated = 0;
+      const allocatedChargeIds: string[] = [];
+
+      for (const charge of charges) {
+        if (remainingCents <= 0) break;
+
+        const chargeAllocated = charge.allocations.reduce((sum, a) => sum + a.amountCents, 0);
+        const chargeBalance = charge.amountCents - chargeAllocated;
+        if (chargeBalance <= 0) continue;
+
+        const toAllocate = Math.min(remainingCents, chargeBalance);
+
+        await tx.paymentAllocation.create({
+          data: {
+            orgId,
+            paymentId,
+            chargeId: charge.id,
+            amountCents: toAllocate,
+            createdById,
+          },
+        });
+
+        allocatedChargeIds.push(charge.id);
+        totalAllocated += toAllocate;
+        remainingCents -= toAllocate;
+      }
+
+      // Update charge statuses inside the transaction
+      for (const chargeId of allocatedChargeIds) {
+        await this.chargesService.updateChargeStatus(chargeId, createdById, tx);
+      }
+
+      return { allocated: true as const, allocatedCents: totalAllocated, chargeCount: allocatedChargeIds.length, allocatedChargeIds, rawPayerName: payment.rawPayerName };
+    });
+
+    if (!result.allocated) return { allocated: false, reason: (result as any).reason };
+
+    // Audit log (best-effort, outside tx)
+    if (result.allocatedCents > 0) {
+      await this.auditService.logCreate(orgId, createdById, 'ALLOCATION', paymentId, {
+        paymentId,
+        amountCents: result.allocatedCents,
+        chargeIds: result.allocatedChargeIds,
+        autoAllocated: true,
+        rawPayerName: result.rawPayerName,
+      });
+    }
+
+    return { allocated: true, allocatedCents: result.allocatedCents, chargeCount: result.chargeCount };
+  }
+
+  async bulkAutoAllocate(orgId: string, paymentIds: string[], createdById: string) {
+    let totalAllocatedCents = 0;
+    let successCount = 0;
+    let skippedCount = 0;
+
+    for (const paymentId of paymentIds) {
+      try {
+        const result = await this.autoAllocatePayment(orgId, paymentId, createdById);
+        if (result.allocated) {
+          totalAllocatedCents += result.allocatedCents || 0;
+          successCount++;
+        } else {
+          skippedCount++;
+        }
+      } catch {
+        skippedCount++;
+      }
+    }
+
+    return { totalAllocatedCents, successCount, skippedCount };
+  }
+
+  async getUnallocatedForMember(orgId: string, membershipId: string, tx?: Prisma.TransactionClient) {
+    const db = tx ?? this.prisma;
+    const payments = await db.payment.findMany({
       where: { orgId, membershipId, deletedAt: null },
       include: {
         allocations: {
@@ -518,67 +844,70 @@ export class PaymentsService {
     chargeId: string,
     createdById: string,
   ) {
-    // Get the charge with its member
-    const charge = await this.prisma.charge.findFirst({
-      where: { id: chargeId, orgId, status: { not: 'VOID' } },
-      include: {
-        allocations: { select: { amountCents: true } },
-      },
-    });
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Lock the charge row
+      await tx.$queryRaw`SELECT 1 FROM charges WHERE id = ${chargeId} FOR UPDATE`;
 
-    if (!charge) {
-      throw new NotFoundException('Charge not found');
-    }
-
-    const chargeAllocated = charge.allocations.reduce((sum, a) => sum + a.amountCents, 0);
-    let chargeBalance = charge.amountCents - chargeAllocated;
-
-    if (chargeBalance <= 0) {
-      return { allocatedCents: 0, message: 'Charge is already fully paid' };
-    }
-
-    // Get unallocated payments for this member
-    const { payments } = await this.getUnallocatedForMember(orgId, charge.membershipId);
-
-    if (payments.length === 0) {
-      return { allocatedCents: 0, message: 'No unallocated payments for this member' };
-    }
-
-    let totalAllocated = 0;
-
-    // Allocate from each unallocated payment
-    for (const payment of payments) {
-      if (chargeBalance <= 0) break;
-
-      const toAllocate = Math.min(payment.unallocatedCents, chargeBalance);
-
-      await this.prisma.paymentAllocation.create({
-        data: {
-          orgId,
-          paymentId: payment.id,
-          chargeId,
-          amountCents: toAllocate,
-          createdById,
-        },
+      const charge = await tx.charge.findFirst({
+        where: { id: chargeId, orgId, status: { not: 'VOID' } },
+        include: { allocations: { select: { amountCents: true } } },
       });
 
-      totalAllocated += toAllocate;
-      chargeBalance -= toAllocate;
-    }
+      if (!charge) {
+        throw new NotFoundException('Charge not found');
+      }
 
-    // Update charge status
-    await this.chargesService.updateChargeStatus(chargeId);
+      const chargeAllocated = charge.allocations.reduce((sum, a) => sum + a.amountCents, 0);
+      let chargeBalance = charge.amountCents - chargeAllocated;
 
-    // Audit log
-    if (totalAllocated > 0) {
+      if (chargeBalance <= 0) {
+        return { allocatedCents: 0, message: 'Charge is already fully paid', chargeTitle: charge.title };
+      }
+
+      // Get unallocated payments for this member (inside tx)
+      const { payments } = await this.getUnallocatedForMember(orgId, charge.membershipId, tx);
+
+      if (payments.length === 0) {
+        return { allocatedCents: 0, message: 'No unallocated payments for this member', chargeTitle: charge.title };
+      }
+
+      let totalAllocated = 0;
+
+      for (const payment of payments) {
+        if (chargeBalance <= 0) break;
+
+        const toAllocate = Math.min(payment.unallocatedCents, chargeBalance);
+
+        await tx.paymentAllocation.create({
+          data: {
+            orgId,
+            paymentId: payment.id,
+            chargeId,
+            amountCents: toAllocate,
+            createdById,
+          },
+        });
+
+        totalAllocated += toAllocate;
+        chargeBalance -= toAllocate;
+      }
+
+      // Update charge status inside the transaction
+      await this.chargesService.updateChargeStatus(chargeId, createdById, tx);
+
+      return { allocatedCents: totalAllocated, chargeTitle: charge.title };
+    });
+
+    // Audit log (best-effort, outside tx)
+    if (result.allocatedCents > 0) {
       await this.auditService.logCreate(orgId, createdById, 'ALLOCATION', chargeId, {
         chargeId,
-        chargeTitle: charge.title,
-        amountCents: totalAllocated,
+        chargeTitle: result.chargeTitle,
+        amountCents: result.allocatedCents,
         autoAllocated: true,
       });
     }
 
-    return { allocatedCents: totalAllocated };
+    return { allocatedCents: result.allocatedCents, message: result.message };
   }
 }

@@ -57,6 +57,7 @@ export function useCreatePayment() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.payments.all(variables.orgId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all(variables.orgId) });
     },
   });
 }
@@ -79,6 +80,7 @@ export function useAllocatePayment() {
       queryClient.invalidateQueries({ queryKey: queryKeys.charges.all(variables.orgId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.members.all(variables.orgId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all(variables.orgId) });
     },
   });
 }
@@ -102,8 +104,8 @@ export function useUpdatePayment() {
       };
     }) => api.patch(`/organizations/${orgId}/payments/${paymentId}`, data),
     onSuccess: (_, variables) => {
-      // Only invalidate payments — metadata-only update doesn't affect charges or members
       queryClient.invalidateQueries({ queryKey: queryKeys.payments.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all(variables.orgId) });
     },
   });
 }
@@ -119,6 +121,26 @@ export function useDeletePayment() {
       queryClient.invalidateQueries({ queryKey: queryKeys.charges.all(variables.orgId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.members.all(variables.orgId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all(variables.orgId) });
+    },
+  });
+}
+
+export function useBulkDeletePayments() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ orgId, paymentIds }: { orgId: string; paymentIds: string[] }) =>
+      api.post<{ success: boolean; deletedCount: number }>(
+        `/organizations/${orgId}/payments/bulk-delete`,
+        { paymentIds },
+      ),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.payments.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.charges.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.members.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all(variables.orgId) });
     },
   });
 }
@@ -132,6 +154,7 @@ export function useRestorePayment() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.payments.all(variables.orgId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all(variables.orgId) });
     },
   });
 }
@@ -168,6 +191,55 @@ export function useRemoveAllocation() {
       queryClient.invalidateQueries({ queryKey: queryKeys.charges.all(variables.orgId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.members.all(variables.orgId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all(variables.orgId) });
+    },
+  });
+}
+
+export function useBulkRemoveAllocations() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      orgId,
+      allocationIds,
+    }: {
+      orgId: string;
+      allocationIds: string[];
+    }) => api.post<{ success: boolean; removedCount: number }>(
+      `/organizations/${orgId}/payments/allocations/bulk-remove`,
+      { allocationIds },
+    ),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.payments.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.charges.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.members.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all(variables.orgId) });
+    },
+  });
+}
+
+export function useBulkAutoAllocate() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      orgId,
+      paymentIds,
+    }: {
+      orgId: string;
+      paymentIds: string[];
+    }) => api.post<{ totalAllocatedCents: number; successCount: number; skippedCount: number }>(
+      `/organizations/${orgId}/payments/bulk-auto-allocate`,
+      { paymentIds },
+    ),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.payments.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.charges.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.members.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all(variables.orgId) });
     },
   });
 }
@@ -188,6 +260,7 @@ export function useAutoAllocateToCharge() {
       queryClient.invalidateQueries({ queryKey: queryKeys.charges.all(variables.orgId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.members.all(variables.orgId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all(variables.orgId) });
     },
   });
 }

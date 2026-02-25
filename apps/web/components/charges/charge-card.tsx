@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { AlertCircle, MoreHorizontal, Pencil, Trash2, Circle, CheckCircle2, X, Link2 } from 'lucide-react';
+import { AlertCircle, Check, MoreHorizontal, Pencil, Trash2, Circle, CheckCircle2, X, Link2 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { CHARGE_CATEGORY_LABELS } from '@ledgly/shared';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import {
 import { Money } from '@/components/ui/money';
 import { AvatarGradient } from '@/components/ui/avatar-gradient';
 import { MotionCard, MotionCardContent } from '@/components/ui/motion-card';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { StaggerItem } from '@/components/ui/page-transition';
 
 interface ChargeCardProps {
@@ -68,9 +69,9 @@ export const ChargeCard = memo(function ChargeCard({
               name={charge.membership?.displayName || 'Unknown'}
               size="sm"
             />
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <p className="font-medium">{nested ? charge.membership?.displayName : charge.title}</p>
+            <div className="min-w-0 space-y-1">
+              <div className="flex items-center gap-2 min-w-0">
+                <p className="font-medium truncate" title={nested ? charge.membership?.displayName : charge.title}>{nested ? charge.membership?.displayName : charge.title}</p>
                 {isOverdue && (
                   <Badge variant="destructive" className="text-xs">
                     <AlertCircle className="w-3 h-3 mr-1" />
@@ -80,7 +81,7 @@ export const ChargeCard = memo(function ChargeCard({
               </div>
               {!nested && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span>{charge.membership?.displayName}</span>
+                  <span className="truncate" title={charge.membership?.displayName}>{charge.membership?.displayName}</span>
                   <span className="opacity-30">&bull;</span>
                   <Badge variant="outline" className="text-xs">
                     {CHARGE_CATEGORY_LABELS[charge.category as keyof typeof CHARGE_CATEGORY_LABELS]}
@@ -99,9 +100,18 @@ export const ChargeCard = memo(function ChargeCard({
             <div className="text-right space-y-1">
               <div className="flex items-center justify-end gap-2">
                 <Money cents={charge.amountCents} size="sm" />
-                {isPaid && (
-                  <Badge variant="success" className="text-xs">Paid</Badge>
-                )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      {isPaid ? (
+                        <Check className="w-4 h-4 text-success" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 text-warning" />
+                      )}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{isPaid ? 'Paid' : 'Open'}</TooltipContent>
+                </Tooltip>
               </div>
               {!isPaid && (
                 <p className="text-sm text-destructive">
@@ -109,7 +119,7 @@ export const ChargeCard = memo(function ChargeCard({
                 </p>
               )}
             </div>
-            {isAdmin && (
+            {isAdmin ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -136,6 +146,8 @@ export const ChargeCard = memo(function ChargeCard({
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+            ) : (
+              <div className="w-8 h-8" />
             )}
           </div>
         </div>
@@ -144,8 +156,8 @@ export const ChargeCard = memo(function ChargeCard({
             <p className="text-xs text-muted-foreground mb-2">Payments applied:</p>
             <div className="flex flex-wrap gap-1">
               {allocations.map((a: any) => (
-                <Badge key={a.id} variant="secondary" className="text-xs gap-1 pr-1">
-                  {a.payerName || 'Payment'}: <Money cents={a.amountCents} size="xs" inline />
+                <Badge key={a.id} variant="secondary" className="text-xs gap-1 pr-1 max-w-[200px]">
+                  <span className="truncate">{a.payerName || 'Payment'}</span>: <Money cents={a.amountCents} size="xs" inline />
                   <button
                     onClick={(e) => {
                       e.stopPropagation();

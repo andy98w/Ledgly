@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { IsString, IsNumber, IsOptional, IsArray, ValidateNested } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsArray, ValidateNested, IsInt, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PaymentsService } from './payments.service';
 import { Roles } from '../../common/decorators';
@@ -11,7 +11,9 @@ class CreatePaymentDto {
   @IsOptional()
   membershipId?: string;
 
-  @IsNumber()
+  @IsInt()
+  @Min(1)
+  @Max(99_999_999)
   amountCents: number;
 
   @IsString()
@@ -31,7 +33,9 @@ class UpdatePaymentDto {
   @IsOptional()
   membershipId?: string;
 
-  @IsNumber()
+  @IsInt()
+  @Min(1)
+  @Max(99_999_999)
   @IsOptional()
   amountCents?: number;
 
@@ -52,7 +56,9 @@ class AllocationItemDto {
   @IsString()
   chargeId: string;
 
-  @IsNumber()
+  @IsInt()
+  @Min(1)
+  @Max(99_999_999)
   amountCents: number;
 }
 
@@ -139,6 +145,20 @@ export class PaymentsController {
     return this.paymentsService.delete(orgId, id, actorId);
   }
 
+  @Post('bulk-delete')
+  @Roles('ADMIN', 'TREASURER')
+  async bulkDelete(@Param('orgId') orgId: string, @Body() body: { paymentIds: string[] }, @Req() req: any) {
+    const actorId = req.membership.id;
+    return this.paymentsService.bulkDelete(orgId, body.paymentIds, actorId);
+  }
+
+  @Post('bulk-auto-allocate')
+  @Roles('ADMIN', 'TREASURER')
+  async bulkAutoAllocate(@Param('orgId') orgId: string, @Body() body: { paymentIds: string[] }, @Req() req: any) {
+    const actorId = req.membership.id;
+    return this.paymentsService.bulkAutoAllocate(orgId, body.paymentIds, actorId);
+  }
+
   @Post(':id/restore')
   @Roles('ADMIN', 'TREASURER')
   async restore(@Param('orgId') orgId: string, @Param('id') id: string, @Req() req: any) {
@@ -149,8 +169,19 @@ export class PaymentsController {
   @Delete('allocations/:allocationId')
   @Roles('ADMIN', 'TREASURER')
   async removeAllocation(@Param('orgId') orgId: string, @Param('allocationId') allocationId: string, @Req() req: any) {
-    const actorId = req.membership?.id;
+    const actorId = req.membership.id;
     return this.paymentsService.removeAllocation(orgId, allocationId, actorId);
+  }
+
+  @Post('allocations/bulk-remove')
+  @Roles('ADMIN', 'TREASURER')
+  async bulkRemoveAllocations(
+    @Param('orgId') orgId: string,
+    @Body() body: { allocationIds: string[] },
+    @Req() req: any,
+  ) {
+    const actorId = req.membership.id;
+    return this.paymentsService.bulkRemoveAllocations(orgId, body.allocationIds, actorId);
   }
 
   @Get('member/:membershipId/unallocated')

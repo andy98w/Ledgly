@@ -107,18 +107,24 @@ export class OrganizationsService {
   }
 
   async getDashboard(orgId: string) {
-    const now = new Date();
-
-    // Get aggregate stats
-    const [charges, payments, memberCount] = await Promise.all([
-      this.prisma.charge.findMany({
-        where: { orgId, status: { not: 'VOID' } },
-        include: {
-          allocations: {
-            select: { amountCents: true },
-          },
-        },
-      }),
+    // Aggregate charge stats in a single SQL query instead of loading all charges
+    const [chargeStats, payments, memberCount] = await Promise.all([
+      this.prisma.$queryRaw<
+        [{ total_charged_cents: bigint; total_allocated_cents: bigint; open_charges_count: bigint; overdue_count: bigint }]
+      >`
+        SELECT
+          COALESCE(SUM(c.amount_cents), 0) AS total_charged_cents,
+          COALESCE(SUM(pa_sum.allocated), 0) AS total_allocated_cents,
+          COUNT(*) FILTER (WHERE c.status != 'PAID') AS open_charges_count,
+          COUNT(*) FILTER (WHERE c.status != 'PAID' AND c.due_date IS NOT NULL AND c.due_date < NOW()) AS overdue_count
+        FROM charges c
+        LEFT JOIN LATERAL (
+          SELECT COALESCE(SUM(pa.amount_cents), 0) AS allocated
+          FROM payment_allocations pa
+          WHERE pa.charge_id = c.id
+        ) pa_sum ON true
+        WHERE c.org_id = ${orgId} AND c.status != 'VOID'
+      `,
       this.prisma.payment.findMany({
         where: { orgId, deletedAt: null },
         include: {
@@ -134,24 +140,9 @@ export class OrganizationsService {
       }),
     ]);
 
-    // Calculate totals
-    let totalChargedCents = 0;
-    let totalAllocatedCents = 0;
-    let overdueCount = 0;
-    let openChargesCount = 0;
-
-    for (const charge of charges) {
-      totalChargedCents += charge.amountCents;
-      const allocated = charge.allocations.reduce((sum, a) => sum + a.amountCents, 0);
-      totalAllocatedCents += allocated;
-
-      if (charge.status !== 'PAID') {
-        openChargesCount++;
-        if (charge.dueDate && charge.dueDate < now) {
-          overdueCount++;
-        }
-      }
-    }
+    const stats = chargeStats[0];
+    const totalChargedCents = Number(stats.total_charged_cents);
+    const totalAllocatedCents = Number(stats.total_allocated_cents);
 
     const recentPayments = payments.map((p) => {
       const allocatedCents = p.allocations.reduce((sum, a) => sum + a.amountCents, 0);
@@ -169,9 +160,9 @@ export class OrganizationsService {
     return {
       totalOutstandingCents: totalChargedCents - totalAllocatedCents,
       totalCollectedCents: totalAllocatedCents,
-      overdueCount,
+      overdueCount: Number(stats.overdue_count),
       memberCount,
-      openChargesCount,
+      openChargesCount: Number(stats.open_charges_count),
       recentPayments,
     };
   }

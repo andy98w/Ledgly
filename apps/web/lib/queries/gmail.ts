@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { queryKeys } from '@/lib/query-keys';
 
 export interface GmailStatus {
   connected: boolean;
@@ -50,7 +51,7 @@ export interface SyncResult {
 
 export function useGmailStatus(orgId: string | null) {
   return useQuery({
-    queryKey: ['organizations', orgId, 'gmail', 'status'],
+    queryKey: queryKeys.gmail.status(orgId),
     queryFn: () => api.get<GmailStatus>(`/organizations/${orgId}/gmail/status`),
     enabled: !!orgId,
   });
@@ -58,7 +59,7 @@ export function useGmailStatus(orgId: string | null) {
 
 export function useGmailImports(orgId: string | null, status = 'pending') {
   return useQuery({
-    queryKey: ['organizations', orgId, 'gmail', 'imports', status],
+    queryKey: queryKeys.gmail.imports(orgId, status),
     queryFn: () =>
       api.get<{ data: EmailImport[] }>(
         `/organizations/${orgId}/gmail/imports?status=${status}`,
@@ -69,7 +70,7 @@ export function useGmailImports(orgId: string | null, status = 'pending') {
 
 export function useImportStats(orgId: string | null) {
   return useQuery({
-    queryKey: ['organizations', orgId, 'gmail', 'imports', 'stats'],
+    queryKey: queryKeys.gmail.stats(orgId),
     queryFn: () =>
       api.get<ImportStats>(`/organizations/${orgId}/gmail/imports/stats`),
     enabled: !!orgId,
@@ -84,16 +85,16 @@ export function useSyncGmail() {
       api.post<SyncResult>(`/organizations/${orgId}/gmail/sync`),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'gmail', 'imports'],
+        queryKey: queryKeys.gmail.all(variables.orgId),
       });
       queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'gmail', 'status'],
+        queryKey: queryKeys.payments.all(variables.orgId),
       });
       queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'payments'],
+        queryKey: queryKeys.dashboard.all(variables.orgId),
       });
       queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'dashboard'],
+        queryKey: queryKeys.audit.all(variables.orgId),
       });
     },
   });
@@ -117,13 +118,16 @@ export function useConfirmImport() {
       }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'gmail', 'imports'],
+        queryKey: queryKeys.gmail.all(variables.orgId),
       });
       queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'payments'],
+        queryKey: queryKeys.payments.all(variables.orgId),
       });
       queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'dashboard'],
+        queryKey: queryKeys.dashboard.all(variables.orgId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.audit.all(variables.orgId),
       });
     },
   });
@@ -137,7 +141,7 @@ export function useIgnoreImport() {
       api.post(`/organizations/${orgId}/gmail/imports/${importId}/ignore`),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'gmail', 'imports'],
+        queryKey: queryKeys.gmail.imports(variables.orgId),
       });
     },
   });
@@ -151,7 +155,7 @@ export function useRestoreImport() {
       api.post(`/organizations/${orgId}/gmail/imports/${importId}/restore`),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'gmail', 'imports'],
+        queryKey: queryKeys.gmail.imports(variables.orgId),
       });
     },
   });
@@ -165,19 +169,16 @@ export function useUnconfirmImport() {
       api.post(`/organizations/${orgId}/gmail/imports/${importId}/unconfirm`),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'gmail', 'imports'],
+        queryKey: queryKeys.gmail.all(variables.orgId),
       });
       queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'payments'],
+        queryKey: queryKeys.payments.all(variables.orgId),
       });
       queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'charges'],
+        queryKey: queryKeys.dashboard.all(variables.orgId),
       });
       queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'members'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'dashboard'],
+        queryKey: queryKeys.audit.all(variables.orgId),
       });
     },
   });
@@ -191,7 +192,7 @@ export function useDisconnectGmail() {
       api.delete(`/organizations/${orgId}/gmail/disconnect`),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.orgId, 'gmail'],
+        queryKey: queryKeys.gmail.all(variables.orgId),
       });
     },
   });

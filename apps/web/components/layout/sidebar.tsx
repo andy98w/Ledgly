@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { motion } from 'framer-motion';
 import {
   LayoutDashboard,
   Users,
@@ -34,7 +33,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 const navItems: Array<{ href: string; label: string; icon: typeof LayoutDashboard; badge?: string }> = [
-  { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/members', label: 'Members', icon: Users },
   { href: '/charges', label: 'Charges', icon: Receipt },
   { href: '/expenses', label: 'Expenses', icon: TrendingDown },
@@ -59,13 +58,12 @@ export function Sidebar() {
       <div className="flex flex-col flex-1 min-h-0">
         {/* Logo */}
         <div className="flex items-center h-16 px-5 border-b border-border/50">
-          <Link href="/" className="flex items-center gap-3">
+          <Link href="/dashboard" className="flex items-center gap-3">
             <Image
               src="/logo.png"
               alt="Ledgly"
               width={36}
               height={36}
-              className="rounded-xl shadow-lg"
             />
             <span className="font-bold text-xl tracking-tight">Ledgly</span>
           </Link>
@@ -121,7 +119,7 @@ export function Sidebar() {
         <Separator className="opacity-50" />
 
         {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 space-y-1">
+        <nav data-tour="sidebar-nav" className="flex-1 px-3 py-4 space-y-1">
           {navItems.map((item) => {
             const isActive = pathname === item.href;
             return (
@@ -136,11 +134,10 @@ export function Sidebar() {
                 )}
               >
                 {isActive && (
-                  <motion.div
-                    layoutId="activeNav"
-                    className="absolute inset-0 bg-primary/10 rounded-xl"
-                    transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                  />
+                  <>
+                    <div className="absolute inset-0 bg-primary/10 rounded-xl transition-all" />
+                    <div className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-primary" />
+                  </>
                 )}
                 <item.icon className={cn('h-5 w-5 relative z-10', isActive && 'text-primary')} />
                 <span className="relative z-10">{item.label}</span>

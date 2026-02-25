@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { motion } from 'framer-motion';
+
 import {
   Mail,
   CheckCircle2,
@@ -107,9 +107,11 @@ function ImportCard({
   }, [item.parsedPayerName, members]);
 
   // Filter members based on search
-  const filteredMembers = memberSearch
-    ? members.filter((m) => m.displayName.toLowerCase().includes(memberSearch.toLowerCase()))
-    : members;
+  const filteredMembers = useMemo(() => {
+    if (!memberSearch) return members;
+    const query = memberSearch.toLowerCase();
+    return members.filter((m) => m.displayName.toLowerCase().includes(query));
+  }, [members, memberSearch]);
 
   // Get the name to use for creating a new member
   // Use the search term if typed, otherwise use the payer name
@@ -164,14 +166,14 @@ function ImportCard({
                 )}
               </button>
             )}
-            <div className="flex items-start gap-3 flex-1">
+            <div className="flex items-start gap-3 flex-1 min-w-0">
               <AvatarGradient
                 name={item.parsedPayerName || 'Unknown'}
                 size="md"
               />
-              <div className="space-y-1 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="font-medium text-sm">
+              <div className="space-y-1 flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap min-w-0">
+                  <p className="font-medium text-sm truncate" title={isOutgoing ? `To: ${item.parsedPayerName || 'Unknown'}` : item.parsedPayerName || 'Unknown Payer'}>
                     {isOutgoing ? `To: ${item.parsedPayerName || 'Unknown'}` : item.parsedPayerName || 'Unknown Payer'}
                   </p>
                   <Badge
@@ -837,7 +839,7 @@ export default function InboxPage() {
   const members = membersData?.data || [];
 
   return (
-    <div className="space-y-8">
+    <div data-tour="inbox-content" className="space-y-8">
       {/* Header */}
       <FadeIn>
         <div className="flex items-center justify-between">
@@ -881,11 +883,7 @@ export default function InboxPage() {
         {statusLoading ? (
           <Skeleton className="h-32 rounded-2xl" />
         ) : isConnected ? (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="rounded-2xl border border-success/30 bg-gradient-to-br from-success/10 via-success/5 to-transparent p-5"
-          >
+          <div className="rounded-2xl border border-success/30 bg-gradient-to-br from-success/10 via-success/5 to-transparent p-5 animate-in-scale">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-xl bg-success/20 flex items-center justify-center">
@@ -913,29 +911,15 @@ export default function InboxPage() {
                 Disconnect
               </Button>
             </div>
-          </motion.div>
+          </div>
         ) : (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="relative overflow-hidden rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-6"
-          >
+          <div className="relative overflow-hidden rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-6 animate-in-scale">
             <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-blue-500/5 to-primary/5 animate-pulse" />
             <div className="relative">
               <div className="flex items-center gap-4 mb-6">
-                <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{
-                    type: 'spring',
-                    stiffness: 200,
-                    damping: 15,
-                    delay: 0.2,
-                  }}
-                  className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-blue-400 flex items-center justify-center shadow-lg glow-md"
-                >
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-blue-400 flex items-center justify-center shadow-lg glow-md animate-in-scale">
                   <Zap className="w-7 h-7 text-primary-foreground" />
-                </motion.div>
+                </div>
                 <div>
                   <h2 className="text-xl font-bold">Auto-Import Payments</h2>
                   <p className="text-muted-foreground">
@@ -992,7 +976,7 @@ export default function InboxPage() {
                 </Button>
               </a>
             </div>
-          </motion.div>
+          </div>
         )}
       </FadeIn>
 
@@ -1235,11 +1219,7 @@ export default function InboxPage() {
                 </div>
               ) : (
                 <FadeIn delay={0.3}>
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.98 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="rounded-xl border border-dashed border-border/50 bg-card/30 py-12 text-center"
-                  >
+                  <div className="rounded-xl border border-dashed border-border/50 bg-card/30 py-12 text-center animate-in-scale">
                     <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
                       <CheckCircle2 className="w-8 h-8 text-success" />
                     </div>
@@ -1261,7 +1241,7 @@ export default function InboxPage() {
                       )}
                       Check for new emails
                     </Button>
-                  </motion.div>
+                  </div>
                 </FadeIn>
               )}
             </>
@@ -1322,11 +1302,7 @@ export default function InboxPage() {
                 </StaggerChildren>
               ) : (
                 <FadeIn delay={0.3}>
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.98 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="rounded-xl border border-dashed border-border/50 bg-card/30 py-12 text-center"
-                  >
+                  <div className="rounded-xl border border-dashed border-border/50 bg-card/30 py-12 text-center animate-in-scale">
                     <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
                       <EyeOff className="w-8 h-8 text-muted-foreground" />
                     </div>
@@ -1334,7 +1310,7 @@ export default function InboxPage() {
                     <p className="text-sm text-muted-foreground max-w-md mx-auto">
                       Items you ignore will appear here. You can restore them anytime.
                     </p>
-                  </motion.div>
+                  </div>
                 </FadeIn>
               )}
             </>

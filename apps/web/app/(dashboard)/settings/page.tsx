@@ -3,9 +3,9 @@
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { motion } from 'framer-motion';
-import { Moon, Sun, Monitor, User, Building2, Shield, Bell, Loader2, Camera, Plus, Trash2, AlertTriangle, Mail } from 'lucide-react';
+import { Moon, Sun, Monitor, User, Building2, Shield, Bell, Loader2, Camera, Plus, Trash2, AlertTriangle, Mail, Settings, GraduationCap } from 'lucide-react';
 import { useAuthStore } from '@/lib/stores/auth';
+import { useTutorialStore } from '@/lib/stores/tutorial';
 import { useUpdateProfile } from '@/lib/queries/auth';
 import { useCreateOrganization, useDeleteOrganization, useOrganization, useUpdateOrganization } from '@/lib/queries/organizations';
 import { uploadAvatar } from '@/lib/supabase';
@@ -27,6 +27,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { PageHeader } from '@/components/ui/page-header';
 import { cn } from '@/lib/utils';
 
 const themeOptions = [
@@ -41,6 +42,7 @@ export default function SettingsPage() {
   const { toast } = useToast();
   const user = useAuthStore((s) => s.user);
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
+  const startTutorial = useTutorialStore((s) => s.start);
   const currentOrg = user?.memberships.find((m) => m.orgId === currentOrgId);
   const updateProfile = useUpdateProfile();
   const createOrganization = useCreateOrganization();
@@ -186,12 +188,11 @@ export default function SettingsPage() {
     <div className="space-y-8 max-w-2xl">
       {/* Header */}
       <FadeIn>
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage your account and preferences
-          </p>
-        </div>
+        <PageHeader
+          title="Settings"
+          helpText="Manage your account, appearance, notifications, and organization preferences."
+          icon={<Settings className="h-6 w-6 text-primary-foreground" />}
+        />
       </FadeIn>
 
       {/* Profile Section */}
@@ -314,13 +315,11 @@ export default function SettingsPage() {
                   const isActive = theme === option.value;
                   const Icon = option.icon;
                   return (
-                    <motion.button
+                    <button
                       key={option.value}
                       onClick={() => setTheme(option.value)}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
                       className={cn(
-                        'flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all',
+                        'flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all hover:scale-[1.02] active:scale-[0.98] transition-transform',
                         isActive
                           ? 'border-primary bg-primary/10'
                           : 'border-border/50 hover:border-border hover:bg-secondary/50'
@@ -341,7 +340,7 @@ export default function SettingsPage() {
                       )}>
                         {option.label}
                       </span>
-                    </motion.button>
+                    </button>
                   );
                 })}
               </div>
@@ -424,13 +423,23 @@ export default function SettingsPage() {
                 <p className="text-sm text-muted-foreground mb-3">
                   Create a new organization to manage a different group.
                 </p>
-                <Button
-                  variant="outline"
-                  onClick={() => setShowCreateOrgDialog(true)}
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create New Organization
-                </Button>
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowCreateOrgDialog(true)}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Create New Organization
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={startTutorial}
+                    data-tour="launch-tutorial"
+                  >
+                    <GraduationCap className="w-4 h-4 mr-2" />
+                    Launch Tutorial
+                  </Button>
+                </div>
               </div>
             </div>
           </MotionCardContent>

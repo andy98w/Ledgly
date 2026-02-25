@@ -1,9 +1,8 @@
 'use client';
 
-import { useMemo, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { useCallback, useMemo, useEffect, useState } from 'react';
 import { Plus, Receipt, TrendingUp, Percent, Search, ChevronRight, ChevronLeft, Trash2, Info, Circle, CheckCircle2 } from 'lucide-react';
-import { useCharges, useUpdateCharge, useVoidCharge, useRestoreCharge, useCreateCharge } from '@/lib/queries/charges';
+import { useCharges, useUpdateCharge, useVoidCharge, useRestoreCharge, useCreateCharge, useBulkVoidCharges } from '@/lib/queries/charges';
 import { useMembers, useCreateMembers } from '@/lib/queries/members';
 import { usePayments, useAutoAllocateToCharge, useRemoveAllocation, useAllocatePayment } from '@/lib/queries/payments';
 import { useAuthStore } from '@/lib/stores/auth';
@@ -28,6 +27,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 
+
 import { groupCharges, type ChargeGroup } from '@/lib/utils/charge-grouping';
 import { ChargeGroupCard } from '@/components/charges/charge-group-card';
 import { ChargeCardSkeleton } from '@/components/charges/charge-card-skeleton';
@@ -40,7 +40,6 @@ import { ChargeAllocatePaymentDialog } from '@/components/charges/charge-allocat
 import { useChargeFilters } from '@/hooks/use-charge-filters';
 import { useBulkSelection } from '@/hooks/use-bulk-selection';
 
-import { useState } from 'react';
 
 export default function ChargesPage() {
   const {
@@ -73,6 +72,7 @@ export default function ChargesPage() {
   const updateCharge = useUpdateCharge();
   const voidCharge = useVoidCharge();
   const restoreCharge = useRestoreCharge();
+  const bulkVoidCharges = useBulkVoidCharges();
   const createCharge = useCreateCharge();
   const autoAllocate = useAutoAllocateToCharge();
   const removeAllocation = useRemoveAllocation();
@@ -121,14 +121,14 @@ export default function ChargesPage() {
   const collectionRate = totalAmount > 0 ? Math.round((totalCollected / totalAmount) * 100) : 0;
 
   // Handlers
-  const handleEdit = (charge: any) => {
+  const handleEdit = useCallback((charge: any) => {
     setEditingCharge({
       id: charge.id,
       title: charge.title,
       amountCents: charge.amountCents,
       dueDate: charge.dueDate ? new Date(charge.dueDate).toISOString().split('T')[0] : null,
     });
-  };
+  }, []);
 
   const handleSaveEdit = () => {
     if (!editingCharge || !currentOrgId) return;
@@ -225,14 +225,14 @@ export default function ChargesPage() {
     );
   };
 
-  const handleEditGroup = (group: ChargeGroup) => {
+  const handleEditGroup = useCallback((group: ChargeGroup) => {
     setEditingGroup(group);
     setGroupEditData({
       title: group.title,
       amountCents: group.amountCents,
       dueDate: group.dueDate ? new Date(group.dueDate).toISOString().split('T')[0] : null,
     });
-  };
+  }, []);
 
   const handleSaveGroupEdit = async () => {
     if (!editingGroup || !currentOrgId) return;
@@ -269,52 +269,48 @@ export default function ChargesPage() {
   const handleBulkDeleteCharges = async () => {
     if (!currentOrgId || selectedCharges.size === 0) return;
     const chargeIds = Array.from(selectedCharges);
-    const deletedChargeIds: string[] = [];
 
-    for (const chargeId of chargeIds) {
-      try {
-        await voidCharge.mutateAsync({ orgId: currentOrgId, chargeId });
-        deletedChargeIds.push(chargeId);
-      } catch { /* continue */ }
+    try {
+      const result = await bulkVoidCharges.mutateAsync({ orgId: currentOrgId, chargeIds });
+      const deletedCount = result.voidedCount;
+      clearSelection();
+
+      toast({
+        title: `Deleted ${deletedCount} charge${deletedCount !== 1 ? 's' : ''}`,
+        action: (
+          <button
+            onClick={async () => {
+              let restoredCount = 0;
+              for (const chargeId of chargeIds) {
+                try { await restoreCharge.mutateAsync({ orgId: currentOrgId, chargeId }); restoredCount++; } catch { /* continue */ }
+              }
+              toast({
+                title: `Restored ${restoredCount} charge${restoredCount !== 1 ? 's' : ''}`,
+                action: (
+                  <button
+                    onClick={async () => {
+                      const redoResult = await bulkVoidCharges.mutateAsync({ orgId: currentOrgId, chargeIds });
+                      toast({ title: `Deleted ${redoResult.voidedCount} charge${redoResult.voidedCount !== 1 ? 's' : ''}` });
+                    }}
+                    className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+                  >
+                    Redo
+                  </button>
+                ),
+              });
+            }}
+            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+          >
+            Undo
+          </button>
+        ),
+      });
+    } catch {
+      clearSelection();
     }
-    clearSelection();
-
-    toast({
-      title: `Deleted ${deletedChargeIds.length} charge${deletedChargeIds.length !== 1 ? 's' : ''}`,
-      action: (
-        <button
-          onClick={async () => {
-            let restoredCount = 0;
-            for (const chargeId of deletedChargeIds) {
-              try { await restoreCharge.mutateAsync({ orgId: currentOrgId, chargeId }); restoredCount++; } catch { /* continue */ }
-            }
-            toast({
-              title: `Restored ${restoredCount} charge${restoredCount !== 1 ? 's' : ''}`,
-              action: (
-                <button
-                  onClick={async () => {
-                    let redoneCount = 0;
-                    for (const chargeId of deletedChargeIds) {
-                      try { await voidCharge.mutateAsync({ orgId: currentOrgId, chargeId }); redoneCount++; } catch { /* continue */ }
-                    }
-                    toast({ title: `Deleted ${redoneCount} charge${redoneCount !== 1 ? 's' : ''}` });
-                  }}
-                  className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-                >
-                  Redo
-                </button>
-              ),
-            });
-          }}
-          className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-        >
-          Undo
-        </button>
-      ),
-    });
   };
 
-  const handleUnallocate = (allocation: { id: string; paymentId: string; amountCents: number }, chargeId: string) => {
+  const handleUnallocate = useCallback((allocation: { id: string; paymentId: string; amountCents: number }, chargeId: string) => {
     if (!currentOrgId) return;
     removeAllocation.mutate(
       { orgId: currentOrgId, allocationId: allocation.id },
@@ -359,9 +355,9 @@ export default function ChargesPage() {
         onError: (error: any) => toast({ title: 'Error removing allocation', description: error.message || 'Please try again', variant: 'destructive' }),
       },
     );
-  };
+  }, [currentOrgId, removeAllocation, allocatePayment, toast]);
 
-  const handleAllocatePaymentToCharge = (paymentId: string, chargeId: string, amountCents: number) => {
+  const handleAllocatePaymentToCharge = useCallback((paymentId: string, chargeId: string, amountCents: number) => {
     if (!currentOrgId) return;
     allocatePayment.mutate(
       { orgId: currentOrgId, paymentId, allocations: [{ chargeId, amountCents }] },
@@ -405,7 +401,7 @@ export default function ChargesPage() {
         },
       },
     );
-  };
+  }, [currentOrgId, allocatePayment, removeAllocation, toast]);
 
   const handleAddMember = async (name: string): Promise<{ id: string; displayName: string } | null> => {
     if (!currentOrgId) return null;
@@ -464,24 +460,23 @@ export default function ChargesPage() {
   };
 
   return (
-    <div className="space-y-8">
+    <TooltipProvider delayDuration={0}>
+    <div data-tour="charges-list" className="space-y-8">
       {/* Header */}
       <FadeIn>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <h1 className="text-3xl font-bold tracking-tight">Charges</h1>
-            <TooltipProvider delayDuration={0}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button className="text-muted-foreground hover:text-foreground transition-colors">
-                    <Info className="w-4 h-4" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="right" className="max-w-xs">
-                  <p className="text-sm">Create charges for dues, events, fines, or other fees. Assign to one or multiple members and track payment status. Use selection checkboxes for bulk actions.</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button className="text-muted-foreground hover:text-foreground transition-colors">
+                  <Info className="w-4 h-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="max-w-xs">
+                <p className="text-sm">Create charges for dues, events, fines, or other fees. Assign to one or multiple members and track payment status. Use selection checkboxes for bulk actions.</p>
+              </TooltipContent>
+            </Tooltip>
           </div>
           <Button
             onClick={() => setShowCreateDialog(true)}
@@ -579,11 +574,7 @@ export default function ChargesPage() {
         </div>
       ) : filteredCharges.length === 0 ? (
         <FadeIn delay={0.3}>
-          <motion.div
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="rounded-xl border border-border/50 bg-card/50 py-16 text-center"
-          >
+          <div className="rounded-xl border border-border/50 bg-card/50 py-16 text-center animate-in-scale">
             <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
               <Receipt className="h-8 w-8 text-primary" />
             </div>
@@ -592,7 +583,7 @@ export default function ChargesPage() {
             {!searchQuery && (
               <Button onClick={() => setShowCreateDialog(true)} className="bg-gradient-to-r from-primary to-blue-400">Create your first charge</Button>
             )}
-          </motion.div>
+          </div>
         </FadeIn>
       ) : (
         <>
@@ -614,11 +605,11 @@ export default function ChargesPage() {
                   key={group.key}
                   group={group}
                   onEdit={handleEdit}
-                  onDelete={(charge) => setDeletingCharge(charge)}
+                  onDelete={setDeletingCharge}
                   onEditGroup={handleEditGroup}
-                  onDeleteGroup={(group) => setDeletingGroup(group)}
+                  onDeleteGroup={setDeletingGroup}
                   onUnallocate={handleUnallocate}
-                  onAllocatePayment={(charge) => setAllocatingCharge(charge)}
+                  onAllocatePayment={setAllocatingCharge}
                   isAdmin={isAdmin}
                   selectedCharges={selectedCharges}
                   onToggleSelect={toggleChargeSelection}
@@ -651,5 +642,6 @@ export default function ChargesPage() {
       <ChargeCreateDialog open={showCreateDialog} onClose={() => setShowCreateDialog(false)} onCreate={handleCreateCharge} members={members} loadingMembers={loadingMembers} isPending={createCharge.isPending} onAddMember={handleAddMember} isAddingMember={createMembers.isPending} />
       <ChargeAllocatePaymentDialog charge={allocatingCharge} payments={paymentsData?.data || []} onClose={() => setAllocatingCharge(null)} onAllocate={handleAllocatePaymentToCharge} isPending={allocatePayment.isPending} />
     </div>
+    </TooltipProvider>
   );
 }

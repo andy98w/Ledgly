@@ -166,6 +166,39 @@ export class AuthService {
       });
     }
 
+    // Ensure the dev user has at least one active membership
+    const activeMembership = await this.prisma.membership.findFirst({
+      where: { userId: user.id, status: 'ACTIVE' },
+    });
+
+    if (!activeMembership) {
+      // Restore a LEFT membership if one exists, otherwise create a test org
+      const leftMembership = await this.prisma.membership.findFirst({
+        where: { userId: user.id, status: 'LEFT' },
+      });
+
+      if (leftMembership) {
+        await this.prisma.membership.update({
+          where: { id: leftMembership.id },
+          data: { status: 'ACTIVE', leftAt: null },
+        });
+      } else {
+        await this.prisma.organization.create({
+          data: {
+            name: 'Test Organization',
+            memberships: {
+              create: {
+                userId: user.id,
+                role: 'ADMIN',
+                status: 'ACTIVE',
+                name: user.name || normalizedEmail.split('@')[0],
+              },
+            },
+          },
+        });
+      }
+    }
+
     const payload = { sub: user.id, email: user.email };
     const accessToken = this.jwtService.sign(payload);
     const authUser = await this.getAuthUser(user.id);

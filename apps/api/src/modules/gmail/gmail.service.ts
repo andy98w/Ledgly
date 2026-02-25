@@ -6,6 +6,18 @@ import { EmailParserService } from './email-parser.service';
 import { PaymentMatcherService } from './payment-matcher.service';
 import { ExpenseMatcherService } from './expense-matcher.service';
 import { ChargesService } from '../charges/charges.service';
+import { AuditService } from '../audit/audit.service';
+
+function formatSourceName(source: string): string {
+  const map: Record<string, string> = {
+    venmo: 'Venmo',
+    zelle: 'Zelle',
+    cashapp: 'Cash App',
+    paypal: 'PayPal',
+    square: 'Square',
+  };
+  return map[source?.toLowerCase()] || source || 'Unknown';
+}
 
 function createConcurrencyLimiter(concurrency: number) {
   let active = 0;
@@ -39,6 +51,7 @@ export class GmailService {
     private readonly paymentMatcher: PaymentMatcherService,
     private readonly expenseMatcher: ExpenseMatcherService,
     private readonly chargesService: ChargesService,
+    private readonly auditService: AuditService,
   ) {
     this.oauth2Client = new google.auth.OAuth2(
       this.configService.get<string>('GOOGLE_CLIENT_ID'),
@@ -422,11 +435,11 @@ export class GmailService {
       data: {
         orgId: connection.orgId,
         category: 'OTHER',
-        title: `${parsed.source.toUpperCase()} payment to ${parsed.payerName || 'Unknown'}`,
+        title: parsed.payerName || 'Unknown',
         description: parsed.memo || undefined,
         amountCents: parsed.amount,
         date: emailDate,
-        vendor: parsed.payerName || undefined,
+        vendor: formatSourceName(parsed.source),
         createdById: adminMembership?.id || '',
       },
     });
@@ -452,6 +465,13 @@ export class GmailService {
         reviewedAt: new Date(),
       },
     });
+
+    // Audit log for auto-created expense
+    await this.auditService.logCreate(connection.orgId, adminMembership?.id, 'EXPENSE', expense.id, {
+      amountCents: expense.amountCents,
+      title: expense.title,
+      source: 'auto_confirm',
+    }).catch(() => {});
 
     this.logger.log(
       `Auto-created expense of ${parsed.amount} cents to ${parsed.payerName} from ${parsed.source}`,
@@ -553,93 +573,117 @@ export class GmailService {
         return 'imported';
       }
 
-      // Create the payment
-      const payment = await this.prisma.payment.create({
-        data: {
-          orgId: connection.orgId,
-          membershipId: matchResult.membershipId,
+      // Wrap payment creation + allocation loop + email import in one transaction
+      const { allocatedChargeIds } = await this.prisma.$transaction(async (tx) => {
+        const payment = await tx.payment.create({
+          data: {
+            orgId: connection.orgId,
+            membershipId: matchResult.membershipId,
+            amountCents: parsed.amount!,
+            paidAt: emailDate,
+            source: parsed.source,
+            rawPayerName: parsed.payerName,
+            memo: parsed.memo,
+            externalId,
+          },
+        });
+
+        // Auto-allocate to matching charges
+        const txAllocatedChargeIds: string[] = [];
+        if (matchResult.suggestedChargeIds.length > 0) {
+          let remainingAmount = parsed.amount!;
+
+          for (const chargeId of matchResult.suggestedChargeIds) {
+            if (remainingAmount <= 0) break;
+
+            // Lock and read each charge row
+            await tx.$queryRaw`SELECT 1 FROM charges WHERE id = ${chargeId} FOR UPDATE`;
+
+            const charge = await tx.charge.findUnique({
+              where: { id: chargeId },
+              include: { allocations: { select: { amountCents: true } } },
+            });
+
+            if (!charge) continue;
+
+            const allocatedCents = charge.allocations.reduce(
+              (sum, a) => sum + a.amountCents,
+              0,
+            );
+            const balanceDue = charge.amountCents - allocatedCents;
+
+            if (balanceDue <= 0) continue;
+
+            const allocationAmount = Math.min(remainingAmount, balanceDue);
+
+            await tx.paymentAllocation.create({
+              data: {
+                orgId: connection.orgId,
+                paymentId: payment.id,
+                chargeId,
+                amountCents: allocationAmount,
+                createdById: matchResult.membershipId!,
+              },
+            });
+
+            // Update charge status inside the transaction
+            await this.chargesService.updateChargeStatus(chargeId, undefined, tx);
+
+            txAllocatedChargeIds.push(chargeId);
+            remainingAmount -= allocationAmount;
+          }
+        }
+
+        // Create email import record inside the transaction
+        await tx.emailImport.create({
+          data: {
+            orgId: connection.orgId,
+            gmailConnectionId: connection.id,
+            messageId,
+            threadId: message.data.threadId || undefined,
+            emailFrom: from,
+            emailSubject: subject,
+            emailDate,
+            emailSnippet: message.data.snippet || undefined,
+            parsedSource: parsed.source,
+            parsedDirection: 'incoming',
+            parsedAmount: parsed.amount,
+            parsedPayerName: parsed.payerName,
+            parsedPayerEmail: parsed.payerEmail,
+            parsedMemo: parsed.memo,
+            status: 'AUTO_CONFIRMED',
+            paymentId: payment.id,
+            reviewedAt: new Date(),
+            matchedMembershipId: matchResult.membershipId,
+            matchConfidence: matchResult.confidence,
+            derivedCategory: matchResult.derivedCategory,
+            allocatedChargeIds: txAllocatedChargeIds,
+          },
+        });
+
+        return { allocatedChargeIds: txAllocatedChargeIds };
+      });
+
+      // Audit log for auto-confirmed payment (best-effort)
+      const adminMembership = await this.prisma.membership.findFirst({
+        where: { orgId: connection.orgId, role: { in: ['ADMIN', 'TREASURER'] }, status: 'ACTIVE' },
+        select: { id: true },
+      });
+      const actorForAudit = adminMembership?.id;
+
+      // Find the payment created in the transaction
+      const autoPayment = await this.prisma.emailImport.findFirst({
+        where: { gmailConnectionId: connection.id, messageId },
+        select: { paymentId: true },
+      });
+      if (autoPayment?.paymentId) {
+        await this.auditService.logCreate(connection.orgId, actorForAudit, 'PAYMENT', autoPayment.paymentId, {
           amountCents: parsed.amount,
           paidAt: emailDate,
-          source: parsed.source,
           rawPayerName: parsed.payerName,
-          memo: parsed.memo,
-          externalId,
-        },
-      });
-
-      // Auto-allocate to matching charges
-      const allocatedChargeIds: string[] = [];
-      if (matchResult.suggestedChargeIds.length > 0) {
-        let remainingAmount = parsed.amount;
-
-        for (const chargeId of matchResult.suggestedChargeIds) {
-          if (remainingAmount <= 0) break;
-
-          // Get charge with current allocations
-          const charge = await this.prisma.charge.findUnique({
-            where: { id: chargeId },
-            include: {
-              allocations: { select: { amountCents: true } },
-            },
-          });
-
-          if (!charge) continue;
-
-          const allocatedCents = charge.allocations.reduce(
-            (sum, a) => sum + a.amountCents,
-            0,
-          );
-          const balanceDue = charge.amountCents - allocatedCents;
-
-          if (balanceDue <= 0) continue;
-
-          const allocationAmount = Math.min(remainingAmount, balanceDue);
-
-          // Create allocation
-          await this.prisma.paymentAllocation.create({
-            data: {
-              orgId: connection.orgId,
-              paymentId: payment.id,
-              chargeId,
-              amountCents: allocationAmount,
-              createdById: matchResult.membershipId,
-            },
-          });
-
-          // Update charge status
-          await this.chargesService.updateChargeStatus(chargeId);
-
-          allocatedChargeIds.push(chargeId);
-          remainingAmount -= allocationAmount;
-        }
+          source: 'auto_confirm',
+        }).catch(() => {});
       }
-
-      // Create email import record as AUTO_CONFIRMED
-      await this.prisma.emailImport.create({
-        data: {
-          orgId: connection.orgId,
-          gmailConnectionId: connection.id,
-          messageId,
-          threadId: message.data.threadId || undefined,
-          emailFrom: from,
-          emailSubject: subject,
-          emailDate,
-          emailSnippet: message.data.snippet || undefined,
-          parsedSource: parsed.source,
-          parsedDirection: 'incoming',
-          parsedAmount: parsed.amount,
-          parsedPayerName: parsed.payerName,
-          parsedPayerEmail: parsed.payerEmail,
-          parsedMemo: parsed.memo,
-          status: 'AUTO_CONFIRMED',
-          paymentId: payment.id,
-          reviewedAt: new Date(),
-          matchedMembershipId: matchResult.membershipId,
-          matchConfidence: matchResult.confidence,
-          derivedCategory: matchResult.derivedCategory,
-          allocatedChargeIds,
-        },
-      });
 
       this.logger.log(
         `Auto-confirmed payment of ${parsed.amount} cents from ${parsed.payerName} (confidence: ${matchResult.confidence})`,
@@ -765,53 +809,52 @@ export class GmailService {
       throw new BadRequestException('Import is not confirmed');
     }
 
-    // If a payment was created, delete it and its allocations
-    if (emailImport.paymentId) {
-      const payment = await this.prisma.payment.findUnique({
-        where: { id: emailImport.paymentId },
-        include: { allocations: { select: { chargeId: true } } },
-      });
+    // Wrap all deletions + emailImport reset in a single transaction
+    // to prevent orphaned references (e.g. emailImport.paymentId pointing to a deleted payment)
+    const affectedChargeIds: string[] = [];
 
-      if (payment) {
-        const affectedChargeIds = payment.allocations.map((a) => a.chargeId);
+    await this.prisma.$transaction(async (tx) => {
+      // If a payment was created, hard-delete it and its allocations
+      if (emailImport.paymentId) {
+        const payment = await tx.payment.findUnique({
+          where: { id: emailImport.paymentId },
+          include: { allocations: { select: { chargeId: true } } },
+        });
 
-        // Delete allocations and soft-delete the payment (null externalId to avoid unique constraint on re-confirm)
-        await this.prisma.$transaction([
-          this.prisma.paymentAllocation.deleteMany({ where: { paymentId: payment.id } }),
-          this.prisma.payment.update({
-            where: { id: payment.id },
-            data: { deletedAt: new Date(), externalId: null },
-          }),
-        ]);
-
-        // Update charge statuses
-        for (const chargeId of affectedChargeIds) {
-          await this.chargesService.updateChargeStatus(chargeId);
+        if (payment) {
+          affectedChargeIds.push(...payment.allocations.map((a) => a.chargeId));
+          await tx.paymentAllocation.deleteMany({ where: { paymentId: payment.id } });
+          await tx.payment.delete({ where: { id: payment.id } });
         }
       }
-    }
 
-    // If an expense was created, soft-delete it
-    if (emailImport.expenseId) {
-      await this.prisma.expense.update({
-        where: { id: emailImport.expenseId },
-        data: { deletedAt: new Date() },
-      }).catch(() => { /* ignore if already deleted */ });
-    }
+      // If an expense was created, hard-delete it (matches payment pattern)
+      if (emailImport.expenseId) {
+        await tx.expense.delete({
+          where: { id: emailImport.expenseId },
+        }).catch(() => { /* ignore if already deleted */ });
+      }
 
-    await this.prisma.emailImport.update({
-      where: { id: importId },
-      data: {
-        status: 'PENDING',
-        paymentId: null,
-        expenseId: null,
-        matchedMembershipId: null,
-        matchConfidence: null,
-        needsReviewReason: null,
-        allocatedChargeIds: [],
-        reviewedAt: null,
-      },
+      // Reset the import back to PENDING
+      await tx.emailImport.update({
+        where: { id: importId },
+        data: {
+          status: 'PENDING',
+          paymentId: null,
+          expenseId: null,
+          matchedMembershipId: null,
+          matchConfidence: null,
+          needsReviewReason: null,
+          allocatedChargeIds: [],
+          reviewedAt: null,
+        },
+      });
     });
+
+    // Update charge statuses outside the transaction (best-effort)
+    for (const chargeId of affectedChargeIds) {
+      await this.chargesService.updateChargeStatus(chargeId);
+    }
   }
 
   async getImportStats(orgId: string) {
@@ -862,17 +905,28 @@ export class GmailService {
 
     const externalId = `email:${emailImport.messageId}`;
 
-    // Clear any existing soft-deleted payment with this externalId to avoid unique constraint violation
-    await this.prisma.payment.updateMany({
+    // Hard-delete any soft-deleted payment with this externalId (prevents duplicate on restore)
+    await this.prisma.payment.deleteMany({
       where: { orgId: emailImport.orgId, externalId, deletedAt: { not: null } },
-      data: { externalId: null },
     });
 
-    // Also clear any NON-deleted payment with the same externalId (orphaned from previous confirm)
-    await this.prisma.payment.updateMany({
-      where: { orgId: emailImport.orgId, externalId },
-      data: { externalId: null },
+    // Check if an active payment already exists with this externalId (idempotency guard)
+    const existingActive = await this.prisma.payment.findFirst({
+      where: { orgId: emailImport.orgId, externalId, deletedAt: null },
     });
+
+    if (existingActive) {
+      // Payment already exists — just link the import to it
+      await this.prisma.emailImport.update({
+        where: { id: importId },
+        data: {
+          status: 'CONFIRMED',
+          paymentId: existingActive.id,
+          reviewedAt: new Date(),
+        },
+      });
+      return existingActive;
+    }
 
     try {
       // Create the payment
@@ -899,6 +953,14 @@ export class GmailService {
           reviewedAt: new Date(),
         },
       });
+
+      // Audit log for confirmed import payment
+      await this.auditService.logCreate(emailImport.orgId, actorId, 'PAYMENT', payment.id, {
+        amountCents: payment.amountCents,
+        paidAt: payment.paidAt,
+        rawPayerName: payment.rawPayerName,
+        source: 'inbox_confirm',
+      }).catch(() => {});
 
       return payment;
     } catch (error) {
@@ -974,11 +1036,11 @@ export class GmailService {
         data: {
           orgId: emailImport.orgId,
           category: 'OTHER',
-          title: `${emailImport.parsedSource.toUpperCase()} payment to ${emailImport.parsedPayerName || 'Unknown'}`,
+          title: emailImport.parsedPayerName || 'Unknown',
           description: emailImport.parsedMemo || undefined,
           amountCents: emailImport.parsedAmount,
           date: emailImport.emailDate,
-          vendor: emailImport.parsedPayerName || undefined,
+          vendor: formatSourceName(emailImport.parsedSource),
           createdById: actorId,
         },
       });
@@ -999,6 +1061,14 @@ export class GmailService {
         reviewedAt: new Date(),
       },
     });
+
+    // Audit log for confirmed expense import
+    await this.auditService.logCreate(emailImport.orgId, actorId, 'EXPENSE', expenseId, {
+      amountCents: emailImport.parsedAmount,
+      title: emailImport.parsedPayerName || 'Unknown',
+      source: 'inbox_confirm',
+      linked: !!options.linkToExpenseId,
+    }).catch(() => {});
 
     return { expenseId };
   }

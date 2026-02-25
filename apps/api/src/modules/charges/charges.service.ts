@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { ChargeCategory, ChargeStatus } from '@prisma/client';
+import { ChargeCategory, ChargeStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 
@@ -66,6 +66,7 @@ export class ChargesService {
         select: {
           id: true,
           name: true,
+          status: true,
           user: { select: { name: true, email: true } },
         },
       },
@@ -99,7 +100,7 @@ export class ChargesService {
         return {
           id: c.id, orgId: c.orgId, membershipId: c.membershipId, category: c.category,
           title: c.title, amountCents: c.amountCents, dueDate: c.dueDate, status: c.status, createdAt: c.createdAt,
-          membership: { id: c.membership.id, name: c.membership.name, displayName: c.membership.name || c.membership.user?.name || c.membership.user?.email || 'Unknown' },
+          membership: { id: c.membership.id, name: c.membership.name, status: c.membership.status, displayName: c.membership.name || c.membership.user?.name || c.membership.user?.email || 'Unknown' },
           allocatedCents, balanceDueCents: c.amountCents - allocatedCents,
           allocations: c.allocations.map((a) => ({
             id: a.id, amountCents: a.amountCents,
@@ -131,7 +132,7 @@ export class ChargesService {
       return {
         id: c.id, orgId: c.orgId, membershipId: c.membershipId, category: c.category,
         title: c.title, amountCents: c.amountCents, dueDate: c.dueDate, status: c.status, createdAt: c.createdAt,
-        membership: { id: c.membership.id, name: c.membership.name, displayName: c.membership.name || c.membership.user?.name || c.membership.user?.email || 'Unknown' },
+        membership: { id: c.membership.id, name: c.membership.name, status: c.membership.status, displayName: c.membership.name || c.membership.user?.name || c.membership.user?.email || 'Unknown' },
         allocatedCents, balanceDueCents: c.amountCents - allocatedCents,
         allocations: c.allocations.map((a) => ({
           id: a.id, amountCents: a.amountCents,
@@ -154,6 +155,7 @@ export class ChargesService {
           select: {
             id: true,
             name: true,
+            status: true,
             user: { select: { name: true, email: true } },
           },
         },
@@ -194,6 +196,7 @@ export class ChargesService {
       membership: {
         id: charge.membership.id,
         name: charge.membership.name,
+        status: charge.membership.status,
         displayName: charge.membership.name || charge.membership.user?.name || charge.membership.user?.email || 'Unknown',
       },
       createdBy: {
@@ -359,7 +362,7 @@ export class ChargesService {
     return updated;
   }
 
-  async void(orgId: string, chargeId: string, actorId?: string) {
+  async void(orgId: string, chargeId: string, actorId?: string, batch?: { batchId: string; batchDescription: string }) {
     const charge = await this.prisma.charge.findFirst({
       where: { id: chargeId, orgId },
       include: {
@@ -388,10 +391,52 @@ export class ChargesService {
         title: charge.title,
         amountCents: charge.amountCents,
         category: charge.category,
-      });
+      }, batch);
     }
 
     return { success: true };
+  }
+
+  async bulkVoid(orgId: string, chargeIds: string[], actorId: string) {
+    if (chargeIds.length === 0) return { success: true, voidedCount: 0 };
+
+    // Fetch all target charges in one query
+    const charges = await this.prisma.charge.findMany({
+      where: { id: { in: chargeIds }, orgId, status: { not: 'VOID' } },
+      select: { id: true, title: true, amountCents: true, category: true },
+    });
+
+    if (charges.length === 0) return { success: true, voidedCount: 0 };
+
+    const validIds = charges.map((c) => c.id);
+
+    // Batch: delete allocations, void charges, and log audit in one transaction
+    await this.prisma.$transaction([
+      this.prisma.paymentAllocation.deleteMany({
+        where: { chargeId: { in: validIds } },
+      }),
+      this.prisma.charge.updateMany({
+        where: { id: { in: validIds } },
+        data: { status: 'VOID' },
+      }),
+    ]);
+
+    // Batch audit logs
+    const batch = charges.length > 1
+      ? this.auditService.createBatchContext(`Voided ${charges.length} charges`)
+      : undefined;
+
+    await Promise.all(
+      charges.map((charge) =>
+        this.auditService.logDelete(orgId, actorId, 'CHARGE', charge.id, {
+          title: charge.title,
+          amountCents: charge.amountCents,
+          category: charge.category,
+        }, batch),
+      ),
+    );
+
+    return { success: true, voidedCount: charges.length };
   }
 
   async restore(orgId: string, chargeId: string, actorId?: string) {
@@ -421,8 +466,9 @@ export class ChargesService {
     return { success: true };
   }
 
-  async updateChargeStatus(chargeId: string) {
-    const charge = await this.prisma.charge.findUnique({
+  async updateChargeStatus(chargeId: string, actorId?: string, tx?: Prisma.TransactionClient) {
+    const db = tx ?? this.prisma;
+    const charge = await db.charge.findUnique({
       where: { id: chargeId },
       include: {
         allocations: {
@@ -447,10 +493,21 @@ export class ChargesService {
     }
 
     if (newStatus !== charge.status) {
-      await this.prisma.charge.update({
+      const oldStatus = charge.status;
+      await db.charge.update({
         where: { id: chargeId },
         data: { status: newStatus },
       });
+
+      // Audit log stays outside tx (best-effort, non-critical)
+      await this.auditService.logUpdate(
+        charge.orgId,
+        actorId,
+        'CHARGE',
+        chargeId,
+        { status: oldStatus },
+        { status: newStatus },
+      );
     }
   }
 }

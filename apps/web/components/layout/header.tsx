@@ -22,7 +22,7 @@ export function Header({ title }: HeaderProps) {
           alt="Ledgly"
           width={32}
           height={32}
-          className="rounded-lg"
+          className=""
         />
         <div className="flex flex-col">
           <span className="font-semibold text-sm">{title || 'Ledgly'}</span>

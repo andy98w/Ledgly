@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { motion } from 'framer-motion';
 import { Mail, ArrowRight, Sparkles } from 'lucide-react';
 import { useSendMagicLink, useDevLogin } from '@/lib/queries/auth';
 import { Button } from '@/components/ui/button';
@@ -51,7 +50,7 @@ export default function LoginPage() {
   const handleDevLogin = async () => {
     try {
       await devLogin.mutateAsync('test@ledgly.dev');
-      router.push('/');
+      router.push('/dashboard');
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -63,19 +62,10 @@ export default function LoginPage() {
 
   if (emailSent) {
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="text-center"
-      >
-        <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 0.1 }}
-          className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-primary to-blue-400 flex items-center justify-center shadow-lg glow-md"
-        >
+      <div className="text-center animate-in-up">
+        <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-primary to-blue-400 flex items-center justify-center shadow-lg glow-md animate-in-scale">
           <Mail className="w-10 h-10 text-primary-foreground" />
-        </motion.div>
+        </div>
         <h1 className="text-2xl font-bold mb-2">Check your email</h1>
         <p className="text-muted-foreground mb-6">
           We sent a sign-in link to{' '}
@@ -91,24 +81,16 @@ export default function LoginPage() {
         >
           Use a different email
         </Button>
-      </motion.div>
+      </div>
     );
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-    >
+    <div className="animate-in-up">
       {/* Logo */}
-      <motion.div
-        initial={{ scale: 0 }}
-        animate={{ scale: 1 }}
-        transition={{ type: 'spring', stiffness: 200, damping: 15 }}
-        className="w-16 h-16 mx-auto mb-8 rounded-2xl bg-gradient-to-br from-primary to-blue-400 flex items-center justify-center shadow-lg glow-md"
-      >
+      <div className="w-16 h-16 mx-auto mb-8 rounded-2xl bg-gradient-to-br from-primary to-blue-400 flex items-center justify-center shadow-lg glow-md animate-in-scale">
         <span className="text-primary-foreground font-bold text-2xl">L</span>
-      </motion.div>
+      </div>
 
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold mb-2">Welcome to Ledgly</h1>
@@ -172,6 +154,6 @@ export default function LoginPage() {
           </Button>
         </div>
       )}
-    </motion.div>
+    </div>
   );
 }

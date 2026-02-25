@@ -15,7 +15,7 @@ const MotionCard = React.forwardRef<HTMLDivElement, MotionCardProps>(
         ref={ref}
         className={cn(
           'rounded-xl border bg-card text-card-foreground shadow-sm animate-in-up',
-          hover && 'transition-all hover:shadow-md hover:-translate-y-0.5',
+          hover && 'transition-all duration-200 hover:shadow-layered-md hover:border-primary/20 hover:-translate-y-0.5',
           className,
         )}
         style={delay ? { animationDelay: `${delay}s`, ...style } : style}

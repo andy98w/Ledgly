@@ -1,8 +1,7 @@
 'use client';
 
 import { memo, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { AlertCircle, MoreHorizontal, Pencil, Trash2, ChevronDown, ChevronRight, Users, Circle, CheckCircle2 } from 'lucide-react';
+import { AlertCircle, Check, MoreHorizontal, Pencil, Trash2, ChevronDown, ChevronRight, Users, Circle, CheckCircle2 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { CHARGE_CATEGORY_LABELS } from '@ledgly/shared';
 import { Button } from '@/components/ui/button';
@@ -16,6 +15,7 @@ import {
 import { Money } from '@/components/ui/money';
 import { MotionCard, MotionCardContent } from '@/components/ui/motion-card';
 import { StaggerItem } from '@/components/ui/page-transition';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ChargeCard } from './charge-card';
 import type { ChargeGroup } from '@/lib/utils/charge-grouping';
 
@@ -97,14 +97,14 @@ export const ChargeGroupCard = memo(function ChargeGroupCard({
             )}
             <button
               onClick={() => setExpanded(!expanded)}
-              className="flex items-center gap-3 text-left flex-1"
+              className="flex items-center gap-3 text-left flex-1 min-w-0"
             >
-              <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center">
+              <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                 <Users className="w-4 h-4 text-primary" />
               </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <p className="font-medium">{group.title}</p>
+              <div className="min-w-0 space-y-1">
+                <div className="flex items-center gap-2 min-w-0">
+                  <p className="font-medium truncate" title={group.title}>{group.title}</p>
                   <Badge variant="secondary" className="text-xs">
                     {group.memberCount} members
                   </Badge>
@@ -134,9 +134,18 @@ export const ChargeGroupCard = memo(function ChargeGroupCard({
               <div className="text-right space-y-1">
                 <div className="flex items-center justify-end gap-2">
                   <Money cents={group.totalAmount} size="sm" />
-                  {allPaid && (
-                    <Badge variant="success" className="text-xs">All Paid</Badge>
-                  )}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span>
+                        {allPaid ? (
+                          <Check className="w-4 h-4 text-success" />
+                        ) : (
+                          <AlertCircle className="w-4 h-4 text-warning" />
+                        )}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>{allPaid ? 'All Paid' : 'Open'}</TooltipContent>
+                  </Tooltip>
                 </div>
                 {!allPaid && (
                   <p className="text-sm text-destructive">
@@ -144,7 +153,7 @@ export const ChargeGroupCard = memo(function ChargeGroupCard({
                   </p>
                 )}
               </div>
-              {isAdmin && (
+              {isAdmin ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -165,6 +174,8 @@ export const ChargeGroupCard = memo(function ChargeGroupCard({
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+              ) : (
+                <div className="w-8 h-8" />
               )}
               <button
                 onClick={() => setExpanded(!expanded)}
@@ -179,34 +190,24 @@ export const ChargeGroupCard = memo(function ChargeGroupCard({
             </div>
           </div>
 
-          <AnimatePresence>
-            {expanded && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="overflow-hidden"
-              >
-                <div className="mt-4 pt-4 border-t border-border/30 space-y-2">
-                  {group.charges.map((charge) => (
-                    <ChargeCard
-                      key={charge.id}
-                      charge={charge}
-                      onEdit={onEdit}
-                      onDelete={onDelete}
-                      onUnallocate={onUnallocate}
-                      onAllocatePayment={onAllocatePayment}
-                      nested
-                      isAdmin={isAdmin}
-                      isSelected={selectedCharges?.has(charge.id)}
-                      onToggleSelect={onToggleSelect ? () => onToggleSelect(charge.id) : undefined}
-                    />
-                  ))}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {expanded && (
+            <div className="mt-4 pt-4 border-t border-border/30 space-y-2">
+              {group.charges.map((charge) => (
+                <ChargeCard
+                  key={charge.id}
+                  charge={charge}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                  onUnallocate={onUnallocate}
+                  onAllocatePayment={onAllocatePayment}
+                  nested
+                  isAdmin={isAdmin}
+                  isSelected={selectedCharges?.has(charge.id)}
+                  onToggleSelect={onToggleSelect ? () => onToggleSelect(charge.id) : undefined}
+                />
+              ))}
+            </div>
+          )}
         </MotionCardContent>
       </MotionCard>
     </StaggerItem>
