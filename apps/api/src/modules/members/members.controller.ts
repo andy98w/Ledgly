@@ -74,6 +74,13 @@ export class MembersController {
     });
   }
 
+  @Post('bulk-delete')
+  @Roles('ADMIN')
+  async bulkDelete(@Param('orgId') orgId: string, @Body() body: { memberIds: string[] }, @Req() req: any) {
+    const actorId = req.membership.id;
+    return this.membersService.bulkRemove(orgId, body.memberIds, actorId);
+  }
+
   @Get(':id')
   async findOne(@Param('orgId') orgId: string, @Param('id') id: string) {
     return this.membersService.findOne(orgId, id);
@@ -83,7 +90,15 @@ export class MembersController {
   @Roles('ADMIN', 'TREASURER')
   async create(@Param('orgId') orgId: string, @Body() dto: CreateMembersBulkDto, @Req() req: any) {
     const actorId = req.membership?.id;
-    return this.membersService.createMany(orgId, dto.members, actorId);
+    const actorName = req.membership?.name;
+    return this.membersService.createMany(orgId, dto.members, actorId, actorName);
+  }
+
+  @Post(':id/resend-invitation')
+  @Roles('ADMIN')
+  async resendInvitation(@Param('orgId') orgId: string, @Param('id') id: string, @Req() req: any) {
+    const actorName = req.membership?.name;
+    return this.membersService.resendInvitation(orgId, id, actorName);
   }
 
   @Patch(':id')

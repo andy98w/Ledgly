@@ -11,22 +11,45 @@ const features = [
     icon: Receipt,
     title: 'Track Dues',
     description: 'Create charges for dues, fees, and fines. See who owes what at a glance.',
+    iconBg: 'bg-amber-500/10',
+    iconText: 'text-amber-500',
+    hoverBorder: 'hover:border-amber-500/30',
   },
   {
     icon: RefreshCw,
     title: 'Auto-Reconcile Payments',
     description: 'Payments are automatically matched to outstanding charges — no manual bookkeeping.',
+    iconBg: 'bg-emerald-500/10',
+    iconText: 'text-emerald-500',
+    hoverBorder: 'hover:border-emerald-500/30',
   },
   {
     icon: Smartphone,
     title: 'Import from Venmo & Zelle',
     description: 'Connect your Gmail to auto-import payment notifications from Venmo and Zelle.',
+    iconBg: 'bg-cyan-500/10',
+    iconText: 'text-cyan-500',
+    hoverBorder: 'hover:border-cyan-500/30',
   },
   {
     icon: Table2,
     title: 'Spreadsheet View',
     description: 'See every member and charge in a single spreadsheet. Filter, sort, and export.',
+    iconBg: 'bg-violet-500/10',
+    iconText: 'text-violet-500',
+    hoverBorder: 'hover:border-violet-500/30',
   },
+];
+
+const showcaseLabelColors = [
+  'text-primary',
+  'text-violet-500',
+  'text-emerald-500',
+  'text-cyan-500',
+  'text-amber-500',
+  'text-rose-500',
+  'text-violet-500',
+  'text-emerald-500',
 ];
 
 const showcaseSections = [
@@ -81,9 +104,9 @@ const showcaseSections = [
 ];
 
 const trustIndicators = [
-  { icon: Shield, label: 'Bank-level security' },
-  { icon: Zap, label: 'Set up in minutes' },
-  { icon: Users, label: 'Built for teams' },
+  { icon: Shield, label: 'Bank-level security', iconColor: 'text-emerald-500', iconBg: 'bg-emerald-500/10' },
+  { icon: Zap, label: 'Set up in minutes', iconColor: 'text-amber-500', iconBg: 'bg-amber-500/10' },
+  { icon: Users, label: 'Built for teams', iconColor: 'text-violet-500', iconBg: 'bg-violet-500/10' },
 ];
 
 const sectionLabels = [
@@ -124,7 +147,7 @@ export default function LandingPage() {
       className="h-dvh overflow-y-auto overflow-x-hidden snap-y snap-mandatory bg-background text-foreground relative"
     >
       {/* Fixed background gradient */}
-      <div className="fixed inset-0 bg-gradient-to-br from-primary/5 via-transparent to-blue-500/5 pointer-events-none z-0" />
+      <div className="fixed inset-0 bg-gradient-to-br from-primary/5 via-violet-500/3 to-cyan-500/5 pointer-events-none z-0" />
 
       {/* Fixed subtle grid */}
       <div
@@ -192,13 +215,15 @@ export default function LandingPage() {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] pointer-events-none">
           <div className="absolute inset-0 rounded-full bg-gradient-to-br from-primary/20 via-blue-400/15 to-purple-500/10 blur-[120px] animate-float" />
           <div className="absolute inset-8 rounded-full bg-gradient-to-tr from-blue-400/10 via-primary/15 to-cyan-400/10 blur-[100px] animate-gradient-rotate" />
+          <div className="absolute inset-4 rounded-full bg-gradient-to-bl from-violet-500/15 via-purple-400/10 to-fuchsia-500/10 blur-[110px] animate-float" style={{ animationDelay: '-3s' }} />
+          <div className="absolute inset-12 rounded-full bg-gradient-to-tl from-cyan-400/10 via-teal-400/10 to-emerald-400/5 blur-[100px] animate-gradient-rotate" style={{ animationDelay: '-5s' }} />
         </div>
 
         <div className="max-w-3xl mx-auto text-center relative z-10">
           <h1 className="text-fluid-5xl font-bold tracking-tight leading-[1.1] animate-reveal-up" style={{ animationDelay: '100ms' }}>
             Club Finance
             <br />
-            <span className="bg-gradient-to-r from-primary to-blue-400 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-primary via-violet-500 to-cyan-400 bg-clip-text text-transparent">
               Made Simple
             </span>
           </h1>
@@ -208,7 +233,7 @@ export default function LandingPage() {
           <div className="mt-10 animate-reveal-up" style={{ animationDelay: '300ms' }}>
             <Link
               href="/login"
-              className="inline-flex items-center justify-center rounded-xl px-8 py-3.5 text-sm font-medium bg-gradient-to-r from-primary to-blue-400 text-primary-foreground hover:opacity-90 transition-all duration-150 shadow-layered-lg active:scale-[0.98]"
+              className="inline-flex items-center justify-center rounded-xl px-8 py-3.5 text-sm font-medium bg-gradient-to-r from-primary via-violet-500 to-cyan-400 text-primary-foreground hover:opacity-90 transition-all duration-150 shadow-layered-lg active:scale-[0.98]"
             >
               Get Started
               <ArrowRight className="ml-2 h-4 w-4" />
@@ -226,9 +251,9 @@ export default function LandingPage() {
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {features.map((feature, i) => (
               <ScrollReveal key={feature.title} delay={i * 100}>
-                <div className="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm p-6 hover:bg-card/80 hover:-translate-y-1 hover:shadow-layered-lg hover:border-primary/30 transition-all duration-200 h-full">
-                  <div className="p-2.5 rounded-lg bg-primary/10 w-fit mb-4">
-                    <feature.icon className="h-5 w-5 text-primary" />
+                <div className={`rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm p-6 hover:bg-card/80 hover:-translate-y-1 hover:shadow-layered-lg ${feature.hoverBorder} transition-all duration-200 h-full`}>
+                  <div className={`p-2.5 rounded-lg ${feature.iconBg} w-fit mb-4`}>
+                    <feature.icon className={`h-5 w-5 ${feature.iconText}`} />
                   </div>
                   <h3 className="font-semibold mb-2">{feature.title}</h3>
                   <p className="text-sm text-muted-foreground leading-relaxed">
@@ -251,7 +276,7 @@ export default function LandingPage() {
                 <div className={`flex flex-col ${isReversed ? 'md:flex-row-reverse' : 'md:flex-row'} items-center gap-8 md:gap-16`}>
                   {/* Text */}
                   <div className="flex-1 min-w-0">
-                    <span className="text-sm font-medium text-primary mb-2 block">{section.title}</span>
+                    <span className={`text-sm font-medium ${showcaseLabelColors[i]} mb-2 block`}>{section.title}</span>
                     <h2 className="text-fluid-2xl font-bold tracking-tight mb-4">{section.heading}</h2>
                     <p className="text-muted-foreground leading-relaxed text-lg">{section.description}</p>
                   </div>
@@ -294,8 +319,8 @@ export default function LandingPage() {
               <div className="flex flex-wrap items-center justify-center gap-8">
                 {trustIndicators.map((item) => (
                   <div key={item.label} className="flex items-center gap-2.5 text-sm text-muted-foreground">
-                    <div className="p-2 rounded-lg bg-primary/10">
-                      <item.icon className="h-4 w-4 text-primary" />
+                    <div className={`p-2 rounded-lg ${item.iconBg}`}>
+                      <item.icon className={`h-4 w-4 ${item.iconColor}`} />
                     </div>
                     <span className="font-medium">{item.label}</span>
                   </div>
@@ -315,7 +340,7 @@ export default function LandingPage() {
               </p>
               <Link
                 href="/login"
-                className="inline-flex items-center justify-center rounded-xl px-8 py-3.5 text-sm font-medium bg-gradient-to-r from-primary to-blue-400 text-primary-foreground hover:opacity-90 transition-all duration-150 shadow-layered-lg active:scale-[0.98]"
+                className="inline-flex items-center justify-center rounded-xl px-8 py-3.5 text-sm font-medium bg-gradient-to-r from-primary via-violet-500 to-cyan-400 text-primary-foreground hover:opacity-90 transition-all duration-150 shadow-layered-lg active:scale-[0.98]"
               >
                 Get Started Free
                 <ArrowRight className="ml-2 h-4 w-4" />

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useMemo, useEffect, useState } from 'react';
-import { Plus, Receipt, TrendingUp, Percent, Search, ChevronRight, ChevronLeft, Trash2, Info, Circle, CheckCircle2 } from 'lucide-react';
+import { Plus, Receipt, TrendingUp, Percent, Search, ChevronRight, ChevronLeft, Trash2, Circle, CheckCircle2 } from 'lucide-react';
 import { useCharges, useUpdateCharge, useVoidCharge, useRestoreCharge, useCreateCharge, useBulkVoidCharges } from '@/lib/queries/charges';
 import { useMembers, useCreateMembers } from '@/lib/queries/members';
 import { usePayments, useAutoAllocateToCharge, useRemoveAllocation, useAllocatePayment } from '@/lib/queries/payments';
@@ -19,13 +19,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { StatCard } from '@/components/ui/stat-card';
-import { FadeIn, StaggerChildren } from '@/components/ui/page-transition';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { FadeIn } from '@/components/ui/page-transition';
+import { AnimatedList } from '@/components/ui/animated-list';
+import { PageHeader } from '@/components/ui/page-header';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 
 import { groupCharges, type ChargeGroup } from '@/lib/utils/charge-grouping';
@@ -464,35 +461,26 @@ export default function ChargesPage() {
     <div data-tour="charges-list" className="space-y-8">
       {/* Header */}
       <FadeIn>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-bold tracking-tight">Charges</h1>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button className="text-muted-foreground hover:text-foreground transition-colors">
-                  <Info className="w-4 h-4" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right" className="max-w-xs">
-                <p className="text-sm">Create charges for dues, events, fines, or other fees. Assign to one or multiple members and track payment status. Use selection checkboxes for bulk actions.</p>
-              </TooltipContent>
-            </Tooltip>
-          </div>
-          <Button
-            onClick={() => setShowCreateDialog(true)}
-            className="bg-gradient-to-r from-primary to-blue-400 hover:opacity-90 transition-opacity"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Create Charge
-          </Button>
-        </div>
+        <PageHeader
+          title="Charges"
+          helpText="Create charges for dues, events, fines, or other fees. Assign to one or multiple members and track payment status. Use selection checkboxes for bulk actions."
+          actions={isAdmin && (
+            <Button
+              onClick={() => setShowCreateDialog(true)}
+              className="bg-gradient-to-r from-primary to-blue-400 hover:opacity-90 transition-opacity"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Create Charge
+            </Button>
+          )}
+        />
       </FadeIn>
 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-3">
-        <StatCard title="Total Charges" value={totalCharges} description="All time charges" icon={Receipt} delay={0} />
-        <StatCard title="Total Amount" value={totalAmount} isMoney description="Amount billed" icon={TrendingUp} delay={0.1} />
-        <StatCard title="Collection Rate" value={`${collectionRate}%`} description={`${totalCollected > 0 ? `$${(totalCollected / 100).toFixed(0)}` : '$0'} collected`} icon={Percent} delay={0.2} />
+        <StatCard title="Total Charges" value={totalCharges} description="All time charges" icon={Receipt} delay={0} color="amber" />
+        <StatCard title="Total Amount" value={totalAmount} isMoney description="Amount billed" icon={TrendingUp} delay={0.1} color="emerald" />
+        <StatCard title="Collection Rate" value={`${collectionRate}%`} description={`${totalCollected > 0 ? `$${(totalCollected / 100).toFixed(0)}` : '$0'} collected`} icon={Percent} delay={0.2} color="violet" />
       </div>
 
       {/* Filters */}
@@ -580,7 +568,7 @@ export default function ChargesPage() {
             </div>
             <h3 className="text-lg font-semibold mb-2">{searchQuery ? 'No charges found' : 'No charges yet'}</h3>
             <p className="text-muted-foreground mb-6">{searchQuery ? 'Try adjusting your search' : 'Create your first charge to start collecting'}</p>
-            {!searchQuery && (
+            {!searchQuery && isAdmin && (
               <Button onClick={() => setShowCreateDialog(true)} className="bg-gradient-to-r from-primary to-blue-400">Create your first charge</Button>
             )}
           </div>
@@ -599,10 +587,12 @@ export default function ChargesPage() {
                 </button>
               </div>
             )}
-            <StaggerChildren className="space-y-3">
-              {paginatedGroups.map((group) => (
+            <AnimatedList
+              items={paginatedGroups}
+              getKey={(g) => g.key}
+              className="space-y-3"
+              renderItem={(group) => (
                 <ChargeGroupCard
-                  key={group.key}
                   group={group}
                   onEdit={handleEdit}
                   onDelete={setDeletingCharge}
@@ -615,8 +605,8 @@ export default function ChargesPage() {
                   onToggleSelect={toggleChargeSelection}
                   onToggleSelectGroup={toggleGroupSelection}
                 />
-              ))}
-            </StaggerChildren>
+              )}
+            />
           </div>
 
           {/* Pagination Bottom */}

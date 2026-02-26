@@ -1,8 +1,6 @@
 'use client';
 
 import Image from 'next/image';
-import { Menu, Bell } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/lib/stores/auth';
 
 interface HeaderProps {
@@ -31,10 +29,6 @@ export function Header({ title }: HeaderProps) {
           )}
         </div>
       </div>
-
-      <Button variant="ghost" size="icon" className="touch-target">
-        <Bell className="h-5 w-5" />
-      </Button>
     </header>
   );
 }

@@ -17,7 +17,7 @@ export default function AuthLayout({
       />
 
       {/* Content */}
-      <div className="relative w-full max-w-md">
+      <div className="relative w-full max-w-lg">
         <div className="rounded-2xl border border-border/50 bg-card/80 backdrop-blur-xl p-8 shadow-2xl">
           {children}
         </div>

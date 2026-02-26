@@ -41,9 +41,10 @@ export class GmailPublicController {
   @Get('connect/:orgId')
   async connect(
     @Param('orgId') orgId: string,
+    @Query('returnTo') returnTo: string | undefined,
     @Res() res: Response,
   ) {
-    const authUrl = this.gmailService.getAuthUrl(orgId);
+    const authUrl = this.gmailService.getAuthUrl({ orgId, returnTo: returnTo || null });
     res.redirect(authUrl);
   }
 
@@ -51,16 +52,25 @@ export class GmailPublicController {
   @Get('callback')
   async callback(
     @Query('code') code: string,
-    @Query('state') orgId: string,
+    @Query('state') stateParam: string,
     @Res() res: Response,
   ) {
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+
     try {
+      const { orgId, returnTo } = this.gmailService.parseAndVerifyState(stateParam);
+
       await this.gmailService.handleCallback(code, orgId);
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-      res.redirect(`${frontendUrl}/inbox?connected=true`);
+
+      if (returnTo) {
+        const separator = returnTo.includes('?') ? '&' : '?';
+        res.redirect(`${frontendUrl}${returnTo}${separator}connected=true`);
+      } else {
+        res.redirect(`${frontendUrl}/inbox?connected=true`);
+      }
     } catch (error) {
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-      res.redirect(`${frontendUrl}/inbox?error=connection_failed`);
+      const message = error?.message || 'connection_failed';
+      res.redirect(`${frontendUrl}/inbox?error=${encodeURIComponent(message)}`);
     }
   }
 }
@@ -85,8 +95,9 @@ export class GmailController {
   }
 
   @Delete('disconnect')
-  async disconnect(@Param('orgId') orgId: string) {
-    await this.gmailService.disconnect(orgId);
+  @Roles('ADMIN', 'TREASURER')
+  async disconnect(@Param('orgId') orgId: string, @Req() req: any) {
+    await this.gmailService.disconnect(orgId, req.membership?.id);
     return { success: true };
   }
 

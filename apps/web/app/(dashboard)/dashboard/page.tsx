@@ -1,12 +1,16 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, Users, Receipt, AlertTriangle, AlertCircle, Check, TrendingUp, Plus } from 'lucide-react';
+import { ArrowRight, Users, Receipt, AlertTriangle, AlertCircle, Check, TrendingUp, Plus, Shield, Loader2 } from 'lucide-react';
 import { useDashboard } from '@/lib/queries/organizations';
-import { useAuthStore } from '@/lib/stores/auth';
+import { useCreateMembers } from '@/lib/queries/members';
+import { useAuthStore, useIsAdminOrTreasurer } from '@/lib/stores/auth';
 import { formatCents, formatRelativeDate } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatCard } from '@/components/ui/stat-card';
 import { Money } from '@/components/ui/money';
@@ -15,6 +19,15 @@ import { MotionCard, MotionCardHeader, MotionCardTitle, MotionCardContent } from
 import { FadeIn, StaggerChildren, StaggerItem } from '@/components/ui/page-transition';
 import { PageHeader } from '@/components/ui/page-header';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { useToast } from '@/components/ui/use-toast';
 
 function StatCardSkeleton() {
   return (
@@ -28,20 +41,66 @@ function StatCardSkeleton() {
 
 export default function DashboardPage() {
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
+  const isAdmin = useIsAdminOrTreasurer();
   const { data: stats, isLoading } = useDashboard(currentOrgId);
+  const { toast } = useToast();
+  const createMembers = useCreateMembers();
+  const [showAddAdmin, setShowAddAdmin] = useState(false);
+  const [adminName, setAdminName] = useState('');
+  const [adminEmail, setAdminEmail] = useState('');
+
+  const handleAddAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentOrgId || !adminName.trim() || !adminEmail.trim()) return;
+
+    try {
+      await createMembers.mutateAsync({
+        orgId: currentOrgId,
+        members: [{ name: adminName.trim(), email: adminEmail.trim() || undefined, role: 'ADMIN' }],
+      });
+      toast({ title: `${adminName.trim()} added as admin` });
+      setShowAddAdmin(false);
+      setAdminName('');
+      setAdminEmail('');
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to add admin',
+        variant: 'destructive',
+      });
+    }
+  };
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-10">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">Overview of your organization finances</p>
+          <Skeleton className="h-9 w-48 mb-2" />
+          <Skeleton className="h-4 w-72" />
         </div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <StatCardSkeleton />
           <StatCardSkeleton />
           <StatCardSkeleton />
           <StatCardSkeleton />
+        </div>
+        <div className="grid gap-6 md:grid-cols-2">
+          <div className="rounded-xl border bg-card p-5 space-y-4">
+            <Skeleton className="h-6 w-32" />
+            <div className="space-y-3">
+              <Skeleton className="h-10 w-full rounded-lg" />
+              <Skeleton className="h-10 w-full rounded-lg" />
+              <Skeleton className="h-10 w-full rounded-lg" />
+            </div>
+          </div>
+          <div className="rounded-xl border bg-card p-5 space-y-4">
+            <Skeleton className="h-6 w-40" />
+            <div className="space-y-3">
+              <Skeleton className="h-12 w-full rounded-lg" />
+              <Skeleton className="h-12 w-full rounded-lg" />
+              <Skeleton className="h-12 w-full rounded-lg" />
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -73,6 +132,7 @@ export default function DashboardPage() {
           isMoney
           description={`${stats.openChargesCount} open charges`}
           icon={Receipt}
+          color="amber"
           delay={0}
         />
         <StatCard
@@ -81,6 +141,7 @@ export default function DashboardPage() {
           isMoney
           description="Total payments received"
           icon={TrendingUp}
+          color="emerald"
           delay={0.1}
         />
         <StatCard
@@ -88,6 +149,7 @@ export default function DashboardPage() {
           value={stats.memberCount}
           description="Active members"
           icon={Users}
+          color="violet"
           delay={0.2}
         />
         <StatCard
@@ -95,6 +157,7 @@ export default function DashboardPage() {
           value={stats.overdueCount}
           description={stats.overdueCount > 0 ? 'Need attention' : 'All up to date'}
           icon={AlertTriangle}
+          color="rose"
           delay={0.3}
         />
       </div>
@@ -110,8 +173,8 @@ export default function DashboardPage() {
             <MotionCardContent className="grid gap-3">
               <Button asChild variant="outline" className="justify-start h-12 text-left">
                 <Link href="/members">
-                  <div className="p-2 rounded-lg bg-primary/10 mr-3">
-                    <Users className="h-4 w-4 text-primary" />
+                  <div className="p-2 rounded-lg bg-violet-500/10 mr-3">
+                    <Users className="h-4 w-4 text-violet-500" />
                   </div>
                   <div>
                     <p className="font-medium">Add Members</p>
@@ -119,28 +182,41 @@ export default function DashboardPage() {
                   </div>
                 </Link>
               </Button>
-              <Button asChild variant="outline" className="justify-start h-12 text-left">
-                <Link href="/charges/new">
-                  <div className="p-2 rounded-lg bg-primary/10 mr-3">
-                    <Receipt className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <p className="font-medium">Create Charge</p>
-                    <p className="text-xs text-muted-foreground">Bill dues, fees, or fines</p>
-                  </div>
-                </Link>
-              </Button>
-              <Button asChild variant="outline" className="justify-start h-12 text-left">
-                <Link href="/payments/new">
-                  <div className="p-2 rounded-lg bg-success/10 mr-3">
-                    <TrendingUp className="h-4 w-4 text-success" />
-                  </div>
-                  <div>
-                    <p className="font-medium">Record Payment</p>
-                    <p className="text-xs text-muted-foreground">Log a payment received</p>
-                  </div>
-                </Link>
-              </Button>
+              {isAdmin && (
+                <>
+                  <Button asChild variant="outline" className="justify-start h-12 text-left">
+                    <Link href="/charges/new">
+                      <div className="p-2 rounded-lg bg-amber-500/10 mr-3">
+                        <Receipt className="h-4 w-4 text-amber-500" />
+                      </div>
+                      <div>
+                        <p className="font-medium">Create Charge</p>
+                        <p className="text-xs text-muted-foreground">Bill dues, fees, or fines</p>
+                      </div>
+                    </Link>
+                  </Button>
+                  <Button asChild variant="outline" className="justify-start h-12 text-left">
+                    <Link href="/payments/new">
+                      <div className="p-2 rounded-lg bg-success/10 mr-3">
+                        <TrendingUp className="h-4 w-4 text-success" />
+                      </div>
+                      <div>
+                        <p className="font-medium">Record Payment</p>
+                        <p className="text-xs text-muted-foreground">Log a payment received</p>
+                      </div>
+                    </Link>
+                  </Button>
+                  <Button variant="outline" className="justify-start h-12 text-left" onClick={() => setShowAddAdmin(true)}>
+                    <div className="p-2 rounded-lg bg-violet-500/10 mr-3">
+                      <Shield className="h-4 w-4 text-violet-500" />
+                    </div>
+                    <div>
+                      <p className="font-medium">Add Admin</p>
+                      <p className="text-xs text-muted-foreground">Invite another admin to manage</p>
+                    </div>
+                  </Button>
+                </>
+              )}
             </MotionCardContent>
           </MotionCard>
         </FadeIn>
@@ -234,6 +310,67 @@ export default function DashboardPage() {
           </div>
         </FadeIn>
       )}
+
+      {/* Add Admin Dialog */}
+      {isAdmin && <Dialog open={showAddAdmin} onOpenChange={setShowAddAdmin}>
+        <DialogContent className="border-border/50 bg-card/95 backdrop-blur-xl">
+          <form onSubmit={handleAddAdmin}>
+            <DialogHeader>
+              <DialogTitle>Add Admin</DialogTitle>
+              <DialogDescription>
+                Add a new administrator to your organization
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="admin-name" className="text-sm font-medium">Name *</Label>
+                <Input
+                  id="admin-name"
+                  value={adminName}
+                  onChange={(e) => setAdminName(e.target.value)}
+                  placeholder="John Doe"
+                  className="h-11 bg-secondary/50 border-border/50 focus:border-primary"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="admin-email" className="text-sm font-medium">Email *</Label>
+                <Input
+                  id="admin-email"
+                  type="email"
+                  value={adminEmail}
+                  onChange={(e) => setAdminEmail(e.target.value)}
+                  placeholder="john@example.com"
+                  className="h-11 bg-secondary/50 border-border/50 focus:border-primary"
+                  required
+                />
+                <p className="text-xs text-muted-foreground">
+                  An invitation email will be sent to join as an admin.
+                </p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setShowAddAdmin(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={createMembers.isPending}
+                className="bg-gradient-to-r from-primary to-blue-400"
+              >
+                {createMembers.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Adding...
+                  </>
+                ) : (
+                  'Add Admin'
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>}
     </div>
   );
 }

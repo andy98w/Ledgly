@@ -3,9 +3,9 @@
 import { useState, useMemo, useEffect, useCallback, memo } from 'react';
 import Link from 'next/link';
 
-import { Plus, Search, Users, AlertCircle, MoreHorizontal, Pencil, Trash2, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Info, Circle, CheckCircle2 } from 'lucide-react';
+import { Plus, Search, Users, AlertCircle, MoreHorizontal, Pencil, Trash2, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Circle, CheckCircle2, Mail, Clock } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
-import { useMembers, useCreateMembers, useUpdateMember, useDeleteMember, useRestoreMember } from '@/lib/queries/members';
+import { useMembers, useCreateMembers, useUpdateMember, useDeleteMember, useRestoreMember, useResendInvitation, useBulkDeleteMembers } from '@/lib/queries/members';
 import { useAuthStore } from '@/lib/stores/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,13 +38,9 @@ import { useToast } from '@/components/ui/use-toast';
 import { Money } from '@/components/ui/money';
 import { AvatarGradient } from '@/components/ui/avatar-gradient';
 import { MotionCard, MotionCardContent } from '@/components/ui/motion-card';
-import { FadeIn, StaggerChildren, StaggerItem } from '@/components/ui/page-transition';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { FadeIn } from '@/components/ui/page-transition';
+import { AnimatedList } from '@/components/ui/animated-list';
+import { PageHeader } from '@/components/ui/page-header';
 import type { MemberWithBalance } from '@ledgly/shared';
 
 const MemberCard = memo(function MemberCard({
@@ -52,6 +48,7 @@ const MemberCard = memo(function MemberCard({
   index,
   onEdit,
   onDelete,
+  onResendInvitation,
   isAdmin,
   isSelf,
   isSelected,
@@ -61,6 +58,7 @@ const MemberCard = memo(function MemberCard({
   index: number;
   onEdit: (member: MemberWithBalance) => void;
   onDelete: (member: MemberWithBalance) => void;
+  onResendInvitation?: (member: MemberWithBalance) => void;
   isAdmin: boolean;
   isSelf?: boolean;
   isSelected?: boolean;
@@ -68,13 +66,14 @@ const MemberCard = memo(function MemberCard({
 }) {
   const hasBalance = member.balanceCents > 0;
   const isOverdue = member.overdueCharges > 0;
+  const isInvited = member.status === 'INVITED';
+  const isExpiredInvite = isInvited && member.inviteExpired;
 
   return (
-    <StaggerItem>
-      <MotionCard className="cursor-pointer">
-        <MotionCardContent className="p-4">
-          <div className="flex items-center justify-between">
-            {isAdmin && onToggleSelect && (
+    <MotionCard className="cursor-pointer">
+      <MotionCardContent className="p-4">
+        <div className="flex items-center justify-between">
+          {isAdmin && onToggleSelect && (
               <button
                 onClick={(e) => {
                   e.preventDefault();
@@ -97,16 +96,28 @@ const MemberCard = memo(function MemberCard({
                   {member.displayName}
                   {isSelf && <span className="text-muted-foreground font-normal"> (You)</span>}
                 </p>
-                <div className="flex items-center gap-2 mt-1">
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
                   <Badge
                     variant={member.role === 'ADMIN' ? 'default' : member.role === 'TREASURER' ? 'secondary' : 'outline'}
                     className="text-xs"
                   >
                     {member.role === 'ADMIN' ? 'Admin' : member.role === 'TREASURER' ? 'Treasurer' : 'Member'}
                   </Badge>
-                  <span className="text-xs text-muted-foreground">
-                    Joined {formatDate(member.joinedAt)}
-                  </span>
+                  {isExpiredInvite ? (
+                    <Badge variant="destructive" className="text-xs">
+                      <AlertCircle className="w-3 h-3 mr-1" />
+                      Invitation Expired
+                    </Badge>
+                  ) : isInvited ? (
+                    <Badge variant="warning" className="text-xs">
+                      <Clock className="w-3 h-3 mr-1" />
+                      Pending Invitation
+                    </Badge>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">
+                      Joined {formatDate(member.joinedAt)}
+                    </span>
+                  )}
                   {isOverdue && (
                     <Badge variant="destructive" className="text-xs">
                       <AlertCircle className="w-3 h-3 mr-1" />
@@ -117,19 +128,21 @@ const MemberCard = memo(function MemberCard({
               </div>
             </Link>
             <div className="flex items-center gap-4">
-              <div className="text-right">
-                {hasBalance ? (
-                  <div className="flex items-center gap-1 text-destructive">
-                    <span className="text-sm">Owes</span>
-                    <Money cents={member.balanceCents} size="sm" className="text-destructive" />
-                  </div>
-                ) : (
-                  <Badge variant="success" className="text-xs">Paid up</Badge>
-                )}
-                <p className="text-xs text-muted-foreground mt-1">
-                  <Money cents={member.totalPaidCents} size="xs" inline /> paid
-                </p>
-              </div>
+              {!isInvited && (
+                <div className="text-right">
+                  {hasBalance ? (
+                    <div className="flex items-center gap-1 text-destructive">
+                      <span className="text-sm">Owes</span>
+                      <Money cents={member.balanceCents} size="sm" className="text-destructive" />
+                    </div>
+                  ) : (
+                    <Badge variant="success" className="text-xs">Paid up</Badge>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-1">
+                    <Money cents={member.totalPaidCents} size="xs" inline /> paid
+                  </p>
+                </div>
+              )}
               {isAdmin && !isSelf ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -138,10 +151,18 @@ const MemberCard = memo(function MemberCard({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => onEdit(member)}>
-                      <Pencil className="h-4 w-4 mr-2" />
-                      Edit
-                    </DropdownMenuItem>
+                    {isInvited && onResendInvitation && (
+                      <DropdownMenuItem onClick={() => onResendInvitation(member)}>
+                        <Mail className="h-4 w-4 mr-2" />
+                        Resend Invitation
+                      </DropdownMenuItem>
+                    )}
+                    {!isInvited && (
+                      <DropdownMenuItem onClick={() => onEdit(member)}>
+                        <Pencil className="h-4 w-4 mr-2" />
+                        Edit
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem
                       onClick={() => onDelete(member)}
                       className="text-destructive focus:text-destructive"
@@ -158,7 +179,6 @@ const MemberCard = memo(function MemberCard({
           </div>
         </MotionCardContent>
       </MotionCard>
-    </StaggerItem>
   );
 });
 
@@ -322,11 +342,14 @@ function AddMemberDialog() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [role, setRole] = useState<'MEMBER' | 'TREASURER' | 'ADMIN'>('MEMBER');
   const { toast } = useToast();
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
   const createMembers = useCreateMembers();
   const restoreMember = useRestoreMember();
   const deleteMemberMutation = useDeleteMember();
+
+  const requiresEmail = role === 'ADMIN' || role === 'TREASURER';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -335,7 +358,7 @@ function AddMemberDialog() {
     try {
       const created = await createMembers.mutateAsync({
         orgId: currentOrgId,
-        members: [{ name: name.trim(), email: email.trim() || undefined }],
+        members: [{ name: name.trim(), email: email.trim() || undefined, role }],
       });
       const createdName = name.trim();
       const createdId = created[0]?.id;
@@ -374,6 +397,7 @@ function AddMemberDialog() {
       setOpen(false);
       setName('');
       setEmail('');
+      setRole('MEMBER');
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -412,7 +436,22 @@ function AddMemberDialog() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-medium">Email (optional)</Label>
+              <Label htmlFor="add-role" className="text-sm font-medium">Role</Label>
+              <Select value={role} onValueChange={(v) => setRole(v as 'MEMBER' | 'TREASURER' | 'ADMIN')}>
+                <SelectTrigger className="h-11 bg-secondary/50 border-border/50">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="MEMBER">Member</SelectItem>
+                  <SelectItem value="TREASURER">Treasurer</SelectItem>
+                  <SelectItem value="ADMIN">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-sm font-medium">
+                Email {requiresEmail ? '*' : '(optional)'}
+              </Label>
               <Input
                 id="email"
                 type="email"
@@ -420,7 +459,13 @@ function AddMemberDialog() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="john@example.com"
                 className="h-11 bg-secondary/50 border-border/50 focus:border-primary"
+                required={requiresEmail}
               />
+              {requiresEmail && (
+                <p className="text-xs text-muted-foreground">
+                  An invitation email will be sent to join as {role === 'ADMIN' ? 'an admin' : 'a treasurer'}.
+                </p>
+              )}
             </div>
           </div>
           <DialogFooter>
@@ -458,6 +503,8 @@ export default function MembersPage() {
   const { data, isLoading } = useMembers(currentOrgId, { search });
   const deleteMember = useDeleteMember();
   const restoreMember = useRestoreMember();
+  const resendInvitation = useResendInvitation();
+  const bulkDeleteMembers = useBulkDeleteMembers();
 
   // Sort and paginate members
   const sortedMembers = useMemo(() => {
@@ -488,6 +535,21 @@ export default function MembersPage() {
     setPage(1);
     setSelectedRows(new Set());
   }, [search, sortBy, sortOrder, pageSize]);
+
+  const handleResendInvitation = useCallback((member: MemberWithBalance) => {
+    if (!currentOrgId) return;
+    resendInvitation.mutate(
+      { orgId: currentOrgId, memberId: member.id },
+      {
+        onSuccess: () => toast({ title: `Invitation resent to ${member.displayName}` }),
+        onError: (error: any) => toast({
+          title: 'Error',
+          description: error.message || 'Failed to resend invitation',
+          variant: 'destructive',
+        }),
+      },
+    );
+  }, [currentOrgId, resendInvitation, toast]);
 
   const handleEdit = useCallback((member: MemberWithBalance) => {
     setEditingMember(member);
@@ -586,84 +648,61 @@ export default function MembersPage() {
     if (!currentOrgId || selectedRows.size === 0) return;
 
     // Never delete yourself
-    const membersToDelete = paginatedMembers.filter((m) => selectedRows.has(m.id) && m.id !== currentMembership?.id);
-    const deletedMembers: Array<{ id: string; name: string }> = [];
+    const memberIds = paginatedMembers
+      .filter((m) => selectedRows.has(m.id) && m.id !== currentMembership?.id)
+      .map((m) => m.id);
 
-    for (const member of membersToDelete) {
-      try {
-        await deleteMember.mutateAsync({ orgId: currentOrgId, memberId: member.id });
-        deletedMembers.push({ id: member.id, name: member.displayName });
-      } catch (error) {
-        // Continue with other deletions
-      }
-    }
+    if (memberIds.length === 0) return;
 
-    setSelectedRows(new Set());
+    try {
+      const result = await bulkDeleteMembers.mutateAsync({ orgId: currentOrgId, memberIds });
+      const deletedCount = result.deletedCount;
+      setSelectedRows(new Set());
 
-    const handleUndo = async () => {
-      let restoredCount = 0;
-      for (const member of deletedMembers) {
-        try {
-          await restoreMember.mutateAsync({ orgId: currentOrgId, memberId: member.id });
-          restoredCount++;
-        } catch (error) {
-          // Continue with other restorations
-        }
-      }
       toast({
-        title: `Restored ${restoredCount} member${restoredCount !== 1 ? 's' : ''}`,
+        title: `Removed ${deletedCount} member${deletedCount !== 1 ? 's' : ''}`,
         action: (
           <button
             onClick={async () => {
-              let redoneCount = 0;
-              for (const member of deletedMembers) {
-                try { await deleteMember.mutateAsync({ orgId: currentOrgId, memberId: member.id }); redoneCount++; } catch { /* continue */ }
+              let restoredCount = 0;
+              for (const memberId of memberIds) {
+                try { await restoreMember.mutateAsync({ orgId: currentOrgId, memberId }); restoredCount++; } catch { /* continue */ }
               }
-              toast({ title: `Removed ${redoneCount} member${redoneCount !== 1 ? 's' : ''}` });
+              toast({
+                title: `Restored ${restoredCount} member${restoredCount !== 1 ? 's' : ''}`,
+                action: (
+                  <button
+                    onClick={async () => {
+                      const redoResult = await bulkDeleteMembers.mutateAsync({ orgId: currentOrgId, memberIds });
+                      toast({ title: `Removed ${redoResult.deletedCount} member${redoResult.deletedCount !== 1 ? 's' : ''}` });
+                    }}
+                    className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
+                  >
+                    Redo
+                  </button>
+                ),
+              });
             }}
             className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
           >
-            Redo
+            Undo
           </button>
         ),
       });
-    };
-
-    toast({
-      title: `Removed ${deletedMembers.length} member${deletedMembers.length !== 1 ? 's' : ''}`,
-      action: (
-        <button
-          onClick={handleUndo}
-          className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-        >
-          Undo
-        </button>
-      ),
-    });
+    } catch {
+      setSelectedRows(new Set());
+    }
   };
 
   return (
     <div data-tour="members-list" className="space-y-8">
       {/* Header */}
       <FadeIn>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-bold tracking-tight">Members</h1>
-            <TooltipProvider delayDuration={0}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button className="text-muted-foreground hover:text-foreground transition-colors">
-                    <Info className="w-4 h-4" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="right" className="max-w-xs">
-                  <p className="text-sm">Add and manage organization members. Members can have charges assigned to them and receive payment allocations. Use selection checkboxes to select multiple members for bulk actions.</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-          <AddMemberDialog />
-        </div>
+        <PageHeader
+          title="Members"
+          helpText="Add and manage organization members. Members can have charges assigned to them and receive payment allocations. Use selection checkboxes to select multiple members for bulk actions."
+          actions={isAdmin && <AddMemberDialog />}
+        />
       </FadeIn>
 
       {/* Search and Filters */}
@@ -733,7 +772,7 @@ export default function MembersPage() {
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
                 <span className="text-sm text-muted-foreground min-w-[80px] text-center">
-                  {page} of {totalPages || 1}
+                  {page} / {totalPages || 1}
                 </span>
                 <Button
                   variant="ghost"
@@ -767,7 +806,7 @@ export default function MembersPage() {
             <p className="text-muted-foreground mb-6">
               Start by adding members to your organization
             </p>
-            <AddMemberDialog />
+            {isAdmin && <AddMemberDialog />}
           </div>
         </FadeIn>
       ) : (
@@ -801,21 +840,24 @@ export default function MembersPage() {
               </button>
             </div>
           )}
-          <StaggerChildren className="space-y-3">
-            {paginatedMembers.map((member, index) => (
+          <AnimatedList
+            items={paginatedMembers}
+            getKey={(m) => m.id}
+            className="space-y-3"
+            renderItem={(member, index) => (
               <MemberCard
-                key={member.id}
                 member={member}
                 index={index}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
+                onResendInvitation={handleResendInvitation}
                 isAdmin={isAdmin}
                 isSelf={member.id === currentMembership?.id}
                 isSelected={selectedRows.has(member.id)}
                 onToggleSelect={() => toggleRowSelection(member.id)}
               />
-            ))}
-          </StaggerChildren>
+            )}
+          />
         </div>
       )}
 
@@ -833,7 +875,7 @@ export default function MembersPage() {
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <span className="text-sm text-muted-foreground min-w-[80px] text-center">
-              {page} of {totalPages || 1}
+              {page} / {totalPages || 1}
             </span>
             <Button
               variant="ghost"

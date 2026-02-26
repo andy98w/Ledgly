@@ -11,6 +11,7 @@ interface UpdateOrganizationDto {
   timezone?: string;
   autoApprovePayments?: boolean;
   autoApproveExpenses?: boolean;
+  enabledPaymentSources?: string[];
 }
 
 @Injectable()
@@ -85,6 +86,7 @@ export class OrganizationsService {
       timezone: org.timezone,
       autoApprovePayments: org.autoApprovePayments,
       autoApproveExpenses: org.autoApproveExpenses,
+      enabledPaymentSources: org.enabledPaymentSources,
       createdAt: org.createdAt,
       membership: org.memberships[0],
       memberCount: org._count.memberships,
@@ -100,6 +102,7 @@ export class OrganizationsService {
         ...(dto.timezone && { timezone: dto.timezone }),
         ...(dto.autoApprovePayments !== undefined && { autoApprovePayments: dto.autoApprovePayments }),
         ...(dto.autoApproveExpenses !== undefined && { autoApproveExpenses: dto.autoApproveExpenses }),
+        ...(dto.enabledPaymentSources !== undefined && { enabledPaymentSources: dto.enabledPaymentSources }),
       },
     });
 

@@ -12,6 +12,7 @@ import { ExpensesModule } from '../modules/expenses/expenses.module';
 import { ExpensesService } from '../modules/expenses/expenses.service';
 import { MembersModule } from '../modules/members/members.module';
 import { MembersService } from '../modules/members/members.service';
+import { EmailService } from '../modules/auth/email.service';
 
 export interface TestContext {
   module: TestingModule;
@@ -36,7 +37,10 @@ export async function createTestContext(): Promise<TestContext> {
       ExpensesModule,
       MembersModule,
     ],
-  }).compile();
+  })
+    .overrideProvider(EmailService)
+    .useValue({ sendAdminInvitation: jest.fn(), sendMagicLink: jest.fn() })
+    .compile();
 
   const prisma = module.get(PrismaService);
   await prisma.$connect();

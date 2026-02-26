@@ -54,6 +54,7 @@ export function useGmailStatus(orgId: string | null) {
     queryKey: queryKeys.gmail.status(orgId),
     queryFn: () => api.get<GmailStatus>(`/organizations/${orgId}/gmail/status`),
     enabled: !!orgId,
+    staleTime: 30_000,
   });
 }
 
@@ -198,7 +199,11 @@ export function useDisconnectGmail() {
   });
 }
 
-export function getGmailConnectUrl(orgId: string): string {
-  const baseUrl = 'http://localhost:3001/api';
-  return `${baseUrl}/gmail/connect/${orgId}`;
+export function getGmailConnectUrl(orgId: string, returnTo?: string): string {
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
+  const url = `${baseUrl}/gmail/connect/${orgId}`;
+  if (returnTo) {
+    return `${url}?returnTo=${encodeURIComponent(returnTo)}`;
+  }
+  return url;
 }

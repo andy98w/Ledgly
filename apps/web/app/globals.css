@@ -68,7 +68,7 @@
     --background: 222 47% 6%;
     --foreground: 210 40% 98%;
 
-    --card: 222 47% 9%;
+    --card: 222 47% 11%;
     --card-foreground: 210 40% 98%;
 
     --popover: 222 47% 11%;
@@ -95,8 +95,8 @@
     --warning: 38 92% 50%;
     --warning-foreground: 222 47% 6%;
 
-    --border: 217 33% 17%;
-    --input: 217 33% 17%;
+    --border: 217 33% 20%;
+    --input: 217 33% 20%;
     --ring: 217 91% 60%;
 
     /* Layered shadows — dark */
@@ -332,6 +332,16 @@
   .stagger-container > .stagger-item:nth-child(5) { animation-delay: 120ms; }
   .stagger-container > .stagger-item:nth-child(n+6) { animation-delay: 150ms; }
 
+  /* List add/remove animations */
+  .list-item-enter {
+    animation: list-item-in 250ms ease-out both;
+  }
+
+  .list-item-exit {
+    animation: list-item-out 250ms ease-out both;
+    pointer-events: none;
+  }
+
   /* Reduced motion — Phase 6A */
   @media (prefers-reduced-motion: reduce) {
     .stagger-item,
@@ -341,7 +351,9 @@
     .animate-shimmer,
     .animate-float,
     .animate-gradient-rotate,
-    .animate-reveal-up {
+    .animate-reveal-up,
+    .list-item-enter,
+    .list-item-exit {
       animation-duration: 0.01ms !important;
       animation-iteration-count: 1 !important;
     }
@@ -481,6 +493,33 @@
 
 .animate-loading-bar {
   animation: loading-bar 1.2s ease-in-out infinite;
+}
+
+@keyframes list-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes list-item-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+    max-height: 200px;
+    margin-bottom: 0.75rem;
+  }
+  to {
+    opacity: 0;
+    transform: translateX(40px);
+    max-height: 0;
+    margin-bottom: 0;
+    overflow: hidden;
+  }
 }
 
 /* Skeleton shimmer */

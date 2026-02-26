@@ -26,6 +26,8 @@ export interface Membership {
   name: string | null;
   joinedAt: Date;
   leftAt: Date | null;
+  invitedEmail: string | null;
+  inviteExpiresAt: Date | null;
 }
 
 export interface Charge {
@@ -71,6 +73,7 @@ export interface MemberWithBalance extends Membership {
   totalChargedCents: number;
   totalPaidCents: number;
   overdueCharges: number;
+  inviteExpired?: boolean;
   user?: User | null;
 }
 
@@ -133,6 +136,7 @@ export interface AuthUser {
   email: string;
   name: string | null;
   avatarUrl: string | null;
+  hasPassword: boolean;
   memberships: {
     id: string;
     orgId: string;

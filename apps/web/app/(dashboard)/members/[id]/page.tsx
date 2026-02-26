@@ -139,7 +139,11 @@ export default function MemberDetailPage() {
           <MotionCardContent>
             {member.charges?.length === 0 ? (
               <div className="text-center py-8">
-                <p className="text-sm text-muted-foreground">No charges yet</p>
+                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
+                  <Receipt className="h-6 w-6 text-primary" />
+                </div>
+                <p className="text-sm font-medium mb-1">No charges yet</p>
+                <p className="text-xs text-muted-foreground">Charges assigned to this member will appear here</p>
               </div>
             ) : (
               <StaggerChildren className="space-y-3">
@@ -205,7 +209,11 @@ export default function MemberDetailPage() {
           <MotionCardContent>
             {member.payments?.length === 0 ? (
               <div className="text-center py-8">
-                <p className="text-sm text-muted-foreground">No payments yet</p>
+                <div className="w-12 h-12 rounded-xl bg-success/10 flex items-center justify-center mx-auto mb-3">
+                  <CreditCard className="h-6 w-6 text-success" />
+                </div>
+                <p className="text-sm font-medium mb-1">No payments yet</p>
+                <p className="text-xs text-muted-foreground">Payments from this member will appear here</p>
               </div>
             ) : (
               <StaggerChildren className="space-y-3">

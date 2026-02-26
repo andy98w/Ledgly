@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -17,13 +18,27 @@ import {
   TrendingDown,
   Table2,
   History,
+  Plus,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/lib/stores/auth';
 import { useLogout } from '@/lib/queries/auth';
+import { useCreateOrganization } from '@/lib/queries/organizations';
+import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { AvatarGradient } from '@/components/ui/avatar-gradient';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,15 +47,23 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 
-const navItems: Array<{ href: string; label: string; icon: typeof LayoutDashboard; badge?: string }> = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/members', label: 'Members', icon: Users },
-  { href: '/charges', label: 'Charges', icon: Receipt },
-  { href: '/expenses', label: 'Expenses', icon: TrendingDown },
-  { href: '/payments', label: 'Payments', icon: CreditCard },
-  { href: '/inbox', label: 'Inbox', icon: Inbox },
-  { href: '/spreadsheet', label: 'Spreadsheet', icon: Table2 },
-  { href: '/audit', label: 'Audit Log', icon: History },
+const navItems: Array<{
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  badge?: string;
+  activeText: string;
+  activeBg: string;
+  activeBar: string;
+}> = [
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, activeText: 'text-primary', activeBg: 'bg-primary/10', activeBar: 'bg-primary' },
+  { href: '/members', label: 'Members', icon: Users, activeText: 'text-violet-500', activeBg: 'bg-violet-500/10', activeBar: 'bg-violet-500' },
+  { href: '/charges', label: 'Charges', icon: Receipt, activeText: 'text-amber-500', activeBg: 'bg-amber-500/10', activeBar: 'bg-amber-500' },
+  { href: '/expenses', label: 'Expenses', icon: TrendingDown, activeText: 'text-rose-500', activeBg: 'bg-rose-500/10', activeBar: 'bg-rose-500' },
+  { href: '/payments', label: 'Payments', icon: CreditCard, activeText: 'text-emerald-500', activeBg: 'bg-emerald-500/10', activeBar: 'bg-emerald-500' },
+  { href: '/inbox', label: 'Inbox', icon: Inbox, activeText: 'text-cyan-500', activeBg: 'bg-cyan-500/10', activeBar: 'bg-cyan-500' },
+  { href: '/spreadsheet', label: 'Spreadsheet', icon: Table2, activeText: 'text-indigo-500', activeBg: 'bg-indigo-500/10', activeBar: 'bg-indigo-500' },
+  { href: '/audit', label: 'Audit Log', icon: History, activeText: 'text-slate-500', activeBg: 'bg-slate-500/10', activeBar: 'bg-slate-500' },
 ];
 
 export function Sidebar() {
@@ -50,8 +73,34 @@ export function Sidebar() {
   const setCurrentOrgId = useAuthStore((s) => s.setCurrentOrgId);
   const logout = useLogout();
 
+  const { toast } = useToast();
+  const createOrganization = useCreateOrganization();
+  const [showCreateOrgDialog, setShowCreateOrgDialog] = useState(false);
+  const [newOrgName, setNewOrgName] = useState('');
+
   const currentOrg = user?.memberships.find((m) => m.orgId === currentOrgId);
   const allOrgs = user?.memberships || [];
+
+  const handleCreateOrg = () => {
+    if (!newOrgName.trim()) return;
+    createOrganization.mutate(
+      { name: newOrgName.trim() },
+      {
+        onSuccess: () => {
+          toast({ title: 'Organization created!' });
+          setShowCreateOrgDialog(false);
+          setNewOrgName('');
+        },
+        onError: (error: any) => {
+          toast({
+            title: 'Error',
+            description: error.message || 'Failed to create organization',
+            variant: 'destructive',
+          });
+        },
+      },
+    );
+  };
 
   return (
     <aside className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0 border-r border-border/50 bg-card/50 backdrop-blur-xl">
@@ -104,12 +153,13 @@ export function Sidebar() {
                     )}
                   </DropdownMenuItem>
                 ))}
-                {allOrgs.length > 1 && <DropdownMenuSeparator />}
-                <DropdownMenuItem asChild>
-                  <Link href="/settings" className="flex items-center gap-2 cursor-pointer">
-                    <Settings className="h-4 w-4" />
-                    <span>Create Organization</span>
-                  </Link>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => setShowCreateOrgDialog(true)}
+                  className="flex items-center gap-2 cursor-pointer"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Create Organization</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -129,17 +179,17 @@ export function Sidebar() {
                 className={cn(
                   'relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
                   isActive
-                    ? 'text-primary'
+                    ? item.activeText
                     : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50',
                 )}
               >
                 {isActive && (
                   <>
-                    <div className="absolute inset-0 bg-primary/10 rounded-xl transition-all" />
-                    <div className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-primary" />
+                    <div className={`absolute inset-0 ${item.activeBg} rounded-xl transition-all`} />
+                    <div className={`absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full ${item.activeBar}`} />
                   </>
                 )}
-                <item.icon className={cn('h-5 w-5 relative z-10', isActive && 'text-primary')} />
+                <item.icon className={cn('h-5 w-5 relative z-10', isActive && item.activeText)} />
                 <span className="relative z-10">{item.label}</span>
                 {item.badge && (
                   <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-primary/20 text-primary font-medium relative z-10">
@@ -187,6 +237,52 @@ export function Sidebar() {
           </div>
         )}
       </div>
+
+      {/* Create Organization Dialog */}
+      <Dialog open={showCreateOrgDialog} onOpenChange={setShowCreateOrgDialog}>
+        <DialogContent className="border-border/50 bg-card/95 backdrop-blur-xl">
+          <form onSubmit={(e) => { e.preventDefault(); handleCreateOrg(); }}>
+            <DialogHeader>
+              <DialogTitle>Create Organization</DialogTitle>
+              <DialogDescription>
+                Set up a new organization to manage separately
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+              <div className="space-y-2">
+                <Label htmlFor="new-org-name">Organization Name</Label>
+                <Input
+                  id="new-org-name"
+                  placeholder="e.g., Alpha Beta Gamma"
+                  value={newOrgName}
+                  onChange={(e) => setNewOrgName(e.target.value)}
+                  className="h-11 bg-secondary/50 border-border/50 focus:border-primary"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setShowCreateOrgDialog(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={!newOrgName.trim() || createOrganization.isPending}
+                className="bg-gradient-to-r from-primary to-blue-400"
+              >
+                {createOrganization.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  'Create'
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </aside>
   );
 }

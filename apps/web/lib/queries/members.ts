@@ -102,3 +102,31 @@ export function useRestoreMember() {
     },
   });
 }
+
+export function useBulkDeleteMembers() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ orgId, memberIds }: { orgId: string; memberIds: string[] }) =>
+      api.post<{ success: boolean; deletedCount: number }>(
+        `/organizations/${orgId}/members/bulk-delete`,
+        { memberIds },
+      ),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.members.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
+    },
+  });
+}
+
+export function useResendInvitation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ orgId, memberId }: { orgId: string; memberId: string }) =>
+      api.post(`/organizations/${orgId}/members/${memberId}/resend-invitation`),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.members.all(variables.orgId) });
+    },
+  });
+}

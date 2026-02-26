@@ -1,7 +1,7 @@
 export const MEMBERSHIP_ROLES = ['ADMIN', 'TREASURER', 'MEMBER'] as const;
 export type MembershipRole = (typeof MEMBERSHIP_ROLES)[number];
 
-export const MEMBERSHIP_STATUSES = ['ACTIVE', 'INACTIVE', 'LEFT'] as const;
+export const MEMBERSHIP_STATUSES = ['ACTIVE', 'INACTIVE', 'LEFT', 'INVITED'] as const;
 export type MembershipStatus = (typeof MEMBERSHIP_STATUSES)[number];
 
 export const CHARGE_CATEGORIES = ['DUES', 'EVENT', 'FINE', 'MERCH', 'OTHER'] as const;
@@ -38,6 +38,7 @@ export const MEMBERSHIP_STATUS_LABELS: Record<MembershipStatus, string> = {
   ACTIVE: 'Active',
   INACTIVE: 'Inactive',
   LEFT: 'Left',
+  INVITED: 'Invited',
 };
 
 export const EXPENSE_CATEGORIES = ['EVENT', 'SUPPLIES', 'FOOD', 'VENUE', 'MARKETING', 'SERVICES', 'OTHER'] as const;

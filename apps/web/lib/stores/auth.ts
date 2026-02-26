@@ -21,6 +21,7 @@ export const useAuthStore = create<AuthState>()(
         set({ user: null, currentOrgId: null });
         if (typeof window !== 'undefined') {
           localStorage.removeItem('auth_token');
+          localStorage.removeItem('refresh_token');
         }
       },
     }),
@@ -32,3 +33,18 @@ export const useAuthStore = create<AuthState>()(
     },
   ),
 );
+
+/** Returns the current user's role in the active org, or null */
+export function useCurrentRole() {
+  const user = useAuthStore((s) => s.user);
+  const currentOrgId = useAuthStore((s) => s.currentOrgId);
+  if (!user || !currentOrgId) return null;
+  const membership = user.memberships.find((m) => m.orgId === currentOrgId);
+  return membership?.role ?? null;
+}
+
+/** Convenience: true if role is ADMIN or TREASURER */
+export function useIsAdminOrTreasurer() {
+  const role = useCurrentRole();
+  return role === 'ADMIN' || role === 'TREASURER';
+}

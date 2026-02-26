@@ -16,9 +16,10 @@ model Organization {
   auditLogs       AuditLog[]
   charges         Charge[]
   expenses        Expense[]
-  autoApprovePayments Boolean          @default(true) @map("auto_approve_payments")
-  autoApproveExpenses Boolean          @default(true) @map("auto_approve_expenses")
-  gmailConnection     GmailConnection?
+  autoApprovePayments     Boolean          @default(true) @map("auto_approve_payments")
+  autoApproveExpenses     Boolean          @default(true) @map("auto_approve_expenses")
+  enabledPaymentSources   String[]         @default(["venmo", "zelle", "cashapp", "paypal"]) @map("enabled_payment_sources")
+  gmailConnection         GmailConnection?
   memberships         Membership[]
   payments            Payment[]
 
@@ -26,28 +27,61 @@ model Organization {
 }
 
 model User {
-  id          String       @id @default(cuid())
-  email       String       @unique
-  name        String?
-  phone       String?
-  createdAt   DateTime     @default(now()) @map("created_at")
-  avatarUrl   String?      @map("avatar_url")
-  magicTokens MagicToken[]
-  memberships Membership[]
+  id           String       @id @default(cuid())
+  email        String       @unique
+  name         String?
+  phone        String?
+  passwordHash        String?        @map("password_hash")
+  createdAt           DateTime       @default(now()) @map("created_at")
+  avatarUrl           String?        @map("avatar_url")
+  failedLoginAttempts Int            @default(0) @map("failed_login_attempts")
+  lockedUntil         DateTime?      @map("locked_until")
+  magicTokens         MagicToken[]
+  memberships         Membership[]
+  refreshTokens       RefreshToken[]
 
   @@map("users")
 }
 
 model MagicToken {
+  id        String         @id @default(cuid())
+  token     String         @unique
+  userId    String         @map("user_id")
+  type      MagicTokenType @default(SIGN_IN)
+  expiresAt DateTime       @map("expires_at")
+  usedAt    DateTime?      @map("used_at")
+  createdAt DateTime       @default(now()) @map("created_at")
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("magic_tokens")
+}
+
+model RefreshToken {
   id        String    @id @default(cuid())
   token     String    @unique
   userId    String    @map("user_id")
   expiresAt DateTime  @map("expires_at")
-  usedAt    DateTime? @map("used_at")
+  revokedAt DateTime? @map("revoked_at")
   createdAt DateTime  @default(now()) @map("created_at")
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@map("magic_tokens")
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model AuthEvent {
+  id        String   @id @default(cuid())
+  userId    String?  @map("user_id")
+  email     String?
+  event     String
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([event])
+  @@map("auth_events")
 }
 
 model Membership {
@@ -63,6 +97,9 @@ model Membership {
   chargesCreated     Charge[]            @relation("ChargeCreatedBy")
   chargesAssigned    Charge[]            @relation("ChargeAssignedTo")
   expensesCreated    Expense[]           @relation("ExpenseCreatedBy")
+  invitedEmail       String?             @map("invited_email")
+  inviteExpiresAt    DateTime?           @map("invite_expires_at")
+  inviteToken        String?             @unique @map("invite_token")
   org                Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
   user               User?               @relation(fields: [userId], references: [id])
   allocationsCreated PaymentAllocation[] @relation("AllocationCreatedBy")
@@ -160,7 +197,7 @@ model AuditLog {
 model GmailConnection {
   id             String        @id @default(cuid())
   orgId          String        @unique @map("org_id")
-  email          String
+  email          String        @unique
   accessToken    String        @map("access_token")
   refreshToken   String        @map("refresh_token")
   tokenExpiresAt DateTime      @map("token_expires_at")
@@ -242,6 +279,7 @@ enum MembershipStatus {
   ACTIVE
   INACTIVE
   LEFT
+  INVITED
 }
 
 enum ChargeCategory {
@@ -275,4 +313,9 @@ enum ExpenseCategory {
   MARKETING
   SERVICES
   OTHER
+}
+
+enum MagicTokenType {
+  SIGN_IN
+  PASSWORD_RESET
 }

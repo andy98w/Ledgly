@@ -32,6 +32,15 @@ const entityTypeIcons: Record<string, typeof Receipt> = {
   ALLOCATION: Link2,
 };
 
+const entityTypeColors: Record<string, { bg: string; text: string }> = {
+  CHARGE: { bg: 'bg-amber-500/10', text: 'text-amber-500' },
+  PAYMENT: { bg: 'bg-emerald-500/10', text: 'text-emerald-500' },
+  MEMBER: { bg: 'bg-violet-500/10', text: 'text-violet-500' },
+  EXPENSE: { bg: 'bg-rose-500/10', text: 'text-rose-500' },
+  ORGANIZATION: { bg: 'bg-primary/10', text: 'text-primary' },
+  ALLOCATION: { bg: 'bg-cyan-500/10', text: 'text-cyan-500' },
+};
+
 const entityTypeLabels: Record<string, string> = {
   CHARGE: 'Charge',
   PAYMENT: 'Payment',
@@ -275,6 +284,7 @@ function AuditLogCard({
   processingId: string | null;
 }) {
   const Icon = entityTypeIcons[log.entityType] || Receipt;
+  const colors = entityTypeColors[log.entityType];
   const displayAction = getDisplayAction(log);
 
   return (
@@ -282,8 +292,8 @@ function AuditLogCard({
       <MotionCard className={log.undone ? 'opacity-50' : ''}>
         <MotionCardContent className="p-4">
           <div className="flex items-start gap-4">
-            <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center shrink-0">
-              <Icon className="w-5 h-5 text-muted-foreground" />
+            <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center shrink-0', colors?.bg || 'bg-secondary')}>
+              <Icon className={cn('w-5 h-5', colors?.text || 'text-muted-foreground')} />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
@@ -341,6 +351,7 @@ function BatchAuditLogCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const Icon = entityTypeIcons[batch.entityType] || Receipt;
+  const colors = entityTypeColors[batch.entityType];
   const items = batch.items || [];
   const allUndone = batch.undone;
   const someUndone = items.some((i) => i.undone);
@@ -359,8 +370,8 @@ function BatchAuditLogCard({
       <MotionCard className={allUndone ? 'opacity-50' : ''}>
         <MotionCardContent className="p-4">
           <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center shrink-0">
-              <Icon className="w-5 h-5 text-muted-foreground" />
+            <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center shrink-0', colors?.bg || 'bg-secondary')}>
+              <Icon className={cn('w-5 h-5', colors?.text || 'text-muted-foreground')} />
             </div>
             <button
               onClick={() => setExpanded(!expanded)}

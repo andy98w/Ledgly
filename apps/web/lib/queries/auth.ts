@@ -1,7 +1,30 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, setAuthToken, clearAuthToken } from '@/lib/api';
+import { api, setAuthToken, setRefreshToken, clearAuthTokens, getRefreshToken } from '@/lib/api';
 import { useAuthStore } from '@/lib/stores/auth';
 import type { AuthUser } from '@ledgly/shared';
+
+interface AuthResponse {
+  accessToken: string;
+  refreshToken: string;
+  user: AuthUser;
+}
+
+/** Only update currentOrgId if the persisted one is missing or stale */
+function ensureCurrentOrg(user: AuthUser) {
+  const { currentOrgId, setCurrentOrgId } = useAuthStore.getState();
+  if (user.memberships.length === 0) return;
+  const stillValid = currentOrgId && user.memberships.some((m) => m.orgId === currentOrgId);
+  if (!stillValid) {
+    setCurrentOrgId(user.memberships[0].orgId);
+  }
+}
+
+function handleAuthResponse(data: AuthResponse) {
+  setAuthToken(data.accessToken);
+  setRefreshToken(data.refreshToken);
+  useAuthStore.getState().setUser(data.user);
+  ensureCurrentOrg(data.user);
+}
 
 export function useMe() {
   const setUser = useAuthStore((s) => s.setUser);
@@ -11,10 +34,27 @@ export function useMe() {
     queryFn: async () => {
       const user = await api.get<AuthUser>('/auth/me');
       setUser(user);
+      ensureCurrentOrg(user);
       return user;
     },
     retry: false,
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useRegister() {
+  return useMutation({
+    mutationFn: (data: { email: string; password: string; name: string }) =>
+      api.post<AuthResponse>('/auth/register', data),
+    onSuccess: handleAuthResponse,
+  });
+}
+
+export function useLogin() {
+  return useMutation({
+    mutationFn: (data: { email: string; password: string }) =>
+      api.post<AuthResponse>('/auth/login', data),
+    onSuccess: handleAuthResponse,
   });
 }
 
@@ -25,41 +65,11 @@ export function useSendMagicLink() {
   });
 }
 
-// Dev-only: bypass magic link
-export function useDevLogin() {
-  const setUser = useAuthStore((s) => s.setUser);
-  const setCurrentOrgId = useAuthStore((s) => s.setCurrentOrgId);
-
-  return useMutation({
-    mutationFn: (email: string) =>
-      api.post<{ accessToken: string; user: AuthUser }>('/auth/dev-login', { email }),
-    onSuccess: (data) => {
-      setAuthToken(data.accessToken);
-      setUser(data.user);
-
-      if (data.user.memberships.length > 0) {
-        setCurrentOrgId(data.user.memberships[0].orgId);
-      }
-    },
-  });
-}
-
 export function useVerifyMagicLink() {
-  const setUser = useAuthStore((s) => s.setUser);
-  const setCurrentOrgId = useAuthStore((s) => s.setCurrentOrgId);
-
   return useMutation({
     mutationFn: (token: string) =>
-      api.post<{ accessToken: string; user: AuthUser }>('/auth/verify', { token }),
-    onSuccess: (data) => {
-      setAuthToken(data.accessToken);
-      setUser(data.user);
-
-      // Set first org as current if user has memberships
-      if (data.user.memberships.length > 0) {
-        setCurrentOrgId(data.user.memberships[0].orgId);
-      }
-    },
+      api.post<AuthResponse>('/auth/verify', { token }),
+    onSuccess: handleAuthResponse,
   });
 }
 
@@ -68,10 +78,46 @@ export function useLogout() {
   const queryClient = useQueryClient();
 
   return () => {
-    clearAuthToken();
+    // Best-effort server-side logout
+    const rt = getRefreshToken();
+    if (rt) {
+      api.post('/auth/logout', { refreshToken: rt }).catch(() => {});
+    }
+    clearAuthTokens();
     logout();
     queryClient.clear();
   };
+}
+
+export function useResolveInvite(token: string | null) {
+  return useQuery({
+    queryKey: ['auth', 'invite', token],
+    queryFn: () => api.get<{ email: string; orgName: string; memberName: string | null }>(`/auth/invite/${token}`),
+    enabled: !!token,
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: (data: { currentPassword?: string; newPassword: string }) =>
+      api.patch<{ message: string }>('/auth/password', data),
+  });
+}
+
+export function useForgotPassword() {
+  return useMutation({
+    mutationFn: (email: string) =>
+      api.post<{ message: string }>('/auth/forgot-password', { email }),
+  });
+}
+
+export function useResetPassword() {
+  return useMutation({
+    mutationFn: (data: { token: string; password: string }) =>
+      api.post<{ message: string }>('/auth/reset-password', data),
+  });
 }
 
 export function useUpdateProfile() {

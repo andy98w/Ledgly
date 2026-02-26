@@ -3,10 +3,10 @@
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { Moon, Sun, Monitor, User, Building2, Shield, Bell, Loader2, Camera, Plus, Trash2, AlertTriangle, Mail, Settings, GraduationCap } from 'lucide-react';
+import { Moon, Sun, Monitor, User, Building2, Shield, Loader2, Camera, Plus, Trash2, AlertTriangle, Mail, Settings, GraduationCap, KeyRound, Eye, EyeOff } from 'lucide-react';
 import { useAuthStore } from '@/lib/stores/auth';
 import { useTutorialStore } from '@/lib/stores/tutorial';
-import { useUpdateProfile } from '@/lib/queries/auth';
+import { useUpdateProfile, useChangePassword } from '@/lib/queries/auth';
 import { useCreateOrganization, useDeleteOrganization, useOrganization, useUpdateOrganization } from '@/lib/queries/organizations';
 import { uploadAvatar } from '@/lib/supabase';
 import { useToast } from '@/components/ui/use-toast';
@@ -51,13 +51,20 @@ export default function SettingsPage() {
   const updateOrganization = useUpdateOrganization(currentOrgId ?? null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const changePassword = useChangePassword();
+
   const [name, setName] = useState(user?.name || '');
-  const [emailNotifications, setEmailNotifications] = useState(true);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [showCreateOrgDialog, setShowCreateOrgDialog] = useState(false);
   const [showDeleteOrgDialog, setShowDeleteOrgDialog] = useState(false);
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [newOrgName, setNewOrgName] = useState('');
+  const [currentPw, setCurrentPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
 
   const hasChanges = name !== (user?.name || '');
 
@@ -105,6 +112,32 @@ export default function SettingsPage() {
         });
       },
     });
+  };
+
+  const handleChangePassword = () => {
+    if (newPw !== confirmPw) {
+      toast({ title: 'Passwords do not match', variant: 'destructive' });
+      return;
+    }
+    changePassword.mutate(
+      { currentPassword: user?.hasPassword ? currentPw : undefined, newPassword: newPw },
+      {
+        onSuccess: () => {
+          toast({ title: user?.hasPassword ? 'Password updated' : 'Password set' });
+          setShowPasswordDialog(false);
+          setCurrentPw('');
+          setNewPw('');
+          setConfirmPw('');
+        },
+        onError: (error: any) => {
+          toast({
+            title: 'Error',
+            description: error.message || 'Failed to update password',
+            variant: 'destructive',
+          });
+        },
+      },
+    );
   };
 
   const handleSave = () => {
@@ -296,6 +329,35 @@ export default function SettingsPage() {
         </MotionCard>
       </FadeIn>
 
+      {/* Security Section */}
+      <FadeIn delay={0.15}>
+        <MotionCard hover={false}>
+          <MotionCardHeader>
+            <MotionCardTitle className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <KeyRound className="h-4 w-4 text-primary" />
+              </div>
+              Security
+            </MotionCardTitle>
+          </MotionCardHeader>
+          <MotionCardContent>
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Password</p>
+                <p className="text-xs text-muted-foreground">
+                  {user?.hasPassword
+                    ? 'Change your account password'
+                    : 'Set a password so you can sign in without a magic link'}
+                </p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => setShowPasswordDialog(true)}>
+                {user?.hasPassword ? 'Change password' : 'Set password'}
+              </Button>
+            </div>
+          </MotionCardContent>
+        </MotionCard>
+      </FadeIn>
+
       {/* Appearance Section */}
       <FadeIn delay={0.2}>
         <MotionCard hover={false}>
@@ -349,38 +411,8 @@ export default function SettingsPage() {
         </MotionCard>
       </FadeIn>
 
-      {/* Notifications Section */}
-      <FadeIn delay={0.3}>
-        <MotionCard hover={false}>
-          <MotionCardHeader>
-            <MotionCardTitle className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Bell className="h-4 w-4 text-primary" />
-              </div>
-              Notifications
-            </MotionCardTitle>
-          </MotionCardHeader>
-          <MotionCardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <Label className="text-sm font-medium">Email Notifications</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Receive payment alerts and reminders via email
-                  </p>
-                </div>
-                <Switch
-                  checked={emailNotifications}
-                  onCheckedChange={setEmailNotifications}
-                />
-              </div>
-            </div>
-          </MotionCardContent>
-        </MotionCard>
-      </FadeIn>
-
       {/* Organization Section */}
-      <FadeIn delay={0.4}>
+      <FadeIn delay={0.3}>
         <MotionCard hover={false}>
           <MotionCardHeader>
             <MotionCardTitle className="flex items-center gap-2">
@@ -581,6 +613,100 @@ export default function SettingsPage() {
                 </>
               ) : (
                 'Create Organization'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Change Password Dialog */}
+      <Dialog open={showPasswordDialog} onOpenChange={(open) => {
+        setShowPasswordDialog(open);
+        if (!open) { setCurrentPw(''); setNewPw(''); setConfirmPw(''); }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{user?.hasPassword ? 'Change Password' : 'Set Password'}</DialogTitle>
+            <DialogDescription>
+              {user?.hasPassword
+                ? 'Enter your current password and choose a new one.'
+                : 'Set a password so you can sign in with email and password.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            {user?.hasPassword && (
+              <div className="space-y-2">
+                <Label htmlFor="currentPw">Current Password</Label>
+                <div className="relative">
+                  <Input
+                    id="currentPw"
+                    type={showCurrentPw ? 'text' : 'password'}
+                    value={currentPw}
+                    onChange={(e) => setCurrentPw(e.target.value)}
+                    placeholder="Enter current password"
+                    className="bg-secondary/30 border-border/50 pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentPw(!showCurrentPw)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showCurrentPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="newPw">New Password</Label>
+              <div className="relative">
+                <Input
+                  id="newPw"
+                  type={showNewPw ? 'text' : 'password'}
+                  value={newPw}
+                  onChange={(e) => setNewPw(e.target.value)}
+                  placeholder="At least 8 characters"
+                  className="bg-secondary/30 border-border/50 pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPw(!showNewPw)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showNewPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Must contain uppercase, lowercase, and a number
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirmPw">Confirm New Password</Label>
+              <Input
+                id="confirmPw"
+                type="password"
+                value={confirmPw}
+                onChange={(e) => setConfirmPw(e.target.value)}
+                placeholder="Repeat new password"
+                className="bg-secondary/30 border-border/50"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPasswordDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleChangePassword}
+              disabled={changePassword.isPending || !newPw || !confirmPw || (user?.hasPassword && !currentPw)}
+              className="bg-gradient-to-r from-primary to-blue-400"
+            >
+              {changePassword.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                user?.hasPassword ? 'Change Password' : 'Set Password'
               )}
             </Button>
           </DialogFooter>

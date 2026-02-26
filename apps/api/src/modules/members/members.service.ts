@@ -1,7 +1,9 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { MembershipRole, MembershipStatus } from '@prisma/client';
+import { randomBytes } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
-import { AuditService } from '../audit/audit.service';
+import { AuditService, type BatchContext } from '../audit/audit.service';
+import { EmailService } from '../auth/email.service';
 
 interface CreateMemberDto {
   email?: string;
@@ -28,6 +30,7 @@ export class MembersService {
   constructor(
     private prisma: PrismaService,
     private auditService: AuditService,
+    private emailService: EmailService,
   ) {}
 
   private async getMemberBalances(orgId: string): Promise<
@@ -100,6 +103,7 @@ export class MembersService {
       this.getMemberBalances(orgId),
     ]);
 
+    const now = new Date();
     const membersWithBalance = members.map((m) => {
       const balance = balanceMap.get(m.id) || { totalChargedCents: 0, totalPaidCents: 0, overdueCharges: 0 };
       const balanceCents = balance.totalChargedCents - balance.totalPaidCents;
@@ -118,6 +122,9 @@ export class MembersService {
         totalChargedCents: balance.totalChargedCents,
         totalPaidCents: balance.totalPaidCents,
         overdueCharges: balance.overdueCharges,
+        invitedEmail: m.invitedEmail,
+        inviteExpiresAt: m.inviteExpiresAt,
+        inviteExpired: m.status === 'INVITED' && m.inviteExpiresAt ? m.inviteExpiresAt < now : false,
       };
     });
 
@@ -236,16 +243,28 @@ export class MembersService {
     };
   }
 
-  async createMany(orgId: string, members: CreateMemberDto[], actorId?: string) {
+  async createMany(orgId: string, members: CreateMemberDto[], actorId?: string, actorName?: string) {
     const created = [];
+    const isPrivilegedRole = (role?: MembershipRole) => role === 'ADMIN' || role === 'TREASURER';
+
+    // Get org name for invitation emails
+    const org = await this.prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { name: true },
+    });
 
     for (const dto of members) {
       const trimmedName = dto.name.trim();
       let userId: string | null = null;
 
-      // Check for duplicate name in org (active members only)
+      // Enforce email for admin/treasurer roles
+      if (isPrivilegedRole(dto.role) && !dto.email) {
+        throw new BadRequestException('Email is required when adding an admin or treasurer');
+      }
+
+      // Check for duplicate name in org (active/invited members only)
       const nameMatch = await this.prisma.membership.findFirst({
-        where: { orgId, name: trimmedName, status: 'ACTIVE' },
+        where: { orgId, name: trimmedName, status: { in: ['ACTIVE', 'INVITED'] } },
       });
       if (nameMatch) {
         throw new ConflictException(`A member named "${trimmedName}" already exists`);
@@ -275,7 +294,28 @@ export class MembersService {
         });
 
         if (existing) {
-          // Reactivate if inactive
+          // If already INVITED, reset expiry and resend email
+          if (existing.status === 'INVITED') {
+            const inviteToken = randomBytes(24).toString('hex');
+            const updated = await this.prisma.membership.update({
+              where: { id: existing.id },
+              data: {
+                role: dto.role || existing.role,
+                name: trimmedName || existing.name,
+                inviteExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                inviteToken,
+              },
+            });
+            await this.emailService.sendAdminInvitation(
+              normalizedEmail,
+              org?.name || 'your organization',
+              actorName || 'An admin',
+              inviteToken,
+            );
+            created.push(updated);
+            continue;
+          }
+          // Reactivate if inactive/left
           if (existing.status !== 'ACTIVE') {
             const updated = await this.prisma.membership.update({
               where: { id: existing.id },
@@ -291,9 +331,37 @@ export class MembersService {
           }
           throw new ConflictException(`A member with email "${normalizedEmail}" already exists`);
         }
+
+        // Determine if we should create as INVITED
+        // Admin/Treasurer roles where the user hasn't registered (no password) → invitation
+        if (isPrivilegedRole(dto.role) && !user.passwordHash) {
+          const inviteToken = randomBytes(24).toString('hex');
+          const membership = await this.prisma.membership.create({
+            data: {
+              orgId,
+              userId,
+              name: trimmedName,
+              role: dto.role!,
+              status: 'INVITED',
+              invitedEmail: normalizedEmail,
+              inviteExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+              inviteToken,
+            },
+          });
+
+          await this.emailService.sendAdminInvitation(
+            normalizedEmail,
+            org?.name || 'your organization',
+            actorName || 'An admin',
+            inviteToken,
+          );
+
+          created.push(membership);
+          continue;
+        }
       }
 
-      // Create membership
+      // Create membership (direct add — ACTIVE)
       const membership = await this.prisma.membership.create({
         data: {
           orgId,
@@ -318,6 +386,43 @@ export class MembersService {
     return created;
   }
 
+  async resendInvitation(orgId: string, membershipId: string, actorName?: string) {
+    const membership = await this.prisma.membership.findFirst({
+      where: { id: membershipId, orgId, status: 'INVITED' },
+    });
+
+    if (!membership) {
+      throw new NotFoundException('Invited membership not found');
+    }
+
+    if (!membership.invitedEmail) {
+      throw new BadRequestException('No invitation email on record');
+    }
+
+    const org = await this.prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { name: true },
+    });
+
+    const inviteToken = randomBytes(24).toString('hex');
+    await this.prisma.membership.update({
+      where: { id: membershipId },
+      data: {
+        inviteExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        inviteToken,
+      },
+    });
+
+    await this.emailService.sendAdminInvitation(
+      membership.invitedEmail,
+      org?.name || 'your organization',
+      actorName || 'An admin',
+      inviteToken,
+    );
+
+    return { success: true };
+  }
+
   private async assertNotLastAdmin(orgId: string, membershipId: string) {
     const member = await this.prisma.membership.findFirst({
       where: { id: membershipId, orgId },
@@ -339,6 +444,11 @@ export class MembersService {
 
     if (!member) {
       throw new NotFoundException('Member not found');
+    }
+
+    // Guard: prevent self-demotion
+    if (actorId === membershipId && dto.role && dto.role !== member.role) {
+      throw new BadRequestException('You cannot change your own role');
     }
 
     // Guard: prevent demoting or removing the last admin
@@ -390,7 +500,7 @@ export class MembersService {
     return updated;
   }
 
-  async remove(orgId: string, membershipId: string, actorId?: string) {
+  async remove(orgId: string, membershipId: string, actorId?: string, batch?: BatchContext) {
     // Prevent self-deletion
     if (actorId && actorId === membershipId) {
       throw new BadRequestException('You cannot remove yourself');
@@ -422,10 +532,30 @@ export class MembersService {
       await this.auditService.logDelete(orgId, actorId, 'MEMBER', membershipId, {
         memberName: member.name,
         role: member.role,
-      });
+      }, batch);
     }
 
     return { success: true };
+  }
+
+  async bulkRemove(orgId: string, memberIds: string[], actorId: string) {
+    if (memberIds.length === 0) return { success: true, deletedCount: 0 };
+
+    const batch = memberIds.length > 1
+      ? this.auditService.createBatchContext(`Removed ${memberIds.length} members`)
+      : undefined;
+
+    let deletedCount = 0;
+    for (const memberId of memberIds) {
+      try {
+        await this.remove(orgId, memberId, actorId, batch);
+        deletedCount++;
+      } catch {
+        // Skip not-found or protected members
+      }
+    }
+
+    return { success: true, deletedCount };
   }
 
   async restore(orgId: string, membershipId: string, actorId?: string) {

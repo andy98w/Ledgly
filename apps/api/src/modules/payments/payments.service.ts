@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ChargesService } from '../charges/charges.service';
 import { AuditService } from '../audit/audit.service';
+import { sanitizeText } from '../../common/utils/sanitize';
 
 interface CreatePaymentDto {
   membershipId?: string;
@@ -210,6 +211,9 @@ export class PaymentsService {
   }
 
   async create(orgId: string, createdById: string, dto: CreatePaymentDto) {
+    dto.rawPayerName = sanitizeText(dto.rawPayerName) ?? undefined;
+    dto.memo = sanitizeText(dto.memo) ?? undefined;
+
     const paidAtDate = new Date(dto.paidAt + 'T12:00:00');
     const startOfDay = new Date(paidAtDate);
     startOfDay.setHours(0, 0, 0, 0);
@@ -376,6 +380,9 @@ export class PaymentsService {
   }
 
   async update(orgId: string, paymentId: string, dto: UpdatePaymentDto, actorId?: string) {
+    if (dto.rawPayerName !== undefined) dto.rawPayerName = sanitizeText(dto.rawPayerName) ?? undefined;
+    if (dto.memo !== undefined) dto.memo = sanitizeText(dto.memo) ?? undefined;
+
     const payment = await this.prisma.payment.findFirst({
       where: { id: paymentId, orgId, deletedAt: null },
       include: {

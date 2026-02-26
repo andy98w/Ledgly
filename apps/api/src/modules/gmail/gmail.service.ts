@@ -1,5 +1,6 @@
 import { Injectable, Logger, UnauthorizedException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { google, gmail_v1, Auth } from 'googleapis';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EmailParserService } from './email-parser.service';
@@ -7,6 +8,7 @@ import { PaymentMatcherService } from './payment-matcher.service';
 import { ExpenseMatcherService } from './expense-matcher.service';
 import { ChargesService } from '../charges/charges.service';
 import { AuditService } from '../audit/audit.service';
+import { sanitizeText } from '../../common/utils/sanitize';
 
 function formatSourceName(source: string): string {
   const map: Record<string, string> = {
@@ -60,14 +62,44 @@ export class GmailService {
     );
   }
 
-  getAuthUrl(orgId: string): string {
+  private signState(payload: { orgId: string; returnTo?: string | null }): string {
+    const data = JSON.stringify(payload);
+    const secret = this.configService.get<string>('JWT_SECRET', '');
+    const sig = createHmac('sha256', secret).update(data).digest('hex');
+    return `${Buffer.from(data).toString('base64')}.${sig}`;
+  }
+
+  parseAndVerifyState(stateParam: string): { orgId: string; returnTo: string | null } {
+    const secret = this.configService.get<string>('JWT_SECRET', '');
+    const dotIdx = stateParam.lastIndexOf('.');
+    if (dotIdx === -1) throw new BadRequestException('Invalid OAuth state');
+
+    const dataB64 = stateParam.slice(0, dotIdx);
+    const sig = stateParam.slice(dotIdx + 1);
+
+    const data = Buffer.from(dataB64, 'base64').toString('utf-8');
+    const expectedSig = createHmac('sha256', secret).update(data).digest('hex');
+
+    if (
+      sig.length !== expectedSig.length ||
+      !timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(expectedSig, 'hex'))
+    ) {
+      throw new BadRequestException('Invalid OAuth state signature');
+    }
+
+    const parsed = JSON.parse(data);
+    return { orgId: parsed.orgId, returnTo: parsed.returnTo || null };
+  }
+
+  getAuthUrl(params: { orgId: string; returnTo?: string | null }): string {
     const scopes = ['https://www.googleapis.com/auth/gmail.readonly'];
+    const state = this.signState(params);
 
     return this.oauth2Client.generateAuthUrl({
       access_type: 'offline',
       scope: scopes,
       prompt: 'consent',
-      state: orgId,
+      state,
     });
   }
 
@@ -91,8 +123,16 @@ export class GmailService {
       throw new UnauthorizedException('Failed to get email from Google');
     }
 
+    // Check if this Gmail is already connected to another org
+    const existing = await this.prisma.gmailConnection.findFirst({
+      where: { email, orgId: { not: orgId } },
+    });
+    if (existing) {
+      throw new BadRequestException('This Gmail account is already connected to another organization.');
+    }
+
     // Store the connection
-    await this.prisma.gmailConnection.upsert({
+    const connection = await this.prisma.gmailConnection.upsert({
       where: { orgId },
       update: {
         email,
@@ -110,6 +150,15 @@ export class GmailService {
       },
     });
 
+    // Audit log for Gmail connect (best-effort, no authenticated user in OAuth redirect)
+    const adminMembership = await this.prisma.membership.findFirst({
+      where: { orgId, role: { in: ['ADMIN', 'TREASURER'] }, status: 'ACTIVE' },
+      select: { id: true },
+    });
+    await this.auditService.logCreate(orgId, adminMembership?.id, 'GMAIL_CONNECTION', connection.id, {
+      email,
+    }).catch(() => {});
+
     return { email };
   }
 
@@ -119,10 +168,21 @@ export class GmailService {
     });
   }
 
-  async disconnect(orgId: string) {
+  async disconnect(orgId: string, actorId?: string) {
+    const connection = await this.prisma.gmailConnection.findUnique({
+      where: { orgId },
+      select: { id: true, email: true },
+    });
+
     await this.prisma.gmailConnection.delete({
       where: { orgId },
     });
+
+    if (connection) {
+      await this.auditService.logDelete(orgId, actorId, 'GMAIL_CONNECTION', connection.id, {
+        email: connection.email,
+      }).catch(() => {});
+    }
   }
 
   async syncEmails(orgId: string): Promise<{
@@ -139,20 +199,24 @@ export class GmailService {
       throw new Error('No active Gmail connection');
     }
 
-    // Fetch org auto-approve settings
+    // Fetch org auto-approve settings and enabled payment sources
     const org = await this.prisma.organization.findUnique({
       where: { id: orgId },
-      select: { autoApprovePayments: true, autoApproveExpenses: true },
+      select: { autoApprovePayments: true, autoApproveExpenses: true, enabledPaymentSources: true },
     });
 
     const autoApprovePayments = org?.autoApprovePayments ?? true;
     const autoApproveExpenses = org?.autoApproveExpenses ?? true;
+    const enabledSources = org?.enabledPaymentSources ?? ['venmo', 'zelle', 'cashapp', 'paypal'];
 
     // Refresh token if needed
     const gmail = await this.getGmailClient(connection);
 
-    // Search for payment emails
-    const query = this.buildSearchQuery();
+    // Search for payment emails filtered by enabled sources
+    const query = this.buildSearchQuery(enabledSources);
+    if (!query) {
+      return { imported: 0, skipped: 0, autoConfirmed: 0, needsReview: 0 };
+    }
     const messages = await this.listMessages(gmail, query);
 
     let imported = 0;
@@ -225,19 +289,19 @@ export class GmailService {
     return google.gmail({ version: 'v1', auth: this.oauth2Client });
   }
 
-  private buildSearchQuery(): string {
-    // Search for payment notification emails from last 30 days
-    // Only filter by sender - let the parser determine if it's a valid payment
-    const senders = [
-      'from:venmo.com',
-      'from:venmo@venmo.com',
-      'from:zelle',
-      'from:zellepay',
-      'from:cash.app',
-      'from:square.com',
-      'from:paypal.com',
-      'from:service@paypal.com',
-    ];
+  private buildSearchQuery(enabledSources: string[]): string {
+    const sourceMap: Record<string, string[]> = {
+      venmo: ['from:venmo.com', 'from:venmo@venmo.com'],
+      zelle: ['from:zelle', 'from:zellepay'],
+      cashapp: ['from:cash.app', 'from:square.com'],
+      paypal: ['from:paypal.com', 'from:service@paypal.com'],
+    };
+
+    const senders = enabledSources.flatMap((source) => sourceMap[source] || []);
+
+    if (senders.length === 0) {
+      return '';
+    }
 
     const senderQuery = `(${senders.join(' OR ')})`;
 
@@ -314,6 +378,10 @@ export class GmailService {
       // Not a payment email we can parse
       return 'skipped';
     }
+
+    // Sanitize user-derived fields before any DB writes
+    parsed.payerName = sanitizeText(parsed.payerName);
+    parsed.memo = sanitizeText(parsed.memo);
 
     // Handle OUTGOING payments as expenses
     if (parsed.direction === 'outgoing') {

@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback, memo } from 'react';
 import Link from 'next/link';
-import { Plus, CreditCard, AlertCircle, TrendingUp, Wallet, Search, MoreHorizontal, Pencil, Trash2, Loader2, ChevronLeft, ChevronRight, ChevronDown, Link2, Check, Users, Info, Circle, CheckCircle2, X } from 'lucide-react';
+import { Plus, CreditCard, AlertCircle, TrendingUp, Wallet, Search, MoreHorizontal, Pencil, Trash2, Loader2, ChevronLeft, ChevronRight, ChevronDown, Link2, Check, Users, Circle, CheckCircle2, X } from 'lucide-react';
 import { useAutoAllocateToCharge, useRemoveAllocation, useBulkAutoAllocate } from '@/lib/queries/payments';
 import { cn } from '@/lib/utils';
 import { groupCharges } from '@/lib/utils/charge-grouping';
@@ -44,7 +44,9 @@ import { Money } from '@/components/ui/money';
 import { AvatarGradient } from '@/components/ui/avatar-gradient';
 import { StatCard } from '@/components/ui/stat-card';
 import { MotionCard, MotionCardContent } from '@/components/ui/motion-card';
-import { FadeIn, StaggerChildren, StaggerItem } from '@/components/ui/page-transition';
+import { FadeIn } from '@/components/ui/page-transition';
+import { AnimatedList } from '@/components/ui/animated-list';
+import { PageHeader } from '@/components/ui/page-header';
 import {
   Tooltip,
   TooltipContent,
@@ -84,10 +86,9 @@ const PaymentCard = memo(function PaymentCard({
   const hasUnallocated = payment.unallocatedCents > 0;
 
   return (
-    <StaggerItem>
-      <MotionCard>
-        <MotionCardContent className="p-4">
-          <div className="flex items-start gap-4">
+    <MotionCard>
+      <MotionCardContent className="p-4">
+        <div className="flex items-start gap-4">
             {isAdmin && onToggleSelect && (
               <button
                 onClick={(e) => {
@@ -205,7 +206,6 @@ const PaymentCard = memo(function PaymentCard({
           )}
         </MotionCardContent>
       </MotionCard>
-    </StaggerItem>
   );
 });
 
@@ -969,29 +969,18 @@ export default function PaymentsPage() {
     <div data-tour="payments-list" className="space-y-8">
       {/* Header */}
       <FadeIn>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-bold tracking-tight">Payments</h1>
-            <TooltipProvider delayDuration={0}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button className="text-muted-foreground hover:text-foreground transition-colors">
-                    <Info className="w-4 h-4" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="right" className="max-w-xs">
-                  <p className="text-sm">View and manage payments. Allocate payments to charges or create new charges from unallocated payments. Use selection checkboxes for bulk actions.</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-          <Button asChild className="bg-gradient-to-r from-primary to-blue-400 hover:opacity-90 transition-opacity">
-            <Link href="/payments/new">
-              <Plus className="w-4 h-4 mr-2" />
-              Record Payment
-            </Link>
-          </Button>
-        </div>
+        <PageHeader
+          title="Payments"
+          helpText="View and manage payments. Allocate payments to charges or create new charges from unallocated payments. Use selection checkboxes for bulk actions."
+          actions={isAdmin && (
+            <Button asChild className="bg-gradient-to-r from-primary to-blue-400 hover:opacity-90 transition-opacity">
+              <Link href="/payments/new">
+                <Plus className="w-4 h-4 mr-2" />
+                Record Payment
+              </Link>
+            </Button>
+          )}
+        />
       </FadeIn>
 
       {/* Stats Grid */}
@@ -1002,6 +991,7 @@ export default function PaymentsPage() {
           description="Payments received"
           icon={CreditCard}
           delay={0}
+          color="amber"
         />
         <StatCard
           title="Total Received"
@@ -1010,6 +1000,7 @@ export default function PaymentsPage() {
           description="All time received"
           icon={TrendingUp}
           delay={0.1}
+          color="emerald"
         />
         <StatCard
           title="Unallocated"
@@ -1018,6 +1009,7 @@ export default function PaymentsPage() {
           description={totalUnallocated > 0 ? 'Needs attention' : 'All allocated'}
           icon={Wallet}
           delay={0.2}
+          color="rose"
         />
       </div>
 
@@ -1112,7 +1104,7 @@ export default function PaymentsPage() {
                 ? 'Try adjusting your search'
                 : 'Record your first payment to start tracking'}
             </p>
-            {!searchQuery && (
+            {!searchQuery && isAdmin && (
               <Button asChild className="bg-gradient-to-r from-primary to-blue-400">
                 <Link href="/payments/new">Record your first payment</Link>
               </Button>
@@ -1165,10 +1157,12 @@ export default function PaymentsPage() {
                 </div>
               </div>
             )}
-            <StaggerChildren className="space-y-3">
-              {paginatedPayments.map((payment) => (
+            <AnimatedList
+              items={paginatedPayments}
+              getKey={(p) => p.id}
+              className="space-y-3"
+              renderItem={(payment) => (
                 <PaymentCard
-                  key={payment.id}
                   payment={payment}
                   onEdit={handleEdit}
                   onDelete={handleDelete}
@@ -1179,8 +1173,8 @@ export default function PaymentsPage() {
                   isDuplicate={duplicatePaymentIds.has(payment.id)}
                   onToggleSelect={() => togglePaymentSelection(payment.id)}
                 />
-              ))}
-            </StaggerChildren>
+              )}
+            />
           </div>
 
           {/* Pagination Controls - Bottom */}

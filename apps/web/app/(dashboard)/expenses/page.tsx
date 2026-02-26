@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback, memo } from 'react';
 
-import { Plus, Receipt, TrendingDown, Trash2, MoreHorizontal, Loader2, Search, ChevronLeft, ChevronRight, Pencil, Info, Circle, CheckCircle2 } from 'lucide-react';
+import { Plus, Receipt, TrendingDown, Trash2, MoreHorizontal, Loader2, Search, ChevronLeft, ChevronRight, Pencil, Circle, CheckCircle2 } from 'lucide-react';
 import { useExpenses, useExpenseSummary, useDeleteExpense, useCreateExpense, useUpdateExpense, useRestoreExpense, useBulkDeleteExpenses } from '@/lib/queries/expenses';
 
 /** Strip "VENMO payment to " etc. prefixes from Gmail-imported expense titles */
@@ -44,13 +44,9 @@ import { Input } from '@/components/ui/input';
 import { Money } from '@/components/ui/money';
 import { StatCard } from '@/components/ui/stat-card';
 import { MotionCard, MotionCardContent } from '@/components/ui/motion-card';
-import { FadeIn, StaggerChildren, StaggerItem } from '@/components/ui/page-transition';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { FadeIn } from '@/components/ui/page-transition';
+import { AnimatedList } from '@/components/ui/animated-list';
+import { PageHeader } from '@/components/ui/page-header';
 
 const categoryColors: Record<string, string> = {
   EVENT: 'bg-purple-500/10 text-purple-400 border-purple-500/30',
@@ -78,11 +74,10 @@ const ExpenseCard = memo(function ExpenseCard({
   onToggleSelect?: () => void;
 }) {
   return (
-    <StaggerItem>
-      <MotionCard>
-        <MotionCardContent className="p-4">
-          <div className="flex items-center justify-between">
-            {isAdmin && onToggleSelect && (
+    <MotionCard>
+      <MotionCardContent className="p-4">
+        <div className="flex items-center justify-between">
+          {isAdmin && onToggleSelect && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -159,7 +154,6 @@ const ExpenseCard = memo(function ExpenseCard({
           </div>
         </MotionCardContent>
       </MotionCard>
-    </StaggerItem>
   );
 });
 
@@ -543,30 +537,19 @@ export default function ExpensesPage() {
     <div className="space-y-8" data-tour="expenses-list">
       {/* Header */}
       <FadeIn>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-bold tracking-tight">Expenses</h1>
-            <TooltipProvider delayDuration={0}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button className="text-muted-foreground hover:text-foreground transition-colors">
-                    <Info className="w-4 h-4" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="right" className="max-w-xs">
-                  <p className="text-sm">Track organization spending by category. Expenses are automatically imported from outgoing Venmo/Zelle payments.</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-          <Button
-            onClick={() => setShowCreateDialog(true)}
-            className="bg-gradient-to-r from-primary to-blue-400 hover:opacity-90 transition-opacity"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Add Expense
-          </Button>
-        </div>
+        <PageHeader
+          title="Expenses"
+          helpText="Track organization spending by category. Expenses are automatically imported from outgoing Venmo/Zelle payments."
+          actions={isAdmin && (
+            <Button
+              onClick={() => setShowCreateDialog(true)}
+              className="bg-gradient-to-r from-primary to-blue-400 hover:opacity-90 transition-opacity"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Expense
+            </Button>
+          )}
+        />
       </FadeIn>
 
       {/* Stats */}
@@ -578,6 +561,7 @@ export default function ExpensesPage() {
           description={`${summary?.count || 0} expenses`}
           icon={TrendingDown}
           delay={0}
+          color="rose"
         />
         <StatCard
           title="Largest Category"
@@ -596,6 +580,7 @@ export default function ExpensesPage() {
           }
           icon={Receipt}
           delay={0.1}
+          color="amber"
         />
         <StatCard
           title="This Month"
@@ -604,6 +589,7 @@ export default function ExpensesPage() {
           description="Current period"
           icon={Receipt}
           delay={0.2}
+          color="violet"
         />
       </div>
 
@@ -692,19 +678,21 @@ export default function ExpensesPage() {
       ) : expenses.length === 0 ? (
         <FadeIn delay={0.3}>
           <div className="rounded-xl border border-border/50 bg-card/50 py-16 text-center animate-in-scale">
-            <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
-              <Receipt className="h-8 w-8 text-muted-foreground" />
+            <div className="w-16 h-16 rounded-2xl bg-rose-500/10 flex items-center justify-center mx-auto mb-4">
+              <Receipt className="h-8 w-8 text-rose-500" />
             </div>
             <h3 className="text-lg font-semibold mb-2">No expenses found</h3>
             <p className="text-muted-foreground mb-6">
               Start tracking your organization&apos;s spending
             </p>
-            <Button
-              onClick={() => setShowCreateDialog(true)}
-              className="bg-gradient-to-r from-primary to-blue-400"
-            >
-              Add your first expense
-            </Button>
+            {isAdmin && (
+              <Button
+                onClick={() => setShowCreateDialog(true)}
+                className="bg-gradient-to-r from-primary to-blue-400"
+              >
+                Add your first expense
+              </Button>
+            )}
           </div>
         </FadeIn>
       ) : (
@@ -739,10 +727,12 @@ export default function ExpensesPage() {
                 </button>
               </div>
             )}
-            <StaggerChildren className="space-y-3">
-              {paginatedExpenses.map((expense) => (
+            <AnimatedList
+              items={paginatedExpenses}
+              getKey={(e) => e.id}
+              className="space-y-3"
+              renderItem={(expense) => (
                 <ExpenseCard
-                  key={expense.id}
                   expense={expense}
                   onEdit={handleEdit}
                   onDelete={handleDelete}
@@ -750,8 +740,8 @@ export default function ExpensesPage() {
                   isSelected={selectedExpenses.has(expense.id)}
                   onToggleSelect={() => toggleExpenseSelection(expense.id)}
                 />
-              ))}
-            </StaggerChildren>
+              )}
+            />
           </div>
 
           {/* Pagination Controls - Bottom */}
