@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ChargesService } from '../charges/charges.service';
 import { AuditService } from '../audit/audit.service';
 import { sanitizeText } from '../../common/utils/sanitize';
+import { deriveCategoryFromMemo } from '../../common/utils/category-matcher';
 
 interface CreatePaymentDto {
   membershipId?: string;
@@ -739,8 +740,16 @@ export class PaymentsService {
 
       if (remainingCents <= 0) return { allocated: false as const, reason: 'Fully allocated' };
 
+      // Derive category from memo to filter charges when possible
+      const derivedCategory = payment.memo ? deriveCategoryFromMemo(payment.memo) : null;
+
       const charges = await tx.charge.findMany({
-        where: { orgId, membershipId: finalMembershipId, status: { in: ['OPEN', 'PARTIALLY_PAID'] } },
+        where: {
+          orgId,
+          membershipId: finalMembershipId,
+          status: { in: ['OPEN', 'PARTIALLY_PAID'] },
+          ...(derivedCategory ? { category: derivedCategory } : {}),
+        },
         include: { allocations: { select: { amountCents: true } } },
         orderBy: { createdAt: 'asc' },
       });

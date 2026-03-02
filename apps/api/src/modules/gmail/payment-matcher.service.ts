@@ -1,11 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ChargeCategory } from '@prisma/client';
+import { deriveCategoryFromMemo } from '../../common/utils/category-matcher';
 
 export interface MatchResult {
   membershipId: string | null;
   confidence: number; // 0.0 to 1.0
   needsReview: boolean;
+  shouldAutoAllocate: boolean; // >= 0.9 + category match + charges found
   reviewReason: string | null;
   derivedCategory: ChargeCategory | null;
   suggestedChargeIds: string[];
@@ -69,9 +71,9 @@ export class PaymentMatcherService {
     }
 
     // Derive category from memo
-    const derivedCategory = memo ? this.deriveCategoryFromMemo(memo) : null;
+    const derivedCategory = memo ? deriveCategoryFromMemo(memo) : null;
 
-    // Find matching charges if we have a member
+    // Find matching charges if we have a member (category-strict)
     let suggestedChargeIds: string[] = [];
     if (bestMatch) {
       suggestedChargeIds = await this.findMatchingCharges(
@@ -92,15 +94,21 @@ export class PaymentMatcherService {
     } else if (bestMatch.confidence < 0.8) {
       needsReview = true;
       reviewReason = `Low confidence match (${Math.round(bestMatch.confidence * 100)}%)`;
-    } else if (suggestedChargeIds.length === 0) {
-      // We have a member but no matching charges - still auto-confirm but don't allocate
-      // This is fine, the payment will be unallocated
     }
+
+    // Auto-allocate requires: high confidence (>= 0.9) + category derived + matching charges found
+    const shouldAutoAllocate =
+      !needsReview &&
+      bestMatch !== null &&
+      bestMatch.confidence >= 0.9 &&
+      derivedCategory !== null &&
+      suggestedChargeIds.length > 0;
 
     return {
       membershipId: bestMatch?.membershipId || null,
       confidence: bestMatch?.confidence || 0,
       needsReview,
+      shouldAutoAllocate,
       reviewReason,
       derivedCategory,
       suggestedChargeIds,
@@ -222,84 +230,21 @@ export class PaymentMatcherService {
     return dp[m][n];
   }
 
-  deriveCategoryFromMemo(memo: string): ChargeCategory | null {
-    const lowerMemo = memo.toLowerCase();
-
-    // Dues patterns
-    const duesPatterns = [
-      /dues/i,
-      /membership/i,
-      /monthly\s*fee/i,
-      /annual\s*fee/i,
-      /semester/i,
-      /quarter(?:ly)?/i,
-      /spring|fall|winter|summer/i,
-    ];
-    if (duesPatterns.some((p) => p.test(lowerMemo))) {
-      return 'DUES';
-    }
-
-    // Event patterns
-    const eventPatterns = [
-      /event/i,
-      /party/i,
-      /formal/i,
-      /ticket/i,
-      /concert/i,
-      /trip/i,
-      /retreat/i,
-      /mixer/i,
-      /social/i,
-      /rush/i,
-      /date\s*night/i,
-      /tailgate/i,
-    ];
-    if (eventPatterns.some((p) => p.test(lowerMemo))) {
-      return 'EVENT';
-    }
-
-    // Fine patterns
-    const finePatterns = [
-      /fine/i,
-      /penalty/i,
-      /late\s*fee/i,
-      /missed/i,
-      /absence/i,
-    ];
-    if (finePatterns.some((p) => p.test(lowerMemo))) {
-      return 'FINE';
-    }
-
-    // Merch patterns
-    const merchPatterns = [
-      /merch/i,
-      /shirt/i,
-      /apparel/i,
-      /clothing/i,
-      /hoodie/i,
-      /hat/i,
-      /gear/i,
-      /swag/i,
-      /jersey/i,
-    ];
-    if (merchPatterns.some((p) => p.test(lowerMemo))) {
-      return 'MERCH';
-    }
-
-    return null;
-  }
-
   private async findMatchingCharges(
     orgId: string,
     membershipId: string,
     category: ChargeCategory | null,
     amountCents: number,
   ): Promise<string[]> {
-    // Find open charges for this member
+    // If no category derived, don't guess — return empty
+    if (!category) return [];
+
+    // Find open charges for this member matching the derived category
     const charges = await this.prisma.charge.findMany({
       where: {
         orgId,
         membershipId,
+        category,
         status: { in: ['OPEN', 'PARTIALLY_PAID'] },
       },
       include: {
@@ -324,14 +269,8 @@ export class PaymentMatcherService {
 
       if (balanceDue <= 0) continue;
 
-      // Prefer charges matching the derived category
-      if (category && charge.category === category) {
-        matchingCharges.unshift(charge.id); // Add to front
-        remainingAmount -= Math.min(remainingAmount, balanceDue);
-      } else {
-        matchingCharges.push(charge.id);
-        remainingAmount -= Math.min(remainingAmount, balanceDue);
-      }
+      matchingCharges.push(charge.id);
+      remainingAmount -= Math.min(remainingAmount, balanceDue);
     }
 
     return matchingCharges;

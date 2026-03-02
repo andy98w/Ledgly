@@ -675,9 +675,9 @@ export class GmailService {
           },
         });
 
-        // Auto-allocate to matching charges
+        // Auto-allocate to matching charges (only when confidence >= 0.9 + category match)
         const txAllocatedChargeIds: string[] = [];
-        if (matchResult.suggestedChargeIds.length > 0) {
+        if (matchResult.shouldAutoAllocate && matchResult.suggestedChargeIds.length > 0) {
           let remainingAmount = parsed.amount!;
 
           for (const chargeId of matchResult.suggestedChargeIds) {
