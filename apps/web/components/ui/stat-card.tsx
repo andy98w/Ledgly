@@ -5,23 +5,13 @@ import { cn } from '@/lib/utils';
 import { Money } from './money';
 import { useAnimatedValue } from '@/hooks/use-animated-value';
 
-type StatCardColor = 'primary' | 'amber' | 'emerald' | 'violet' | 'rose';
-
-const colorMap: Record<StatCardColor, { iconBg: string; iconText: string; gradient: string; hoverBorder: string }> = {
-  primary: { iconBg: 'bg-primary/10', iconText: 'text-primary', gradient: 'from-primary/5', hoverBorder: 'hover:border-primary/30' },
-  amber: { iconBg: 'bg-amber-500/10', iconText: 'text-amber-500', gradient: 'from-amber-500/5', hoverBorder: 'hover:border-amber-500/30' },
-  emerald: { iconBg: 'bg-emerald-500/10', iconText: 'text-emerald-500', gradient: 'from-emerald-500/5', hoverBorder: 'hover:border-emerald-500/30' },
-  violet: { iconBg: 'bg-violet-500/10', iconText: 'text-violet-500', gradient: 'from-violet-500/5', hoverBorder: 'hover:border-violet-500/30' },
-  rose: { iconBg: 'bg-rose-500/10', iconText: 'text-rose-500', gradient: 'from-rose-500/5', hoverBorder: 'hover:border-rose-500/30' },
-};
-
 interface StatCardProps {
   title: string;
   value: number | string;
   isMoney?: boolean;
   description?: string;
   icon?: LucideIcon;
-  color?: StatCardColor;
+  color?: string;
   trend?: 'up' | 'down' | 'neutral';
   delay?: number;
   className?: string;
@@ -59,30 +49,26 @@ export function StatCard({
   isMoney = false,
   description,
   icon: Icon,
-  color = 'primary',
+  color,
   trend,
   delay = 0,
   className,
 }: StatCardProps) {
-  const colors = colorMap[color];
   return (
     <div
       className={cn(
-        'relative overflow-hidden rounded-xl border bg-card p-5 animate-in-up shadow-layered-sm',
-        `${colors.hoverBorder} hover:shadow-layered-md transition-all duration-200`,
+        'relative overflow-hidden rounded-xl bg-card p-5 animate-in-up shadow-layered-sm',
+        'hover:shadow-layered-md transition-all duration-200',
         className,
       )}
       style={delay ? { animationDelay: `${delay}s` } : undefined}
     >
-      {/* Subtle gradient overlay */}
-      <div className={`absolute inset-0 bg-gradient-to-br ${colors.gradient} to-transparent pointer-events-none`} />
-
       <div className="relative">
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-medium text-muted-foreground">{title}</p>
           {Icon && (
-            <div className={`p-2 rounded-lg ${colors.iconBg}`}>
-              <Icon className={`h-4 w-4 ${colors.iconText}`} />
+            <div className="p-2 rounded-lg bg-secondary">
+              <Icon className="h-4 w-4 text-muted-foreground" />
             </div>
           )}
         </div>

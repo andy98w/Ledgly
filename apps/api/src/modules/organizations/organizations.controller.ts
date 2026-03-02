@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { IsString, IsBoolean, IsOptional } from 'class-validator';
+import { IsString, IsBoolean, IsOptional, IsArray } from 'class-validator';
 import { OrganizationsService } from './organizations.service';
 import { CurrentUser, CurrentUserData, Roles } from '../../common/decorators';
 import { RolesGuard } from '../../common/guards';
@@ -30,6 +30,11 @@ class UpdateOrganizationDto {
   @IsBoolean()
   @IsOptional()
   autoApproveExpenses?: boolean;
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  enabledPaymentSources?: string[];
 }
 
 @Controller('organizations')

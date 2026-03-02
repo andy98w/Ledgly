@@ -14,8 +14,8 @@ const MotionCard = React.forwardRef<HTMLDivElement, MotionCardProps>(
       <div
         ref={ref}
         className={cn(
-          'rounded-xl border bg-card text-card-foreground shadow-sm animate-in-up',
-          hover && 'transition-all duration-200 hover:shadow-layered-md hover:border-primary/20 hover:-translate-y-0.5',
+          'rounded-xl bg-card text-card-foreground shadow-layered-sm animate-in-up',
+          hover && 'transition-all duration-200 hover:shadow-layered-md hover:-translate-y-0.5',
           className,
         )}
         style={delay ? { animationDelay: `${delay}s`, ...style } : style}
@@ -34,7 +34,7 @@ const MotionCardHeader = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn('flex flex-col space-y-1.5 p-5', className)}
+    className={cn('flex flex-col space-y-1.5 p-6', className)}
     {...props}
   />
 ));
@@ -68,7 +68,7 @@ const MotionCardContent = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn('p-5 pt-0', className)} {...props} />
+  <div ref={ref} className={cn('p-6 pt-0', className)} {...props} />
 ));
 MotionCardContent.displayName = 'MotionCardContent';
 

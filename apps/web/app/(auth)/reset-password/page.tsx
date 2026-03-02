@@ -52,7 +52,7 @@ function ResetPasswordContent() {
           Your password has been reset successfully. You can now sign in with your new password.
         </p>
         <Button
-          className="w-full bg-gradient-to-r from-primary to-blue-400 hover:opacity-90"
+          className="w-full hover:opacity-90"
           onClick={() => router.push('/login')}
         >
           Sign In
@@ -153,7 +153,7 @@ function ResetPasswordContent() {
 
         <Button
           type="submit"
-          className="w-full h-12 bg-gradient-to-r from-primary to-blue-400 hover:opacity-90 transition-opacity font-medium"
+          className="w-full h-12 hover:opacity-90 transition-opacity font-medium"
           disabled={resetPassword.isPending || !password || !confirmPassword}
         >
           {resetPassword.isPending ? (

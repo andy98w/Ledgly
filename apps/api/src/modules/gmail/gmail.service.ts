@@ -159,6 +159,11 @@ export class GmailService {
       email,
     }).catch(() => {});
 
+    // Auto-sync after connecting (fire-and-forget so redirect isn't blocked)
+    this.syncEmails(orgId).catch((err) => {
+      this.logger.warn(`Auto-sync after Gmail connect failed for org ${orgId}: ${err.message}`);
+    });
+
     return { email };
   }
 
@@ -219,6 +224,9 @@ export class GmailService {
     }
     const messages = await this.listMessages(gmail, query);
 
+    // Create a shared batch context for all auto-imports in this sync
+    const syncBatch = this.auditService.createBatchContext('Gmail auto-import');
+
     let imported = 0;
     let skipped = 0;
 
@@ -226,7 +234,7 @@ export class GmailService {
     const limit = createConcurrencyLimiter(5);
     const results = await Promise.allSettled(
       messages.map((message) =>
-        limit(() => this.processMessage(gmail, connection, message.id!, { autoApprovePayments, autoApproveExpenses })),
+        limit(() => this.processMessage(gmail, connection, message.id!, { autoApprovePayments, autoApproveExpenses }, syncBatch)),
       ),
     );
 
@@ -257,6 +265,14 @@ export class GmailService {
 
     const autoConfirmed = recentImports.filter(i => i.status === 'AUTO_CONFIRMED').length;
     const needsReview = recentImports.filter(i => i.status === 'PENDING').length;
+
+    // Update batch description with actual count
+    if (autoConfirmed > 0) {
+      await this.prisma.auditLog.updateMany({
+        where: { orgId, batchId: syncBatch.batchId },
+        data: { batchDescription: `Gmail auto-import: ${autoConfirmed} item${autoConfirmed !== 1 ? 's' : ''}` },
+      }).catch(() => {});
+    }
 
     return { imported, skipped, autoConfirmed, needsReview };
   }
@@ -339,6 +355,7 @@ export class GmailService {
     connection: { id: string; orgId: string },
     messageId: string,
     flags: { autoApprovePayments: boolean; autoApproveExpenses: boolean },
+    syncBatch?: import('../audit/audit.service').BatchContext,
   ): Promise<'imported' | 'skipped'> {
     // Check if already processed
     const existing = await this.prisma.emailImport.findUnique({
@@ -385,11 +402,11 @@ export class GmailService {
 
     // Handle OUTGOING payments as expenses
     if (parsed.direction === 'outgoing') {
-      return this.processOutgoingPayment(connection, messageId, message, from, subject, emailDate, parsed, flags.autoApproveExpenses);
+      return this.processOutgoingPayment(connection, messageId, message, from, subject, emailDate, parsed, flags.autoApproveExpenses, syncBatch);
     }
 
     // Handle INCOMING payments (existing logic)
-    return this.processIncomingPayment(connection, messageId, message, from, subject, emailDate, parsed, flags.autoApprovePayments);
+    return this.processIncomingPayment(connection, messageId, message, from, subject, emailDate, parsed, flags.autoApprovePayments, syncBatch);
   }
 
   private async processOutgoingPayment(
@@ -409,6 +426,7 @@ export class GmailService {
       transactionId: string | null;
     },
     autoApproveExpenses: boolean,
+    syncBatch?: import('../audit/audit.service').BatchContext,
   ): Promise<'imported' | 'skipped'> {
     if (!parsed.amount) {
       return 'skipped';
@@ -534,12 +552,12 @@ export class GmailService {
       },
     });
 
-    // Audit log for auto-created expense
+    // Audit log for auto-created expense (grouped in sync batch)
     await this.auditService.logCreate(connection.orgId, adminMembership?.id, 'EXPENSE', expense.id, {
       amountCents: expense.amountCents,
       title: expense.title,
-      source: 'auto_confirm',
-    }).catch(() => {});
+      source: 'gmail_auto_import',
+    }, syncBatch).catch(() => {});
 
     this.logger.log(
       `Auto-created expense of ${parsed.amount} cents to ${parsed.payerName} from ${parsed.source}`,
@@ -565,6 +583,7 @@ export class GmailService {
       transactionId: string | null;
     },
     autoApprovePayments: boolean,
+    syncBatch?: import('../audit/audit.service').BatchContext,
   ): Promise<'imported' | 'skipped'> {
     // If auto-approve payments is disabled, always send to inbox for review
     if (!autoApprovePayments) {
@@ -749,8 +768,8 @@ export class GmailService {
           amountCents: parsed.amount,
           paidAt: emailDate,
           rawPayerName: parsed.payerName,
-          source: 'auto_confirm',
-        }).catch(() => {});
+          source: 'gmail_auto_import',
+        }, syncBatch).catch(() => {});
       }
 
       this.logger.log(

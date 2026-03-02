@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowRight, Loader2, Mail, ArrowLeft, Building2 } from 'lucide-react';
+import { ArrowRight, Loader2, Mail, ArrowLeft, Building2, Eye, EyeOff } from 'lucide-react';
 import { useLogin, useSendMagicLink, useForgotPassword } from '@/lib/queries/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,6 +23,7 @@ export default function LoginPage() {
   const [view, setView] = useState<LoginView>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -84,7 +85,7 @@ export default function LoginPage() {
   if (view === 'forgot-password-sent') {
     return (
       <div className="text-center animate-in-up">
-        <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-primary to-blue-400 flex items-center justify-center shadow-lg">
+        <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-primary flex items-center justify-center shadow-lg">
           <Mail className="w-10 h-10 text-primary-foreground" />
         </div>
         <h1 className="text-2xl font-bold mb-2">Check your email</h1>
@@ -107,7 +108,7 @@ export default function LoginPage() {
   if (view === 'forgot-org-sent') {
     return (
       <div className="text-center animate-in-up">
-        <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-primary to-blue-400 flex items-center justify-center shadow-lg">
+        <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-primary flex items-center justify-center shadow-lg">
           <Mail className="w-10 h-10 text-primary-foreground" />
         </div>
         <h1 className="text-2xl font-bold mb-2">Check your email</h1>
@@ -158,7 +159,7 @@ export default function LoginPage() {
           </div>
           <Button
             type="submit"
-            className="w-full h-12 bg-gradient-to-r from-primary to-blue-400 hover:opacity-90 transition-opacity font-medium"
+            className="w-full h-12 hover:opacity-90 transition-opacity font-medium"
             disabled={forgotPassword.isPending}
           >
             {forgotPassword.isPending ? (
@@ -208,7 +209,7 @@ export default function LoginPage() {
           </div>
           <Button
             type="submit"
-            className="w-full h-12 bg-gradient-to-r from-primary to-blue-400 hover:opacity-90 transition-opacity font-medium"
+            className="w-full h-12 hover:opacity-90 transition-opacity font-medium"
             disabled={sendMagicLink.isPending}
           >
             {sendMagicLink.isPending ? (
@@ -273,21 +274,31 @@ export default function LoginPage() {
               Forgot password?
             </button>
           </div>
-          <Input
-            id="password"
-            type="password"
-            placeholder="Enter your password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="h-12 bg-secondary/50 border-border/50 focus:border-primary"
-            required
-          />
+          <div className="relative">
+            <Input
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              placeholder="Enter your password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="h-12 bg-secondary/50 border-border/50 focus:border-primary pr-10"
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              tabIndex={-1}
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
 
         <Button
           type="submit"
-          className="w-full h-12 bg-gradient-to-r from-primary to-blue-400 hover:opacity-90 transition-opacity font-medium"
+          className="w-full h-12 hover:opacity-90 transition-opacity font-medium"
           disabled={login.isPending}
         >
           {login.isPending ? (

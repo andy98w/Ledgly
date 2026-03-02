@@ -155,6 +155,31 @@ export function useBulkVoidCharges() {
   });
 }
 
+export function useBulkCreateCharges() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      orgId,
+      charges,
+    }: {
+      orgId: string;
+      charges: Array<{
+        membershipId: string;
+        category: string;
+        title: string;
+        amountCents: number;
+        dueDate?: string;
+      }>;
+    }) => api.post<any[]>(`/organizations/${orgId}/charges/bulk-create`, { charges }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.charges.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all(variables.orgId) });
+    },
+  });
+}
+
 export function useRestoreCharge() {
   const queryClient = useQueryClient();
 

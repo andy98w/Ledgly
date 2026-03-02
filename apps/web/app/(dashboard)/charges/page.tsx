@@ -1,13 +1,14 @@
 'use client';
 
 import { useCallback, useMemo, useEffect, useState } from 'react';
-import { Plus, Receipt, TrendingUp, Percent, Search, ChevronRight, ChevronLeft, Trash2, Circle, CheckCircle2 } from 'lucide-react';
+import Link from 'next/link';
+import { Plus, Receipt, TrendingUp, Percent, Search, Trash2, Circle, CheckCircle2 } from 'lucide-react';
 import { useCharges, useUpdateCharge, useVoidCharge, useRestoreCharge, useCreateCharge, useBulkVoidCharges } from '@/lib/queries/charges';
 import { useMembers, useCreateMembers } from '@/lib/queries/members';
 import { usePayments, useAutoAllocateToCharge, useRemoveAllocation, useAllocatePayment } from '@/lib/queries/payments';
 import { useAuthStore } from '@/lib/stores/auth';
 import { cn, formatCents, parseCents } from '@/lib/utils';
-import type { ChargeCategory } from '@ledgly/shared';
+import { CHARGE_CATEGORY_LABELS, type ChargeCategory } from '@ledgly/shared';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,6 +24,7 @@ import { FadeIn } from '@/components/ui/page-transition';
 import { AnimatedList } from '@/components/ui/animated-list';
 import { PageHeader } from '@/components/ui/page-header';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { ToastUndoButton } from '@/components/ui/toast-undo-button';
 
 
 import { groupCharges, type ChargeGroup } from '@/lib/utils/charge-grouping';
@@ -34,8 +36,13 @@ import { ChargeGroupEditDialog } from '@/components/charges/charge-group-edit-di
 import { ChargeGroupDeleteDialog } from '@/components/charges/charge-group-delete-dialog';
 import { ChargeCreateDialog } from '@/components/charges/charge-create-dialog';
 import { ChargeAllocatePaymentDialog } from '@/components/charges/charge-allocate-payment-dialog';
+import { Pagination } from '@/components/ui/pagination';
+import { EmptyState } from '@/components/ui/empty-state';
 import { useChargeFilters } from '@/hooks/use-charge-filters';
 import { useBulkSelection } from '@/hooks/use-bulk-selection';
+import { BatchActionsBar } from '@/components/ui/batch-actions-bar';
+import { ExportDropdown } from '@/components/export-dropdown';
+import { exportCSV, exportPDF } from '@/lib/export';
 
 
 export default function ChargesPage() {
@@ -142,7 +149,7 @@ export default function ChargesPage() {
           toast({
             title: 'Charge updated',
             action: undoData ? (
-              <button
+              <ToastUndoButton
                 onClick={() => {
                   const redoData = { title: editingCharge.title, amountCents: editingCharge.amountCents, dueDate: editingCharge.dueDate || null };
                   updateCharge.mutate(
@@ -151,25 +158,20 @@ export default function ChargesPage() {
                       onSuccess: () => toast({
                         title: 'Change reverted',
                         action: (
-                          <button
+                          <ToastUndoButton
                             onClick={() => updateCharge.mutate(
                               { orgId: currentOrgId!, chargeId, data: redoData },
                               { onSuccess: () => toast({ title: 'Charge updated' }) },
                             )}
-                            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-                          >
-                            Redo
-                          </button>
+                            label="Redo"
+                          />
                         ),
                       }),
                       onError: () => toast({ title: 'Failed to undo', variant: 'destructive' }),
                     },
                   );
                 }}
-                className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-              >
-                Undo
-              </button>
+              />
             ) : undefined,
           });
           setEditingCharge(null);
@@ -189,7 +191,7 @@ export default function ChargesPage() {
           toast({
             title: 'Charge deleted',
             description: 'You can undo this action.',
-            action: <button onClick={() => handleRestoreCharge(chargeId)} className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors">Undo</button>,
+            action: <ToastUndoButton onClick={() => handleRestoreCharge(chargeId)} />,
           });
           setDeletingCharge(null);
         },
@@ -206,15 +208,13 @@ export default function ChargesPage() {
         onSuccess: () => toast({
           title: 'Charge restored',
           action: (
-            <button
+            <ToastUndoButton
               onClick={() => voidCharge.mutate(
                 { orgId: currentOrgId!, chargeId },
                 { onSuccess: () => toast({ title: 'Charge deleted' }) },
               )}
-              className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-            >
-              Redo
-            </button>
+              label="Redo"
+            />
           ),
         }),
         onError: (error: any) => { toast({ title: 'Error restoring charge', description: error.message || 'Please try again', variant: 'destructive' }); },
@@ -231,19 +231,50 @@ export default function ChargesPage() {
     });
   }, []);
 
-  const handleSaveGroupEdit = async () => {
+  const handleSaveGroupEdit = async (addedMemberIds: string[] = [], removedMemberIds: string[] = []) => {
     if (!editingGroup || !currentOrgId) return;
     try {
+      // Update existing charges
       await Promise.all(
-        editingGroup.charges.map((charge) =>
-          updateCharge.mutateAsync({
-            orgId: currentOrgId,
-            chargeId: charge.id,
-            data: { title: groupEditData.title, amountCents: groupEditData.amountCents, dueDate: groupEditData.dueDate || null },
-          }),
-        ),
+        editingGroup.charges
+          .filter((c) => !removedMemberIds.includes(c.membershipId))
+          .map((charge) =>
+            updateCharge.mutateAsync({
+              orgId: currentOrgId,
+              chargeId: charge.id,
+              data: { title: groupEditData.title, amountCents: groupEditData.amountCents, dueDate: groupEditData.dueDate || null },
+            }),
+          ),
       );
-      toast({ title: `Updated ${editingGroup.memberCount} charges successfully` });
+
+      // Void charges for removed members
+      if (removedMemberIds.length > 0) {
+        const chargesToVoid = editingGroup.charges.filter((c) => removedMemberIds.includes(c.membershipId));
+        await Promise.all(
+          chargesToVoid.map((c) => voidCharge.mutateAsync({ orgId: currentOrgId, chargeId: c.id })),
+        );
+      }
+
+      // Create charges for added members
+      if (addedMemberIds.length > 0) {
+        await createCharge.mutateAsync({
+          orgId: currentOrgId,
+          data: {
+            membershipIds: addedMemberIds,
+            category: editingGroup.category as any,
+            title: groupEditData.title,
+            amountCents: groupEditData.amountCents,
+            dueDate: groupEditData.dueDate ? new Date(groupEditData.dueDate).toISOString() : undefined,
+          },
+        });
+      }
+
+      const parts: string[] = [];
+      const updatedCount = editingGroup.charges.length - removedMemberIds.length;
+      if (updatedCount > 0) parts.push(`Updated ${updatedCount}`);
+      if (addedMemberIds.length > 0) parts.push(`added ${addedMemberIds.length}`);
+      if (removedMemberIds.length > 0) parts.push(`removed ${removedMemberIds.length}`);
+      toast({ title: `${parts.join(', ')} charge${updatedCount + addedMemberIds.length !== 1 ? 's' : ''}` });
       setEditingGroup(null);
     } catch (error: any) {
       toast({ title: 'Error updating charges', description: error.message || 'Please try again', variant: 'destructive' });
@@ -275,7 +306,7 @@ export default function ChargesPage() {
       toast({
         title: `Deleted ${deletedCount} charge${deletedCount !== 1 ? 's' : ''}`,
         action: (
-          <button
+          <ToastUndoButton
             onClick={async () => {
               let restoredCount = 0;
               for (const chargeId of chargeIds) {
@@ -284,22 +315,17 @@ export default function ChargesPage() {
               toast({
                 title: `Restored ${restoredCount} charge${restoredCount !== 1 ? 's' : ''}`,
                 action: (
-                  <button
+                  <ToastUndoButton
                     onClick={async () => {
                       const redoResult = await bulkVoidCharges.mutateAsync({ orgId: currentOrgId, chargeIds });
                       toast({ title: `Deleted ${redoResult.voidedCount} charge${redoResult.voidedCount !== 1 ? 's' : ''}` });
                     }}
-                    className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-                  >
-                    Redo
-                  </button>
+                    label="Redo"
+                  />
                 ),
               });
             }}
-            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-          >
-            Undo
-          </button>
+          />
         ),
       });
     } catch {
@@ -316,7 +342,7 @@ export default function ChargesPage() {
           toast({
             title: 'Allocation removed',
             action: (
-              <button
+              <ToastUndoButton
                 onClick={() => {
                   allocatePayment.mutate(
                     { orgId: currentOrgId!, paymentId: allocation.paymentId, allocations: [{ chargeId, amountCents: allocation.amountCents }] },
@@ -326,15 +352,13 @@ export default function ChargesPage() {
                         toast({
                           title: 'Allocation restored',
                           action: newAllocId ? (
-                            <button
+                            <ToastUndoButton
                               onClick={() => removeAllocation.mutate(
                                 { orgId: currentOrgId!, allocationId: newAllocId },
                                 { onSuccess: () => toast({ title: 'Allocation removed' }) },
                               )}
-                              className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-                            >
-                              Redo
-                            </button>
+                              label="Redo"
+                            />
                           ) : undefined,
                         });
                       },
@@ -342,10 +366,7 @@ export default function ChargesPage() {
                     },
                   );
                 }}
-                className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-              >
-                Undo
-              </button>
+              />
             ),
           });
         },
@@ -364,31 +385,26 @@ export default function ChargesPage() {
           toast({
             title: 'Payment allocated',
             action: allocationId ? (
-              <button
+              <ToastUndoButton
                 onClick={() => removeAllocation.mutate(
                   { orgId: currentOrgId!, allocationId },
                   {
                     onSuccess: () => toast({
                       title: 'Allocation removed',
                       action: (
-                        <button
+                        <ToastUndoButton
                           onClick={() => allocatePayment.mutate(
                             { orgId: currentOrgId!, paymentId, allocations: [{ chargeId, amountCents }] },
                             { onSuccess: () => toast({ title: 'Payment allocated' }) },
                           )}
-                          className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-                        >
-                          Redo
-                        </button>
+                          label="Redo"
+                        />
                       ),
                     }),
                     onError: () => toast({ title: 'Failed to undo', variant: 'destructive' }),
                   },
                 )}
-                className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-              >
-                Undo
-              </button>
+              />
             ) : undefined,
           });
           setAllocatingCharge(null);
@@ -456,6 +472,21 @@ export default function ChargesPage() {
     }
   };
 
+  const handleExportCharges = (format: 'csv' | 'pdf') => {
+    const headers = ['Member', 'Category', 'Title', 'Amount', 'Status', 'Due Date'];
+    const rows = filteredCharges.map((c: any) => [
+      c.membership?.name || c.membership?.user?.name || '',
+      CHARGE_CATEGORY_LABELS[c.category as ChargeCategory] || c.category,
+      c.title,
+      `$${(c.amountCents / 100).toFixed(2)}`,
+      c.status,
+      c.dueDate ? new Date(c.dueDate).toLocaleDateString() : '',
+    ]);
+    const filename = `charges-${new Date().toISOString().split('T')[0]}`;
+    if (format === 'csv') exportCSV(headers, rows, filename);
+    else exportPDF('Charges', headers, rows, filename);
+  };
+
   return (
     <TooltipProvider delayDuration={0}>
     <div data-tour="charges-list" className="space-y-8">
@@ -464,15 +495,24 @@ export default function ChargesPage() {
         <PageHeader
           title="Charges"
           helpText="Create charges for dues, events, fines, or other fees. Assign to one or multiple members and track payment status. Use selection checkboxes for bulk actions."
-          actions={isAdmin && (
-            <Button
-              onClick={() => setShowCreateDialog(true)}
-              className="bg-gradient-to-r from-primary to-blue-400 hover:opacity-90 transition-opacity"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Create Charge
-            </Button>
-          )}
+          actions={
+            <div className="flex items-center gap-2">
+              <ExportDropdown
+                onExportCSV={() => handleExportCharges('csv')}
+                onExportPDF={() => handleExportCharges('pdf')}
+              />
+              {isAdmin && (
+                <Button
+                  size="sm"
+                  onClick={() => setShowCreateDialog(true)}
+                  className="hover:opacity-90 transition-opacity"
+                >
+                  <Plus className="w-4 h-4 mr-1.5" />
+                  Create Charge
+                </Button>
+              )}
+            </div>
+          }
         />
       </FadeIn>
 
@@ -540,15 +580,7 @@ export default function ChargesPage() {
               </Select>
               <span className="text-sm text-muted-foreground">per page</span>
             </div>
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="text-sm text-muted-foreground min-w-[80px] text-center">{page} / {totalPages || 1}</span>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
           </div>
         </FadeIn>
       )}
@@ -562,16 +594,17 @@ export default function ChargesPage() {
         </div>
       ) : filteredCharges.length === 0 ? (
         <FadeIn delay={0.3}>
-          <div className="rounded-xl border border-border/50 bg-card/50 py-16 text-center animate-in-scale">
-            <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-              <Receipt className="h-8 w-8 text-primary" />
-            </div>
-            <h3 className="text-lg font-semibold mb-2">{searchQuery ? 'No charges found' : 'No charges yet'}</h3>
-            <p className="text-muted-foreground mb-6">{searchQuery ? 'Try adjusting your search' : 'Create your first charge to start collecting'}</p>
-            {!searchQuery && isAdmin && (
-              <Button onClick={() => setShowCreateDialog(true)} className="bg-gradient-to-r from-primary to-blue-400">Create your first charge</Button>
+          <EmptyState
+            icon={Receipt}
+            title="No charges yet"
+            description="Create your first charge to start tracking dues"
+            action={isAdmin && (
+              <Button asChild>
+                <Link href="/charges/new">Create your first charge</Link>
+              </Button>
             )}
-          </div>
+            className="rounded-xl border border-border/50 bg-card/50"
+          />
         </FadeIn>
       ) : (
         <>
@@ -611,15 +644,7 @@ export default function ChargesPage() {
 
           {/* Pagination Bottom */}
           {groupedCharges.length > pageSize && (
-            <div className="flex items-center justify-center gap-2 pt-4">
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="text-sm text-muted-foreground min-w-[80px] text-center">{page} / {totalPages}</span>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} className="justify-center pt-4" />
           )}
         </>
       )}
@@ -627,10 +652,26 @@ export default function ChargesPage() {
       {/* Dialogs */}
       <ChargeEditDialog charge={editingCharge} onChange={setEditingCharge} onSave={handleSaveEdit} isPending={updateCharge.isPending} />
       <ChargeDeleteDialog charge={deletingCharge} onClose={() => setDeletingCharge(null)} onConfirm={handleConfirmDelete} isPending={voidCharge.isPending} />
-      <ChargeGroupEditDialog group={editingGroup} editData={groupEditData} onEditDataChange={setGroupEditData} onClose={() => setEditingGroup(null)} onSave={handleSaveGroupEdit} isPending={updateCharge.isPending} />
+      <ChargeGroupEditDialog
+        group={editingGroup}
+        editData={groupEditData}
+        onEditDataChange={setGroupEditData}
+        onClose={() => setEditingGroup(null)}
+        onSave={handleSaveGroupEdit}
+        isPending={updateCharge.isPending || voidCharge.isPending || createCharge.isPending}
+        members={members.map((m: any) => ({ id: m.id, displayName: m.displayName || m.name || 'Unknown' }))}
+        currentMemberIds={editingGroup?.charges.map((c: any) => c.membershipId) || []}
+      />
       <ChargeGroupDeleteDialog group={deletingGroup} onClose={() => setDeletingGroup(null)} onConfirm={handleConfirmDeleteGroup} isPending={voidCharge.isPending} />
       <ChargeCreateDialog open={showCreateDialog} onClose={() => setShowCreateDialog(false)} onCreate={handleCreateCharge} members={members} loadingMembers={loadingMembers} isPending={createCharge.isPending} onAddMember={handleAddMember} isAddingMember={createMembers.isPending} />
       <ChargeAllocatePaymentDialog charge={allocatingCharge} payments={paymentsData?.data || []} onClose={() => setAllocatingCharge(null)} onAllocate={handleAllocatePaymentToCharge} isPending={allocatePayment.isPending} />
+
+      <BatchActionsBar selectedCount={selectedCharges.size} onClear={clearSelection}>
+        <Button variant="destructive" size="sm" onClick={handleBulkDeleteCharges} className="h-8">
+          <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+          Void
+        </Button>
+      </BatchActionsBar>
     </div>
     </TooltipProvider>
   );

@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { IsString, IsArray, IsEnum, IsNumber, IsOptional, IsInt, Min, Max } from 'class-validator';
+import { IsString, IsArray, IsEnum, IsNumber, IsOptional, IsInt, Min, Max, ValidateNested, ArrayMinSize } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ChargeCategory, ChargeStatus } from '@prisma/client';
 import { ChargesService } from './charges.service';
 import { Roles } from '../../common/decorators';
@@ -47,6 +48,34 @@ class UpdateChargeDto {
   status?: ChargeStatus;
 }
 
+class BulkCreateChargeItemDto {
+  @IsString()
+  membershipId: string;
+
+  @IsEnum(ChargeCategory)
+  category: ChargeCategory;
+
+  @IsString()
+  title: string;
+
+  @IsInt()
+  @Min(1)
+  @Max(99_999_999)
+  amountCents: number;
+
+  @IsString()
+  @IsOptional()
+  dueDate?: string;
+}
+
+class BulkCreateChargeDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => BulkCreateChargeItemDto)
+  charges: BulkCreateChargeItemDto[];
+}
+
 class ChargeFiltersDto {
   @IsOptional()
   status?: ChargeStatus;
@@ -86,6 +115,13 @@ export class ChargesController {
       limit: query.limit ? parseInt(query.limit, 10) : 50,
       cursor: query.cursor,
     });
+  }
+
+  @Post('bulk-create')
+  @Roles('ADMIN', 'TREASURER')
+  async bulkCreate(@Param('orgId') orgId: string, @Body() dto: BulkCreateChargeDto, @Req() req: any) {
+    const membershipId = req.membership.id;
+    return this.chargesService.bulkCreate(orgId, membershipId, dto.charges);
   }
 
   @Get(':id')

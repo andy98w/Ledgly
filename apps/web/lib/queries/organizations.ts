@@ -75,14 +75,21 @@ export function useUpdateOrganization(orgId: string | null) {
 
 export function useDeleteOrganization() {
   const queryClient = useQueryClient();
-  const setCurrentOrgId = useAuthStore((s) => s.setCurrentOrgId);
 
   return useMutation({
     mutationFn: (orgId: string) => api.delete(`/organizations/${orgId}`),
-    onSuccess: () => {
+    onSuccess: (_data, deletedOrgId) => {
       queryClient.invalidateQueries({ queryKey: ['organizations'] });
       queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
-      setCurrentOrgId(null);
+
+      const { user, setUser, setCurrentOrgId } = useAuthStore.getState();
+      if (user) {
+        const remaining = user.memberships.filter((m) => m.orgId !== deletedOrgId);
+        setUser({ ...user, memberships: remaining });
+        setCurrentOrgId(remaining.length > 0 ? remaining[0].orgId : null);
+      } else {
+        setCurrentOrgId(null);
+      }
     },
   });
 }

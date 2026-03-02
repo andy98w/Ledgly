@@ -10,6 +10,7 @@ import { useAuthStore } from '@/lib/stores/auth';
 import { parseCents } from '@/lib/utils';
 import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_LABELS } from '@ledgly/shared';
 import { Button } from '@/components/ui/button';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -23,6 +24,8 @@ import {
 import { useToast } from '@/components/ui/use-toast';
 import { MotionCard, MotionCardContent, MotionCardHeader, MotionCardTitle } from '@/components/ui/motion-card';
 import { FadeIn } from '@/components/ui/page-transition';
+import { ToastUndoButton } from '@/components/ui/toast-undo-button';
+import { Breadcrumb } from '@/components/ui/breadcrumb';
 
 const schema = z.object({
   category: z.enum(EXPENSE_CATEGORIES),
@@ -79,31 +82,26 @@ export default function NewExpensePage() {
       toast({
         title: 'Expense created',
         action: createdId ? (
-          <button
+          <ToastUndoButton
             onClick={() => deleteExpense.mutate(
               { orgId: currentOrgId!, expenseId: createdId },
               {
                 onSuccess: () => toast({
                   title: 'Expense deleted',
                   action: (
-                    <button
+                    <ToastUndoButton
                       onClick={() => restoreExpense.mutate(
                         { orgId: currentOrgId!, expenseId: createdId },
                         { onSuccess: () => toast({ title: 'Expense restored' }) },
                       )}
-                      className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-                    >
-                      Redo
-                    </button>
+                      label="Redo"
+                    />
                   ),
                 }),
                 onError: () => toast({ title: 'Failed to undo', variant: 'destructive' }),
               },
             )}
-            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-          >
-            Undo
-          </button>
+          />
         ) : undefined,
       });
       router.push('/expenses');
@@ -118,6 +116,9 @@ export default function NewExpensePage() {
 
   return (
     <div className="space-y-8">
+      {/* Breadcrumb */}
+      <Breadcrumb items={[{ label: 'Expenses', href: '/expenses' }, { label: 'New Expense' }]} />
+
       {/* Header */}
       <FadeIn>
         <div className="flex items-center gap-4">
@@ -203,11 +204,10 @@ export default function NewExpensePage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="date" className="text-sm font-medium">Date</Label>
-                  <Input
-                    id="date"
-                    type="date"
-                    className="h-11 bg-secondary/30 border-border/50 focus:border-primary"
-                    {...register('date')}
+                  <DatePicker
+                    value={watch('date')}
+                    onChange={(date) => setValue('date', date)}
+                    className="h-11"
                   />
                   {errors.date && (
                     <p className="text-sm text-destructive">{errors.date.message}</p>
@@ -250,7 +250,7 @@ export default function NewExpensePage() {
             <Button
               type="submit"
               disabled={createExpense.isPending}
-              className="bg-gradient-to-r from-primary to-blue-400 hover:opacity-90 transition-opacity"
+              className="hover:opacity-90 transition-opacity"
             >
               {createExpense.isPending ? 'Creating...' : 'Add Expense'}
             </Button>

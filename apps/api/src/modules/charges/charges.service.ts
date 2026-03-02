@@ -359,6 +359,11 @@ export class ChargesService {
       }
     }
 
+    // Recalculate status when amount changes (allocated may now cover more/less)
+    if (dto.amountCents !== undefined && dto.amountCents !== charge.amountCents) {
+      await this.updateChargeStatus(chargeId, actorId);
+    }
+
     return updated;
   }
 
@@ -372,6 +377,11 @@ export class ChargesService {
 
     if (!charge) {
       throw new NotFoundException('Charge not found');
+    }
+
+    // Already voided — idempotent
+    if (charge.status === 'VOID') {
+      return { success: true };
     }
 
     // Delete allocations and void the charge
@@ -437,6 +447,72 @@ export class ChargesService {
     );
 
     return { success: true, voidedCount: charges.length };
+  }
+
+  async bulkCreate(
+    orgId: string,
+    createdById: string,
+    charges: Array<{ membershipId: string; category: ChargeCategory; title: string; amountCents: number; dueDate?: string | null }>,
+  ) {
+    if (charges.length === 0) return [];
+
+    // Validate all membership IDs belong to this org
+    const membershipIds = charges.map((c) => c.membershipId);
+    const memberships = await this.prisma.membership.findMany({
+      where: { id: { in: membershipIds }, orgId, status: 'ACTIVE' },
+      include: { user: { select: { name: true, email: true } } },
+    });
+
+    const validIds = new Set(memberships.map((m) => m.id));
+    const invalidIds = membershipIds.filter((id) => !validIds.has(id));
+    if (invalidIds.length > 0) {
+      throw new BadRequestException('Some member IDs are invalid');
+    }
+
+    const memberNameMap = new Map(
+      memberships.map((m) => [m.id, m.name || m.user?.name || m.user?.email || 'Unknown']),
+    );
+
+    // Create each charge
+    const createdCharges = await Promise.all(
+      charges.map((spec) => {
+        let parsedDueDate: Date | null = null;
+        if (spec.dueDate) {
+          const dateValue = new Date(spec.dueDate + 'T12:00:00');
+          if (!isNaN(dateValue.getTime())) parsedDueDate = dateValue;
+        }
+        return this.prisma.charge.create({
+          data: {
+            orgId,
+            membershipId: spec.membershipId,
+            category: spec.category,
+            title: spec.title,
+            amountCents: spec.amountCents,
+            dueDate: parsedDueDate,
+            createdById,
+          },
+        });
+      }),
+    );
+
+    // Batch audit log
+    const batch = createdCharges.length > 1
+      ? this.auditService.createBatchContext(`Created ${createdCharges.length} charges from payments`)
+      : undefined;
+
+    await Promise.all(
+      createdCharges.map((charge) =>
+        this.auditService.logCreate(orgId, createdById, 'CHARGE', charge.id, {
+          title: charge.title,
+          amountCents: charge.amountCents,
+          category: charge.category,
+          membershipId: charge.membershipId,
+          memberName: memberNameMap.get(charge.membershipId) || 'Unknown',
+        }, batch),
+      ),
+    );
+
+    return createdCharges;
   }
 
   async restore(orgId: string, chargeId: string, actorId?: string) {

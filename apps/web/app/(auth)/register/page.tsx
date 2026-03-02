@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowRight, Loader2, Mail, AlertCircle } from 'lucide-react';
+import { ArrowRight, Loader2, Mail, AlertCircle, Eye, EyeOff, Check, X } from 'lucide-react';
 import { useRegister, useResolveInvite } from '@/lib/queries/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,6 +28,16 @@ function RegisterForm() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
+  const passwordChecks = useMemo(() => ({
+    length: password.length >= 8,
+    uppercase: /[A-Z]/.test(password),
+    lowercase: /[a-z]/.test(password),
+    number: /[0-9]/.test(password),
+  }), [password]);
+
+  const passwordScore = Object.values(passwordChecks).filter(Boolean).length;
 
   // Set email from resolved invite or legacy param
   useEffect(() => {
@@ -108,9 +118,7 @@ function RegisterForm() {
   return (
     <div className="animate-in-up">
       {/* Logo */}
-      <div className="w-16 h-16 mx-auto mb-8 rounded-2xl bg-gradient-to-br from-primary to-blue-400 flex items-center justify-center shadow-lg">
-        <span className="text-primary-foreground font-bold text-2xl">L</span>
-      </div>
+      <Image src="/logo.png" alt="Ledgly" width={64} height={64} className="mx-auto mb-8 w-16 h-16 rounded-2xl shadow-lg" />
 
       {isInvite && (
         <div className="mb-6 rounded-lg border border-primary/20 bg-primary/5 p-4 flex items-start gap-3">
@@ -166,22 +174,67 @@ function RegisterForm() {
           <Label htmlFor="password" className="text-sm font-medium">
             Password
           </Label>
-          <Input
-            id="password"
-            type="password"
-            placeholder="8+ chars, uppercase, lowercase, number"
-            autoComplete="new-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="h-12 bg-secondary/50 border-border/50 focus:border-primary"
-            required
-            minLength={8}
-          />
+          <div className="relative">
+            <Input
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              placeholder="8+ chars, uppercase, lowercase, number"
+              autoComplete="new-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="h-12 bg-secondary/50 border-border/50 focus:border-primary pr-10"
+              required
+              minLength={8}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              tabIndex={-1}
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+          {password.length > 0 && (
+            <div className="space-y-2 pt-1">
+              <div className="flex gap-1">
+                {[0, 1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className={`h-1.5 flex-1 rounded-full transition-colors ${
+                      i < passwordScore
+                        ? passwordScore <= 1 ? 'bg-destructive' : passwordScore <= 2 ? 'bg-warning' : passwordScore <= 3 ? 'bg-amber-500' : 'bg-success'
+                        : 'bg-muted'
+                    }`}
+                  />
+                ))}
+              </div>
+              <div className="grid grid-cols-2 gap-1">
+                {[
+                  { key: 'length', label: '8+ characters' },
+                  { key: 'uppercase', label: 'Uppercase' },
+                  { key: 'lowercase', label: 'Lowercase' },
+                  { key: 'number', label: 'Number' },
+                ].map(({ key, label }) => (
+                  <div key={key} className="flex items-center gap-1.5 text-xs">
+                    {passwordChecks[key as keyof typeof passwordChecks] ? (
+                      <Check className="h-3 w-3 text-success" />
+                    ) : (
+                      <X className="h-3 w-3 text-muted-foreground" />
+                    )}
+                    <span className={passwordChecks[key as keyof typeof passwordChecks] ? 'text-success' : 'text-muted-foreground'}>
+                      {label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <Button
           type="submit"
-          className="w-full h-12 bg-gradient-to-r from-primary to-blue-400 hover:opacity-90 transition-opacity font-medium"
+          className="w-full h-12 hover:opacity-90 transition-opacity font-medium"
           disabled={register.isPending}
         >
           {register.isPending ? (

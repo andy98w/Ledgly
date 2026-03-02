@@ -102,7 +102,13 @@ export default function SettingsPage() {
         toast({ title: 'Organization deleted' });
         setShowDeleteOrgDialog(false);
         setDeleteConfirmText('');
-        router.push('/');
+        // useDeleteOrganization already updates memberships + currentOrgId
+        const remaining = (user?.memberships ?? []).filter((m) => m.orgId !== currentOrgId);
+        if (remaining.length > 0) {
+          router.push('/dashboard');
+        } else {
+          router.push('/onboarding');
+        }
       },
       onError: (error: any) => {
         toast({
@@ -218,13 +224,12 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="space-y-8 max-w-2xl">
+    <div className="space-y-8 max-w-4xl mx-auto">
       {/* Header */}
       <FadeIn>
         <PageHeader
           title="Settings"
           helpText="Manage your account, appearance, notifications, and organization preferences."
-          icon={<Settings className="h-6 w-6 text-primary-foreground" />}
         />
       </FadeIn>
 
@@ -311,7 +316,7 @@ export default function SettingsPage() {
               </div>
 
               <Button
-                className="bg-gradient-to-r from-primary to-blue-400 hover:opacity-90"
+                className="hover:opacity-90"
                 disabled={!hasChanges || updateProfile.isPending}
                 onClick={handleSave}
               >
@@ -527,6 +532,45 @@ export default function SettingsPage() {
         </FadeIn>
       )}
 
+      {/* Email Preferences */}
+      <FadeIn delay={0.45}>
+        <MotionCard hover={false}>
+          <MotionCardHeader>
+            <MotionCardTitle className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-cyan-500/10">
+                <Mail className="h-4 w-4 text-cyan-500" />
+              </div>
+              Email Notifications
+            </MotionCardTitle>
+          </MotionCardHeader>
+          <MotionCardContent className="space-y-1">
+            <div className="flex items-center justify-between py-2">
+              <div>
+                <p className="text-sm font-medium">Payment Receipts</p>
+                <p className="text-xs text-muted-foreground">Get notified when a payment is received</p>
+              </div>
+              <Switch defaultChecked />
+            </div>
+            <Separator className="opacity-50" />
+            <div className="flex items-center justify-between py-2">
+              <div>
+                <p className="text-sm font-medium">Overdue Reminders</p>
+                <p className="text-xs text-muted-foreground">Get notified when charges become overdue</p>
+              </div>
+              <Switch defaultChecked />
+            </div>
+            <Separator className="opacity-50" />
+            <div className="flex items-center justify-between py-2">
+              <div>
+                <p className="text-sm font-medium">Weekly Summary</p>
+                <p className="text-xs text-muted-foreground">Receive a weekly digest of activity</p>
+              </div>
+              <Switch />
+            </div>
+          </MotionCardContent>
+        </MotionCard>
+      </FadeIn>
+
       {/* Danger Zone */}
       <FadeIn delay={0.5}>
         <MotionCard hover={false} className="border-destructive/30">
@@ -604,7 +648,7 @@ export default function SettingsPage() {
             <Button
               onClick={handleCreateOrg}
               disabled={createOrganization.isPending}
-              className="bg-gradient-to-r from-primary to-blue-400"
+             
             >
               {createOrganization.isPending ? (
                 <>
@@ -698,7 +742,7 @@ export default function SettingsPage() {
             <Button
               onClick={handleChangePassword}
               disabled={changePassword.isPending || !newPw || !confirmPw || (user?.hasPassword && !currentPw)}
-              className="bg-gradient-to-r from-primary to-blue-400"
+             
             >
               {changePassword.isPending ? (
                 <>

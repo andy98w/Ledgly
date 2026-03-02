@@ -344,7 +344,7 @@ export function TourOverlay() {
             <Button
               size="sm"
               onClick={handleNext}
-              className="bg-gradient-to-r from-primary to-blue-400 hover:opacity-90"
+              className="hover:opacity-90"
               disabled={isNavigating}
             >
               {isLastStep ? (

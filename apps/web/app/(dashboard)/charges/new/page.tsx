@@ -14,6 +14,7 @@ import { useAuthStore } from '@/lib/stores/auth';
 import { parseCents } from '@/lib/utils';
 import { CHARGE_CATEGORIES, CHARGE_CATEGORY_LABELS } from '@ledgly/shared';
 import { Button } from '@/components/ui/button';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -29,6 +30,7 @@ import { cn } from '@/lib/utils';
 import { AvatarGradient } from '@/components/ui/avatar-gradient';
 import { MotionCard, MotionCardContent, MotionCardHeader, MotionCardTitle } from '@/components/ui/motion-card';
 import { FadeIn, StaggerChildren, StaggerItem } from '@/components/ui/page-transition';
+import { Breadcrumb } from '@/components/ui/breadcrumb';
 
 const schema = z.object({
   category: z.enum(CHARGE_CATEGORIES),
@@ -168,6 +170,9 @@ export default function NewChargePage() {
 
   return (
     <div className="space-y-8">
+      {/* Breadcrumb */}
+      <Breadcrumb items={[{ label: 'Charges', href: '/charges' }, { label: 'New Charge' }]} />
+
       {/* Header */}
       <FadeIn>
         <div className="flex items-center gap-4">
@@ -180,7 +185,7 @@ export default function NewChargePage() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-blue-400 flex items-center justify-center shadow-lg glow-sm">
+            <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center shadow-lg">
               <Receipt className="h-6 w-6 text-primary-foreground" />
             </div>
             <div>
@@ -254,11 +259,10 @@ export default function NewChargePage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="dueDate" className="text-sm font-medium">Due Date (optional)</Label>
-                  <Input
-                    id="dueDate"
-                    type="date"
-                    className="h-11 bg-secondary/30 border-border/50 focus:border-primary"
-                    {...register('dueDate')}
+                  <DatePicker
+                    value={watch('dueDate')}
+                    onChange={(date) => setValue('dueDate', date)}
+                    className="h-11"
                   />
                 </div>
               </div>
@@ -318,7 +322,7 @@ export default function NewChargePage() {
                       className={cn(
                         'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors',
                         selectAll
-                          ? 'bg-gradient-to-br from-primary to-blue-400 border-transparent'
+                          ? 'bg-primary border-transparent'
                           : 'border-muted-foreground/30',
                       )}
                     >
@@ -350,7 +354,7 @@ export default function NewChargePage() {
                               className={cn(
                                 'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors',
                                 isSelected
-                                  ? 'bg-gradient-to-br from-primary to-blue-400 border-transparent'
+                                  ? 'bg-primary border-transparent'
                                   : 'border-muted-foreground/30',
                               )}
                             >
@@ -391,7 +395,7 @@ export default function NewChargePage() {
             <Button
               type="submit"
               disabled={createCharge.isPending || selectedMembers.size === 0}
-              className="bg-gradient-to-r from-primary to-blue-400 hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+              className="hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {createCharge.isPending ? 'Creating...' : 'Create Charge'}
             </Button>

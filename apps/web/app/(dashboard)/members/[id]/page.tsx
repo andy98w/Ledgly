@@ -15,6 +15,8 @@ import { StatCard } from '@/components/ui/stat-card';
 import { MotionCard, MotionCardContent, MotionCardHeader, MotionCardTitle } from '@/components/ui/motion-card';
 import { FadeIn, StaggerChildren, StaggerItem } from '@/components/ui/page-transition';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Breadcrumb } from '@/components/ui/breadcrumb';
 
 export default function MemberDetailPage() {
   const params = useParams();
@@ -68,6 +70,9 @@ export default function MemberDetailPage() {
 
   return (
     <div className="space-y-8">
+      {/* Breadcrumb */}
+      <Breadcrumb items={[{ label: 'Members', href: '/members' }, { label: member.displayName }]} />
+
       {/* Header */}
       <FadeIn>
         <div className="flex items-center gap-4">
@@ -138,13 +143,11 @@ export default function MemberDetailPage() {
           </MotionCardHeader>
           <MotionCardContent>
             {member.charges?.length === 0 ? (
-              <div className="text-center py-8">
-                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
-                  <Receipt className="h-6 w-6 text-primary" />
-                </div>
-                <p className="text-sm font-medium mb-1">No charges yet</p>
-                <p className="text-xs text-muted-foreground">Charges assigned to this member will appear here</p>
-              </div>
+              <EmptyState
+                icon={Receipt}
+                title="No charges yet"
+                description="Charges assigned to this member will appear here"
+              />
             ) : (
               <StaggerChildren className="space-y-3">
                 {member.charges?.map((charge: any) => (
@@ -208,13 +211,11 @@ export default function MemberDetailPage() {
           </MotionCardHeader>
           <MotionCardContent>
             {member.payments?.length === 0 ? (
-              <div className="text-center py-8">
-                <div className="w-12 h-12 rounded-xl bg-success/10 flex items-center justify-center mx-auto mb-3">
-                  <CreditCard className="h-6 w-6 text-success" />
-                </div>
-                <p className="text-sm font-medium mb-1">No payments yet</p>
-                <p className="text-xs text-muted-foreground">Payments from this member will appear here</p>
-              </div>
+              <EmptyState
+                icon={CreditCard}
+                title="No payments yet"
+                description="Payments from this member will appear here"
+              />
             ) : (
               <StaggerChildren className="space-y-3">
                 {member.payments?.map((payment: any) => (

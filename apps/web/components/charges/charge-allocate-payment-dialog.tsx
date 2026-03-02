@@ -105,7 +105,7 @@ export function ChargeAllocatePaymentDialog({
             </div>
 
             {/* Payment list */}
-            <div className="flex-1 overflow-y-auto min-h-0 scrollbar-none" style={{ maxHeight: '40vh' }}>
+            <div className="flex-1 overflow-y-auto min-h-0 scrollbar-none px-0.5 -mx-0.5" style={{ maxHeight: '40vh' }}>
               <div className="space-y-2 py-1">
                 {unallocatedPayments.length === 0 ? (
                   <div className="text-center py-8">
@@ -169,7 +169,7 @@ export function ChargeAllocatePaymentDialog({
           <Button
             onClick={handleConfirm}
             disabled={isPending || !selectedPaymentId || allocationAmount <= 0}
-            className="bg-gradient-to-r from-primary to-blue-400"
+           
           >
             {isPending ? (
               <>

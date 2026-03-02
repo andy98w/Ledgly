@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback, memo } from 'react';
 
-import { Plus, Receipt, TrendingDown, Trash2, MoreHorizontal, Loader2, Search, ChevronLeft, ChevronRight, Pencil, Circle, CheckCircle2 } from 'lucide-react';
+import { Plus, Receipt, TrendingDown, Trash2, MoreHorizontal, Loader2, Search, Pencil, Circle, CheckCircle2, Upload } from 'lucide-react';
 import { useExpenses, useExpenseSummary, useDeleteExpense, useCreateExpense, useUpdateExpense, useRestoreExpense, useBulkDeleteExpenses } from '@/lib/queries/expenses';
 
 /** Strip "VENMO payment to " etc. prefixes from Gmail-imported expense titles */
@@ -41,12 +41,30 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Money } from '@/components/ui/money';
 import { StatCard } from '@/components/ui/stat-card';
 import { MotionCard, MotionCardContent } from '@/components/ui/motion-card';
 import { FadeIn } from '@/components/ui/page-transition';
 import { AnimatedList } from '@/components/ui/animated-list';
 import { PageHeader } from '@/components/ui/page-header';
+import { ToastUndoButton } from '@/components/ui/toast-undo-button';
+import { Pagination } from '@/components/ui/pagination';
+import { EmptyState } from '@/components/ui/empty-state';
+import { AvatarGradient } from '@/components/ui/avatar-gradient';
+import { BatchActionsBar } from '@/components/ui/batch-actions-bar';
+import { ExportDropdown } from '@/components/export-dropdown';
+import { CSVImportDialog, type ImportField } from '@/components/import/csv-import-dialog';
+import { exportCSV, exportPDF } from '@/lib/export';
+
+const EXPENSE_IMPORT_FIELDS: ImportField[] = [
+  { key: 'title', label: 'Title', required: true, aliases: ['name', 'expense', 'description'] },
+  { key: 'amount', label: 'Amount', required: true, aliases: ['cost', 'price', 'total'] },
+  { key: 'date', label: 'Date', required: true, aliases: ['expense date', 'paid date'] },
+  { key: 'category', label: 'Category', required: false, aliases: ['type', 'expense type'] },
+  { key: 'vendor', label: 'Vendor', required: false, aliases: ['payee', 'paid to', 'store'] },
+  { key: 'description', label: 'Description', required: false, aliases: ['notes', 'memo', 'details'] },
+];
 
 const categoryColors: Record<string, string> = {
   EVENT: 'bg-purple-500/10 text-purple-400 border-purple-500/30',
@@ -94,9 +112,10 @@ const ExpenseCard = memo(function ExpenseCard({
               </button>
             )}
             <div className="flex items-center gap-4 flex-1">
-              <div className="w-10 h-10 rounded-xl bg-destructive/10 flex items-center justify-center">
-                <TrendingDown className="w-5 h-5 text-destructive" />
-              </div>
+              <AvatarGradient
+                name={expense.vendor || cleanExpenseTitle(expense.title)}
+                size="sm"
+              />
               <div className="min-w-0 space-y-1 flex-1">
                 <div className="flex items-center gap-2 min-w-0">
                   <p className="font-medium truncate" title={cleanExpenseTitle(expense.title)}>{cleanExpenseTitle(expense.title)}</p>
@@ -208,12 +227,47 @@ export default function ExpensesPage() {
     category: categoryFilter !== 'all' ? categoryFilter : undefined,
   });
   const { data: summary } = useExpenseSummary(currentOrgId);
+  const startOfMonth = useMemo(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0];
+  }, []);
+  const { data: monthlySummary } = useExpenseSummary(currentOrgId, startOfMonth);
   const deleteExpense = useDeleteExpense();
   const restoreExpense = useRestoreExpense();
   const bulkDeleteExpenses = useBulkDeleteExpenses();
   const createExpense = useCreateExpense();
   const updateExpense = useUpdateExpense();
   const [selectedExpenses, setSelectedExpenses] = useState<Set<string>>(new Set());
+  const [showImport, setShowImport] = useState(false);
+
+  const handleImportExpenses = async (records: Record<string, string>[]) => {
+    if (!currentOrgId) throw new Error('No org selected');
+    let success = 0;
+    let errors = 0;
+    for (const record of records) {
+      if (!record.title?.trim() || !record.amount?.trim()) { errors++; continue; }
+      const amountStr = record.amount.replace(/[$,]/g, '');
+      const amountCents = Math.round(parseFloat(amountStr) * 100);
+      if (isNaN(amountCents) || amountCents <= 0) { errors++; continue; }
+      const validCategories = ['EVENT', 'SUPPLIES', 'FOOD', 'VENUE', 'MARKETING', 'SERVICES', 'OTHER'];
+      const category = validCategories.includes(record.category?.toUpperCase() || '') ? record.category!.toUpperCase() : 'OTHER';
+      try {
+        await createExpense.mutateAsync({
+          orgId: currentOrgId,
+          data: {
+            title: record.title.trim(),
+            category,
+            amountCents,
+            date: record.date?.trim() || new Date().toISOString().split('T')[0],
+            vendor: record.vendor?.trim() || undefined,
+            description: record.description?.trim() || undefined,
+          },
+        });
+        success++;
+      } catch { errors++; }
+    }
+    return { success, errors };
+  };
 
   const resetCreateDialog = () => {
     setShowCreateDialog(false);
@@ -283,7 +337,7 @@ export default function ExpensesPage() {
       toast({
         title: 'Expense updated',
         action: (
-          <button
+          <ToastUndoButton
             onClick={async () => {
               const redoData = {
                 category: editExpenseData.category,
@@ -309,25 +363,20 @@ export default function ExpensesPage() {
                 toast({
                   title: 'Expense restored',
                   action: (
-                    <button
+                    <ToastUndoButton
                       onClick={() => updateExpense.mutate(
                         { orgId: currentOrgId!, expenseId: originalExpense.id, data: redoData },
                         { onSuccess: () => toast({ title: 'Expense updated' }) },
                       )}
-                      className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-                    >
-                      Redo
-                    </button>
+                      label="Redo"
+                    />
                   ),
                 });
               } catch (error) {
                 toast({ title: 'Failed to restore', variant: 'destructive' });
               }
             }}
-            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-          >
-            Undo
-          </button>
+          />
         ),
       });
       resetEditDialog();
@@ -369,31 +418,26 @@ export default function ExpensesPage() {
       toast({
         title: 'Expense created',
         action: createdId ? (
-          <button
+          <ToastUndoButton
             onClick={() => deleteExpense.mutate(
               { orgId: currentOrgId!, expenseId: createdId },
               {
                 onSuccess: () => toast({
                   title: 'Expense deleted',
                   action: (
-                    <button
+                    <ToastUndoButton
                       onClick={() => restoreExpense.mutate(
                         { orgId: currentOrgId!, expenseId: createdId },
                         { onSuccess: () => toast({ title: 'Expense restored' }) },
                       )}
-                      className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-                    >
-                      Redo
-                    </button>
+                      label="Redo"
+                    />
                   ),
                 }),
                 onError: () => toast({ title: 'Failed to undo', variant: 'destructive' }),
               },
             )}
-            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-          >
-            Undo
-          </button>
+          />
         ) : undefined,
       });
       resetCreateDialog();
@@ -496,7 +540,7 @@ export default function ExpensesPage() {
       toast({
         title: `Deleted ${deletedCount} expense${deletedCount !== 1 ? 's' : ''}`,
         action: (
-          <button
+          <ToastUndoButton
             onClick={async () => {
               let restoredCount = 0;
               for (const expenseId of expenseIds) {
@@ -505,22 +549,17 @@ export default function ExpensesPage() {
               toast({
                 title: `Restored ${restoredCount} expense${restoredCount !== 1 ? 's' : ''}`,
                 action: (
-                  <button
+                  <ToastUndoButton
                     onClick={async () => {
                       const redoResult = await bulkDeleteExpenses.mutateAsync({ orgId: currentOrgId, expenseIds });
                       toast({ title: `Deleted ${redoResult.deletedCount} expense${redoResult.deletedCount !== 1 ? 's' : ''}` });
                     }}
-                    className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-                  >
-                    Redo
-                  </button>
+                    label="Redo"
+                  />
                 ),
               });
             }}
-            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-          >
-            Undo
-          </button>
+          />
         ),
       });
     } catch {
@@ -533,6 +572,21 @@ export default function ExpensesPage() {
     setSelectedExpenses(new Set());
   }, [categoryFilter, searchQuery, page]);
 
+  const handleExportExpenses = (format: 'csv' | 'pdf') => {
+    const headers = ['Title', 'Category', 'Amount', 'Date', 'Vendor', 'Description'];
+    const rows = expenses.map((e: any) => [
+      e.title,
+      EXPENSE_CATEGORY_LABELS[e.category as ExpenseCategory] || e.category,
+      `$${(e.amountCents / 100).toFixed(2)}`,
+      e.date ? new Date(e.date).toLocaleDateString() : '',
+      e.vendor || '',
+      e.description || '',
+    ]);
+    const filename = `expenses-${new Date().toISOString().split('T')[0]}`;
+    if (format === 'csv') exportCSV(headers, rows, filename);
+    else exportPDF('Expenses', headers, rows, filename);
+  };
+
   return (
     <div className="space-y-8" data-tour="expenses-list">
       {/* Header */}
@@ -540,15 +594,30 @@ export default function ExpensesPage() {
         <PageHeader
           title="Expenses"
           helpText="Track organization spending by category. Expenses are automatically imported from outgoing Venmo/Zelle payments."
-          actions={isAdmin && (
-            <Button
-              onClick={() => setShowCreateDialog(true)}
-              className="bg-gradient-to-r from-primary to-blue-400 hover:opacity-90 transition-opacity"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Expense
-            </Button>
-          )}
+          actions={
+            <div className="flex items-center gap-2">
+              <ExportDropdown
+                onExportCSV={() => handleExportExpenses('csv')}
+                onExportPDF={() => handleExportExpenses('pdf')}
+              />
+              {isAdmin && (
+                <Button variant="outline" size="sm" onClick={() => setShowImport(true)}>
+                  <Upload className="w-4 h-4 mr-1.5" />
+                  Import
+                </Button>
+              )}
+              {isAdmin && (
+                <Button
+                  size="sm"
+                  onClick={() => setShowCreateDialog(true)}
+                  className="hover:opacity-90 transition-opacity"
+                >
+                  <Plus className="w-4 h-4 mr-1.5" />
+                  Add Expense
+                </Button>
+              )}
+            </div>
+          }
         />
       </FadeIn>
 
@@ -584,7 +653,7 @@ export default function ExpensesPage() {
         />
         <StatCard
           title="This Month"
-          value={summary?.totalCents || 0}
+          value={monthlySummary?.totalCents || 0}
           isMoney
           description="Current period"
           icon={Receipt}
@@ -641,29 +710,7 @@ export default function ExpensesPage() {
               </Select>
               <span className="text-sm text-muted-foreground">per page</span>
             </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="text-sm text-muted-foreground min-w-[80px] text-center">
-                {page} / {totalPages || 1}
-              </span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
           </div>
         </FadeIn>
       )}
@@ -677,23 +724,17 @@ export default function ExpensesPage() {
         </div>
       ) : expenses.length === 0 ? (
         <FadeIn delay={0.3}>
-          <div className="rounded-xl border border-border/50 bg-card/50 py-16 text-center animate-in-scale">
-            <div className="w-16 h-16 rounded-2xl bg-rose-500/10 flex items-center justify-center mx-auto mb-4">
-              <Receipt className="h-8 w-8 text-rose-500" />
-            </div>
-            <h3 className="text-lg font-semibold mb-2">No expenses found</h3>
-            <p className="text-muted-foreground mb-6">
-              Start tracking your organization&apos;s spending
-            </p>
-            {isAdmin && (
-              <Button
-                onClick={() => setShowCreateDialog(true)}
-                className="bg-gradient-to-r from-primary to-blue-400"
-              >
+          <EmptyState
+            icon={Receipt}
+            title="No expenses found"
+            description="Start tracking your organization's spending"
+            action={isAdmin && (
+              <Button onClick={() => setShowCreateDialog(true)}>
                 Add your first expense
               </Button>
             )}
-          </div>
+            className="rounded-xl border border-border/50 bg-card/50"
+          />
         </FadeIn>
       ) : (
         <>
@@ -746,29 +787,7 @@ export default function ExpensesPage() {
 
           {/* Pagination Controls - Bottom */}
           {expenses.length > pageSize && (
-            <div className="flex items-center justify-center gap-2 pt-4">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="text-sm text-muted-foreground min-w-[80px] text-center">
-                {page} / {totalPages}
-              </span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} className="justify-center pt-4" />
           )}
         </>
       )}
@@ -846,10 +865,9 @@ export default function ExpensesPage() {
               </div>
               <div className="space-y-2">
                 <Label>Date</Label>
-                <Input
-                  type="date"
+                <DatePicker
                   value={newExpenseData.date}
-                  onChange={(e) => setNewExpenseData({ ...newExpenseData, date: e.target.value })}
+                  onChange={(date) => setNewExpenseData({ ...newExpenseData, date })}
                 />
               </div>
             </div>
@@ -899,7 +917,7 @@ export default function ExpensesPage() {
             <Button
               onClick={handleCreateExpense}
               disabled={createExpense.isPending}
-              className="bg-gradient-to-r from-primary to-blue-400"
+             
             >
               {createExpense.isPending ? (
                 <>
@@ -945,10 +963,9 @@ export default function ExpensesPage() {
               </div>
               <div className="space-y-2">
                 <Label>Date</Label>
-                <Input
-                  type="date"
+                <DatePicker
                   value={editExpenseData.date}
-                  onChange={(e) => setEditExpenseData({ ...editExpenseData, date: e.target.value })}
+                  onChange={(date) => setEditExpenseData({ ...editExpenseData, date })}
                 />
               </div>
             </div>
@@ -998,7 +1015,7 @@ export default function ExpensesPage() {
             <Button
               onClick={handleUpdateExpense}
               disabled={updateExpense.isPending}
-              className="bg-gradient-to-r from-primary to-blue-400"
+             
             >
               {updateExpense.isPending ? (
                 <>
@@ -1012,6 +1029,22 @@ export default function ExpensesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <BatchActionsBar selectedCount={selectedExpenses.size} onClear={() => setSelectedExpenses(new Set())}>
+        <Button variant="destructive" size="sm" onClick={handleBulkDeleteExpenses} className="h-8">
+          <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+          Delete
+        </Button>
+      </BatchActionsBar>
+
+      <CSVImportDialog
+        open={showImport}
+        onOpenChange={setShowImport}
+        title="Import Expenses"
+        description="Upload a CSV file to bulk import expenses"
+        fields={EXPENSE_IMPORT_FIELDS}
+        onImport={handleImportExpenses}
+      />
     </div>
   );
 }

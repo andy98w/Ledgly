@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect, useLayoutEffect } from 'react';
-import { ArrowUpRight, ArrowDownRight, Download, Filter, Plus, DollarSign, Wallet, Search, Minus, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, Trash2, Circle, CheckCircle2, Link2, Loader2, CreditCard } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Download, Filter, Plus, DollarSign, Wallet, Search, Minus, ArrowUp, ArrowDown, Trash2, Circle, CheckCircle2, Link2, Loader2, CreditCard } from 'lucide-react';
 import { useCharges, useUpdateCharge, useCreateCharge, useVoidCharge, useRestoreCharge } from '@/lib/queries/charges';
 import { useExpenses, useUpdateExpense, useCreateExpense, useDeleteExpense, useRestoreExpense } from '@/lib/queries/expenses';
 import { usePayments, useUpdatePayment, useCreatePayment, useDeletePayment, useRestorePayment, useAllocatePayment, useAutoAllocateToCharge } from '@/lib/queries/payments';
@@ -43,11 +43,14 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Money } from '@/components/ui/money';
+import { ToastUndoButton } from '@/components/ui/toast-undo-button';
 import { FadeIn } from '@/components/ui/page-transition';
 import { PageHeader } from '@/components/ui/page-header';
+import { Pagination } from '@/components/ui/pagination';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
+import { DatePicker } from '@/components/ui/date-picker';
 
 /** Strip "VENMO payment to " etc. prefixes from Gmail-imported expense titles */
 function cleanExpenseTitle(title: string): string {
@@ -736,31 +739,21 @@ export default function SpreadsheetPage() {
       toast({
         title: `Added member: ${name}`,
         action: createdId ? (
-          <button
-            onClick={() => deleteOneMember.mutate(
+          <ToastUndoButton onClick={() => deleteOneMember.mutate(
               { orgId: currentOrgId!, memberId: createdId },
               {
                 onSuccess: () => toast({
                   title: `${name} removed`,
                   action: (
-                    <button
-                      onClick={() => restoreMember.mutate(
+                    <ToastUndoButton onClick={() => restoreMember.mutate(
                         { orgId: currentOrgId!, memberId: createdId },
                         { onSuccess: () => toast({ title: `${name} restored` }) },
-                      )}
-                      className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-                    >
-                      Redo
-                    </button>
+                      )} label="Redo" />
                   ),
                 }),
                 onError: () => toast({ title: 'Failed to undo', variant: 'destructive' }),
               },
-            )}
-            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-          >
-            Undo
-          </button>
+            )} />
         ) : undefined,
       });
       return createdId;
@@ -862,27 +855,17 @@ export default function SpreadsheetPage() {
         toast({
           title: 'Charge deleted',
           action: (
-            <button
-              onClick={() => restoreCharge.mutate(
+            <ToastUndoButton onClick={() => restoreCharge.mutate(
                 { orgId: currentOrgId, chargeId: row.id },
                 {
                   onSuccess: () => toast({
                     title: 'Charge restored',
                     action: (
-                      <button
-                        onClick={() => voidCharge.mutate({ orgId: currentOrgId!, chargeId: row.id }, { onSuccess: () => toast({ title: 'Charge deleted' }) })}
-                        className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-                      >
-                        Redo
-                      </button>
+                      <ToastUndoButton onClick={() => voidCharge.mutate({ orgId: currentOrgId!, chargeId: row.id }, { onSuccess: () => toast({ title: 'Charge deleted' }) })} label="Redo" />
                     ),
                   }),
                 },
-              )}
-              className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-            >
-              Undo
-            </button>
+              )} />
           ),
         });
       } else if (row.type === 'expense') {
@@ -890,27 +873,17 @@ export default function SpreadsheetPage() {
         toast({
           title: 'Expense deleted',
           action: (
-            <button
-              onClick={() => restoreExpense.mutate(
+            <ToastUndoButton onClick={() => restoreExpense.mutate(
                 { orgId: currentOrgId, expenseId: row.id },
                 {
                   onSuccess: () => toast({
                     title: 'Expense restored',
                     action: (
-                      <button
-                        onClick={() => deleteExpense.mutate({ orgId: currentOrgId!, expenseId: row.id }, { onSuccess: () => toast({ title: 'Expense deleted' }) })}
-                        className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-                      >
-                        Redo
-                      </button>
+                      <ToastUndoButton onClick={() => deleteExpense.mutate({ orgId: currentOrgId!, expenseId: row.id }, { onSuccess: () => toast({ title: 'Expense deleted' }) })} label="Redo" />
                     ),
                   }),
                 },
-              )}
-              className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-            >
-              Undo
-            </button>
+              )} />
           ),
         });
       } else if (row.type === 'payment') {
@@ -918,27 +891,17 @@ export default function SpreadsheetPage() {
         toast({
           title: 'Payment deleted',
           action: (
-            <button
-              onClick={() => restorePayment.mutate(
+            <ToastUndoButton onClick={() => restorePayment.mutate(
                 { orgId: currentOrgId, paymentId: row.id },
                 {
                   onSuccess: () => toast({
                     title: 'Payment restored',
                     action: (
-                      <button
-                        onClick={() => deletePayment.mutate({ orgId: currentOrgId!, paymentId: row.id }, { onSuccess: () => toast({ title: 'Payment deleted' }) })}
-                        className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-                      >
-                        Redo
-                      </button>
+                      <ToastUndoButton onClick={() => deletePayment.mutate({ orgId: currentOrgId!, paymentId: row.id }, { onSuccess: () => toast({ title: 'Payment deleted' }) })} label="Redo" />
                     ),
                   }),
                 },
-              )}
-              className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-            >
-              Undo
-            </button>
+              )} />
           ),
         });
       }
@@ -997,8 +960,7 @@ export default function SpreadsheetPage() {
       toast({
         title: `Restored ${restoredCount} item${restoredCount !== 1 ? 's' : ''}`,
         action: (
-          <button
-            onClick={async () => {
+          <ToastUndoButton onClick={async () => {
               let redoneCount = 0;
               for (const item of deletedItems) {
                 try {
@@ -1008,11 +970,7 @@ export default function SpreadsheetPage() {
                 } catch { /* continue */ }
               }
               toast({ title: `Deleted ${redoneCount} item${redoneCount !== 1 ? 's' : ''}` });
-            }}
-            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-          >
-            Redo
-          </button>
+            }} label="Redo" />
         ),
       });
     };
@@ -1020,12 +978,7 @@ export default function SpreadsheetPage() {
     toast({
       title: `Deleted ${deletedItems.length} item${deletedItems.length !== 1 ? 's' : ''}`,
       action: (
-        <button
-          onClick={handleUndo}
-          className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-        >
-          Undo
-        </button>
+        <ToastUndoButton onClick={handleUndo} />
       ),
     });
   };
@@ -1190,29 +1143,7 @@ export default function SpreadsheetPage() {
               {rows.length} total
             </span>
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="text-sm text-muted-foreground min-w-[80px] text-center">
-              {page} / {totalPages || 1}
-            </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
         </div>
       </FadeIn>
 
@@ -1636,29 +1567,7 @@ export default function SpreadsheetPage() {
       {/* Pagination Controls - Bottom */}
       {rows.length > 0 && (
         <FadeIn delay={0.3}>
-          <div className="flex items-center justify-end gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="text-sm text-muted-foreground min-w-[80px] text-center">
-              {page} of {totalPages || 1}
-            </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} className="justify-center pt-4" />
         </FadeIn>
       )}
 
@@ -1707,10 +1616,9 @@ export default function SpreadsheetPage() {
 
             <div className="grid gap-2">
               <Label>Date</Label>
-              <Input
-                type="date"
+              <DatePicker
                 value={newRowData.date}
-                onChange={(e) => setNewRowData({ ...newRowData, date: e.target.value })}
+                onChange={(date) => setNewRowData({ ...newRowData, date })}
               />
             </div>
 

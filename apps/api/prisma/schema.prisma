@@ -21,6 +21,7 @@ model Organization {
   enabledPaymentSources   String[]         @default(["venmo", "zelle", "cashapp", "paypal"]) @map("enabled_payment_sources")
   gmailConnection         GmailConnection?
   memberships         Membership[]
+  notifications       Notification[]
   payments            Payment[]
 
   @@map("organizations")
@@ -318,4 +319,30 @@ enum ExpenseCategory {
 enum MagicTokenType {
   SIGN_IN
   PASSWORD_RESET
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  orgId     String           @map("org_id")
+  userId    String?          @map("user_id")
+  type      NotificationType
+  title     String
+  body      String?
+  read      Boolean          @default(false)
+  linkUrl   String?          @map("link_url")
+  createdAt DateTime         @default(now()) @map("created_at")
+  org       Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, read])
+  @@index([orgId, createdAt])
+  @@map("notifications")
+}
+
+enum NotificationType {
+  PAYMENT_RECEIVED
+  CHARGE_OVERDUE
+  MEMBER_JOINED
+  EXPENSE_CREATED
+  CHARGE_CREATED
+  SYSTEM
 }

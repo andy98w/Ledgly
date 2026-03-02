@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { History, Receipt, CreditCard, Users, TrendingDown, Building2, Link2, Filter, Undo2, Redo2, Loader2, ChevronDown, ChevronRight, ChevronLeft, Search } from 'lucide-react';
+import { History, Receipt, CreditCard, Users, TrendingDown, Building2, Link2, Filter, Undo2, Redo2, Loader2, ChevronDown, ChevronRight, Search } from 'lucide-react';
 import { useAuditLogs, useUndoAuditLog, useUndoBatch, useRedoAuditLog, useRedoBatch, type AuditLogEntry, type BatchedAuditLogEntry, type AuditLogItem } from '@/lib/queries/audit';
 import { useAuthStore } from '@/lib/stores/auth';
 import { formatRelativeDate } from '@/lib/utils';
@@ -21,6 +21,9 @@ import { FadeIn, StaggerChildren, StaggerItem } from '@/components/ui/page-trans
 import { AvatarGradient } from '@/components/ui/avatar-gradient';
 import { useToast } from '@/components/ui/use-toast';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { PageHeader } from '@/components/ui/page-header';
+import { Pagination } from '@/components/ui/pagination';
+import { EmptyState } from '@/components/ui/empty-state';
 import { cn } from '@/lib/utils';
 
 const entityTypeIcons: Record<string, typeof Receipt> = {
@@ -67,11 +70,11 @@ function getDisplayAction(log: AuditLogEntry): string {
   return log.action;
 }
 
-const formatValue = (value: any): string => {
+const formatValue = (value: any, field?: string): string => {
   if (value === null || value === undefined) return 'null';
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   if (typeof value === 'number') {
-    if (String(value).length > 2) {
+    if (field && /[Cc]ents$/.test(field)) {
       return `$${(value / 100).toFixed(2)}`;
     }
     return String(value);
@@ -192,9 +195,9 @@ function renderDiff(log: AuditLogEntry) {
         {changes.slice(0, 3).map(([field, change]: [string, any]) => (
           <div key={field} className="text-xs">
             <span className="text-muted-foreground">{field}: </span>
-            <span className="text-destructive/70 line-through">{formatValue(change.from)}</span>
+            <span className="text-destructive/70 line-through">{formatValue(change.from, field)}</span>
             <span className="mx-1">&rarr;</span>
-            <span className="text-success">{formatValue(change.to)}</span>
+            <span className="text-success">{formatValue(change.to, field)}</span>
           </div>
         ))}
         {changes.length > 3 && (
@@ -303,6 +306,11 @@ function AuditLogCard({
                 <Badge variant="outline" className={cn('text-xs', actionColors[displayAction] || actionColors[log.action])}>
                   {displayAction}
                 </Badge>
+                {(log.diffJson?.new?.source === 'gmail_auto_import' || log.diffJson?.new?.source === 'auto_confirm') && (
+                  <Badge variant="outline" className="text-xs bg-cyan-500/10 text-cyan-500 border-cyan-500/30">
+                    Auto-Import
+                  </Badge>
+                )}
                 {log.undone && (
                   <Badge variant="outline" className="text-xs bg-muted text-muted-foreground">
                     Undone
@@ -385,8 +393,13 @@ function BatchAuditLogCard({
                   {batchDisplayAction}
                 </Badge>
                 <Badge variant="secondary" className="text-xs">
-                  {batch.itemCount} members
+                  {batch.itemCount} {(entityTypeLabels[batch.entityType] || batch.entityType).toLowerCase()}{batch.itemCount !== 1 ? 's' : ''}
                 </Badge>
+                {batch.batchDescription?.includes('auto-import') && (
+                  <Badge variant="outline" className="text-xs bg-cyan-500/10 text-cyan-500 border-cyan-500/30">
+                    Auto-Import
+                  </Badge>
+                )}
                 {allUndone && (
                   <Badge variant="outline" className="text-xs bg-muted text-muted-foreground">
                     Undone
@@ -642,19 +655,10 @@ export default function AuditLogPage() {
     <div className="space-y-8" data-tour="audit-list">
       {/* Header */}
       <FadeIn>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-blue-400 flex items-center justify-center shadow-lg">
-              <History className="h-6 w-6 text-primary-foreground" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">Audit Log</h1>
-              <p className="text-muted-foreground mt-1">
-                Track all changes made in your organization
-              </p>
-            </div>
-          </div>
-        </div>
+        <PageHeader
+          title="Audit Log"
+          helpText="Track all changes made in your organization. You can undo and redo actions directly from here."
+        />
       </FadeIn>
 
       {/* Filter */}
@@ -712,29 +716,7 @@ export default function AuditLogPage() {
                 {logs.length} total
               </span>
             </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="text-sm text-muted-foreground min-w-[80px] text-center">
-                {page} / {totalPages || 1}
-              </span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
           </div>
         </FadeIn>
       )}
@@ -749,15 +731,12 @@ export default function AuditLogPage() {
         </div>
       ) : logs.length === 0 ? (
         <FadeIn delay={0.2}>
-          <div className="rounded-xl border border-border/50 bg-card/50 py-16 text-center animate-in-scale">
-            <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
-              <History className="h-8 w-8 text-muted-foreground" />
-            </div>
-            <h3 className="text-lg font-semibold mb-2">No activity found</h3>
-            <p className="text-muted-foreground">
-              Try adjusting your filters or search.
-            </p>
-          </div>
+          <EmptyState
+            icon={History}
+            title="No activity found"
+            description="Try adjusting your filters or search."
+            className="rounded-xl border border-border/50 bg-card/50"
+          />
         </FadeIn>
       ) : (
         <>
@@ -793,29 +772,7 @@ export default function AuditLogPage() {
 
           {/* Pagination Controls - Bottom */}
           {logs.length > pageSize && (
-            <div className="flex items-center justify-center gap-2 pt-4">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="text-sm text-muted-foreground min-w-[80px] text-center">
-                {page} / {totalPages}
-              </span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} className="justify-center pt-4" />
           )}
         </>
       )}

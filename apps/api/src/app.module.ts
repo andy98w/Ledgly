@@ -13,6 +13,7 @@ import { ExpensesModule } from './modules/expenses/expenses.module';
 import { HealthModule } from './modules/health/health.module';
 import { GmailModule } from './modules/gmail/gmail.module';
 import { AuditModule } from './modules/audit/audit.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { AuditModule } from './modules/audit/audit.module';
     ExpensesModule,
     HealthModule,
     GmailModule,
+    NotificationsModule,
   ],
   providers: [
     {

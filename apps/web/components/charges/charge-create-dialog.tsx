@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { CHARGE_CATEGORIES, CHARGE_CATEGORY_LABELS, type ChargeCategory } from '@ledgly/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -175,10 +176,9 @@ export function ChargeCreateDialog({
               </div>
               <div className="space-y-2">
                 <Label>Due Date (optional)</Label>
-                <Input
-                  type="date"
+                <DatePicker
                   value={formData.dueDate}
-                  onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                  onChange={(date) => setFormData({ ...formData, dueDate: date })}
                 />
               </div>
             </div>
@@ -254,7 +254,7 @@ export function ChargeCreateDialog({
                 No active members. Add members first.
               </p>
             ) : (
-              <div className="space-y-1 max-h-[300px] overflow-y-auto">
+              <div className="space-y-1 max-h-[300px] overflow-y-auto px-0.5 -mx-0.5">
                 {/* Select All Row */}
                 <button
                   type="button"
@@ -270,7 +270,7 @@ export function ChargeCreateDialog({
                     className={cn(
                       'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors',
                       selectAll
-                        ? 'bg-gradient-to-br from-primary to-blue-400 border-transparent'
+                        ? 'bg-primary border-transparent'
                         : 'border-muted-foreground/30',
                     )}
                   >
@@ -299,7 +299,7 @@ export function ChargeCreateDialog({
                         className={cn(
                           'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors',
                           isSelected
-                            ? 'bg-gradient-to-br from-primary to-blue-400 border-transparent'
+                            ? 'bg-primary border-transparent'
                             : 'border-muted-foreground/30',
                         )}
                       >
@@ -327,7 +327,7 @@ export function ChargeCreateDialog({
           <Button
             onClick={handleSubmit}
             disabled={isPending || selectedMembers.size === 0}
-            className="bg-gradient-to-r from-primary to-blue-400"
+           
           >
             {isPending ? (
               <>

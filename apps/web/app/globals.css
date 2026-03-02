@@ -14,7 +14,7 @@
 @layer base {
   :root {
     /* Light Theme */
-    --background: 0 0% 100%;
+    --background: 220 14% 96%;
     --foreground: 222 47% 11%;
 
     --card: 0 0% 100%;
@@ -26,13 +26,13 @@
     --primary: 217 91% 50%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 214 32% 91%;
+    --secondary: 220 14% 96%;
     --secondary-foreground: 222 47% 11%;
 
-    --muted: 214 32% 91%;
-    --muted-foreground: 215 16% 47%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
 
-    --accent: 214 32% 91%;
+    --accent: 220 14% 96%;
     --accent-foreground: 222 47% 11%;
 
     --destructive: 350 89% 60%;
@@ -44,11 +44,11 @@
     --warning: 38 92% 50%;
     --warning-foreground: 222 47% 11%;
 
-    --border: 214 32% 85%;
-    --input: 214 32% 85%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
     --ring: 217 91% 50%;
 
-    --radius: 0.75rem;
+    --radius: 1rem;
 
     /* Gradient colors */
     --gradient-1: 217 91% 60%;
@@ -64,26 +64,26 @@
   }
 
   .dark {
-    /* Midnight Blue Dark Theme */
-    --background: 222 47% 6%;
+    /* Neutral Dark Theme */
+    --background: 0 0% 7%;
     --foreground: 210 40% 98%;
 
-    --card: 222 47% 11%;
+    --card: 0 0% 12%;
     --card-foreground: 210 40% 98%;
 
-    --popover: 222 47% 11%;
+    --popover: 0 0% 12%;
     --popover-foreground: 210 40% 98%;
 
     --primary: 217 91% 60%;
-    --primary-foreground: 222 47% 6%;
+    --primary-foreground: 0 0% 7%;
 
-    --secondary: 217 33% 17%;
+    --secondary: 0 0% 17%;
     --secondary-foreground: 210 40% 98%;
 
-    --muted: 217 33% 14%;
-    --muted-foreground: 215 20% 55%;
+    --muted: 0 0% 14%;
+    --muted-foreground: 0 0% 45%;
 
-    --accent: 217 33% 17%;
+    --accent: 0 0% 17%;
     --accent-foreground: 210 40% 98%;
 
     --destructive: 350 89% 60%;
@@ -93,10 +93,10 @@
     --success-foreground: 210 40% 98%;
 
     --warning: 38 92% 50%;
-    --warning-foreground: 222 47% 6%;
+    --warning-foreground: 0 0% 7%;
 
-    --border: 217 33% 20%;
-    --input: 217 33% 20%;
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
     --ring: 217 91% 60%;
 
     /* Layered shadows — dark */
@@ -120,7 +120,8 @@
 
   body {
     @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    font-feature-settings: "rlig" 1, "calt" 1, "cv11" 1, "ss01" 1;
+    letter-spacing: -0.011em;
   }
 
   /* Global transition defaults for interactive elements */
@@ -130,7 +131,7 @@
   select,
   textarea,
   [role="button"] {
-    transition: all 150ms ease-out;
+    transition: all 200ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   *:focus-visible {
@@ -161,6 +162,10 @@
   }
   .scrollbar-none::-webkit-scrollbar {
     display: none;
+  }
+
+  h1, h2, h3, h4 {
+    letter-spacing: -0.025em;
   }
 }
 
@@ -287,7 +292,7 @@
 
   /* Animations */
   .animate-in-up {
-    animation: animate-in-up 0.4s ease-out both;
+    animation: animate-in-up 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
   .animate-in-scale {
@@ -322,7 +327,7 @@
 
   /* CSS-based stagger animation (replaces Framer Motion stagger) */
   .stagger-item {
-    animation: stagger-in 0.3s ease-out both;
+    animation: stagger-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
   .stagger-container > .stagger-item:nth-child(1) { animation-delay: 0ms; }
@@ -369,7 +374,7 @@
 @keyframes animate-in-up {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;

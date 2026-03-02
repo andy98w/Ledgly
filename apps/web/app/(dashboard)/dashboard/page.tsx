@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, Users, Receipt, AlertTriangle, AlertCircle, Check, TrendingUp, Plus, Shield, Loader2 } from 'lucide-react';
+import { ArrowRight, Users, Receipt, AlertTriangle, AlertCircle, Check, TrendingUp, Plus, Shield, Loader2, Wallet, ClipboardList } from 'lucide-react';
 import { useDashboard } from '@/lib/queries/organizations';
 import { useCreateMembers } from '@/lib/queries/members';
 import { useAuthStore, useIsAdminOrTreasurer } from '@/lib/stores/auth';
@@ -18,6 +18,7 @@ import { AvatarGradient } from '@/components/ui/avatar-gradient';
 import { MotionCard, MotionCardHeader, MotionCardTitle, MotionCardContent } from '@/components/ui/motion-card';
 import { FadeIn, StaggerChildren, StaggerItem } from '@/components/ui/page-transition';
 import { PageHeader } from '@/components/ui/page-header';
+import { Alert } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   Dialog,
@@ -28,6 +29,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/use-toast';
+import { EmptyState } from '@/components/ui/empty-state';
+import { RevenueChart } from '@/components/charts/revenue-chart';
+import { ExpenseChart } from '@/components/charts/expense-chart';
 
 function StatCardSkeleton() {
   return (
@@ -165,12 +169,12 @@ export default function DashboardPage() {
       {/* Quick Actions + Recent Payments */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Quick Actions */}
-        <FadeIn delay={0.2}>
-          <MotionCard hover={false} data-tour="quick-actions">
+        <FadeIn delay={0.2} className="h-full">
+          <MotionCard hover={false} data-tour="quick-actions" className="h-full flex flex-col">
             <MotionCardHeader>
               <MotionCardTitle className="text-lg">Quick Actions</MotionCardTitle>
             </MotionCardHeader>
-            <MotionCardContent className="grid gap-3">
+            <MotionCardContent className="grid gap-3 flex-1">
               <Button asChild variant="outline" className="justify-start h-12 text-left">
                 <Link href="/members">
                   <div className="p-2 rounded-lg bg-violet-500/10 mr-3">
@@ -206,6 +210,17 @@ export default function DashboardPage() {
                       </div>
                     </Link>
                   </Button>
+                  <Button asChild variant="outline" className="justify-start h-12 text-left">
+                    <Link href="/expenses/new">
+                      <div className="p-2 rounded-lg bg-rose-500/10 mr-3">
+                        <Wallet className="h-4 w-4 text-rose-500" />
+                      </div>
+                      <div>
+                        <p className="font-medium">Track Expense</p>
+                        <p className="text-xs text-muted-foreground">Record organization spending</p>
+                      </div>
+                    </Link>
+                  </Button>
                   <Button variant="outline" className="justify-start h-12 text-left" onClick={() => setShowAddAdmin(true)}>
                     <div className="p-2 rounded-lg bg-violet-500/10 mr-3">
                       <Shield className="h-4 w-4 text-violet-500" />
@@ -215,6 +230,17 @@ export default function DashboardPage() {
                       <p className="text-xs text-muted-foreground">Invite another admin to manage</p>
                     </div>
                   </Button>
+                  <Button asChild variant="outline" className="justify-start h-12 text-left">
+                    <Link href="/audit">
+                      <div className="p-2 rounded-lg bg-cyan-500/10 mr-3">
+                        <ClipboardList className="h-4 w-4 text-cyan-500" />
+                      </div>
+                      <div>
+                        <p className="font-medium">Audit Log</p>
+                        <p className="text-xs text-muted-foreground">Review recent activity</p>
+                      </div>
+                    </Link>
+                  </Button>
                 </>
               )}
             </MotionCardContent>
@@ -222,8 +248,8 @@ export default function DashboardPage() {
         </FadeIn>
 
         {/* Recent Payments */}
-        <FadeIn delay={0.3}>
-          <MotionCard hover={false}>
+        <FadeIn delay={0.3} className="h-full">
+          <MotionCard hover={false} className="h-full flex flex-col">
             <MotionCardHeader className="flex flex-row items-center justify-between">
               <MotionCardTitle className="text-lg">Recent Payments</MotionCardTitle>
               <Button variant="ghost" size="sm" asChild className="text-primary">
@@ -233,14 +259,13 @@ export default function DashboardPage() {
                 </Link>
               </Button>
             </MotionCardHeader>
-            <MotionCardContent>
+            <MotionCardContent className="flex-1">
               {stats.recentPayments.length === 0 ? (
-                <div className="text-center py-8">
-                  <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-3">
-                    <TrendingUp className="h-6 w-6 text-muted-foreground" />
-                  </div>
-                  <p className="text-sm text-muted-foreground">No payments yet</p>
-                </div>
+                <EmptyState
+                  icon={TrendingUp}
+                  title="No payments yet"
+                  description="Payments will appear here once recorded"
+                />
               ) : (
                 <StaggerChildren className="space-y-3">
                   {stats.recentPayments.slice(0, 5).map((payment: any, index: number) => (
@@ -287,27 +312,29 @@ export default function DashboardPage() {
         </FadeIn>
       </div>
 
+      {/* Charts */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <FadeIn delay={0.35}>
+          <RevenueChart />
+        </FadeIn>
+        <FadeIn delay={0.4}>
+          <ExpenseChart />
+        </FadeIn>
+      </div>
+
       {/* Overdue Alert */}
       {stats.overdueCount > 0 && (
         <FadeIn delay={0.4}>
-          <div
-            className="rounded-xl border border-destructive/30 bg-destructive/5 p-5 animate-in-scale"
-          >
-            <div className="flex items-start gap-4">
-              <div className="p-2 rounded-lg bg-destructive/10">
-                <AlertTriangle className="h-5 w-5 text-destructive" />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-destructive">Overdue Charges</h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {stats.overdueCount} charges are past their due date
-                </p>
-                <Button asChild variant="outline" size="sm" className="mt-3">
-                  <Link href="/charges?overdue=true">View Overdue Charges</Link>
-                </Button>
-              </div>
-            </div>
-          </div>
+          <Alert
+            variant="destructive"
+            title="Overdue Charges"
+            description={`${stats.overdueCount} charges are past their due date`}
+            action={
+              <Button asChild variant="outline" size="sm">
+                <Link href="/charges?overdue=true">View Overdue Charges</Link>
+              </Button>
+            }
+          />
         </FadeIn>
       )}
 
@@ -356,7 +383,7 @@ export default function DashboardPage() {
               <Button
                 type="submit"
                 disabled={createMembers.isPending}
-                className="bg-gradient-to-r from-primary to-blue-400"
+               
               >
                 {createMembers.isPending ? (
                   <>

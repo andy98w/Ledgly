@@ -2,13 +2,13 @@
 
 import { useState, useMemo, useEffect, useCallback, memo } from 'react';
 import Link from 'next/link';
-import { Plus, CreditCard, AlertCircle, TrendingUp, Wallet, Search, MoreHorizontal, Pencil, Trash2, Loader2, ChevronLeft, ChevronRight, ChevronDown, Link2, Check, Users, Circle, CheckCircle2, X } from 'lucide-react';
+import { Plus, CreditCard, AlertCircle, TrendingUp, Wallet, Search, MoreHorizontal, Pencil, Trash2, Loader2, ChevronDown, Link2, Check, Users, Circle, CheckCircle2, X, UserPlus, Receipt } from 'lucide-react';
 import { useAutoAllocateToCharge, useRemoveAllocation, useBulkAutoAllocate } from '@/lib/queries/payments';
 import { cn } from '@/lib/utils';
 import { groupCharges } from '@/lib/utils/charge-grouping';
 import { calculateNameSimilarity, deriveCategoryFromMemo } from '@/lib/utils/name-similarity';
 import { usePayments, useUpdatePayment, useDeletePayment, useRestorePayment, useAllocatePayment, useBulkDeletePayments } from '@/lib/queries/payments';
-import { useCharges, useCreateCharge } from '@/lib/queries/charges';
+import { useCharges, useCreateCharge, useBulkCreateCharges } from '@/lib/queries/charges';
 import { useMembers, useCreateMembers } from '@/lib/queries/members';
 import { CHARGE_CATEGORIES, CHARGE_CATEGORY_LABELS } from '@ledgly/shared';
 import { useAuthStore } from '@/lib/stores/auth';
@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Pagination } from '@/components/ui/pagination';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select,
@@ -47,12 +48,18 @@ import { MotionCard, MotionCardContent } from '@/components/ui/motion-card';
 import { FadeIn } from '@/components/ui/page-transition';
 import { AnimatedList } from '@/components/ui/animated-list';
 import { PageHeader } from '@/components/ui/page-header';
+import { ToastUndoButton } from '@/components/ui/toast-undo-button';
+import { EmptyState } from '@/components/ui/empty-state';
+import { DatePicker } from '@/components/ui/date-picker';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { BatchActionsBar } from '@/components/ui/batch-actions-bar';
+import { ExportDropdown } from '@/components/export-dropdown';
+import { exportCSV, exportPDF } from '@/lib/export';
 
 interface EditPaymentData {
   id: string;
@@ -273,6 +280,7 @@ export default function PaymentsPage() {
   const bulkDeletePayments = useBulkDeletePayments();
   const allocatePayment = useAllocatePayment();
   const createCharge = useCreateCharge();
+  const bulkCreateCharges = useBulkCreateCharges();
   const createMembers = useCreateMembers();
   const autoAllocate = useAutoAllocateToCharge();
   const removeAllocation = useRemoveAllocation();
@@ -312,6 +320,19 @@ export default function PaymentsPage() {
     }
     return null;
   }, [chargeDialogPayment?.rawPayerName, members]);
+
+  // Find a matching member for any payer name (reuses payerMatchesMember logic)
+  const findMatchingMember = useCallback((payerName: string) => {
+    if (!payerName || members.length === 0) return null;
+    const normalizedPayer = payerName.toLowerCase().trim();
+    for (const member of members) {
+      const memberName = (member.displayName || member.name || member.user?.name || '').toLowerCase().trim();
+      if (!memberName) continue;
+      if (calculateNameSimilarity(payerName, memberName) >= 0.8) return member;
+      if (memberName.includes(normalizedPayer) || normalizedPayer.includes(memberName)) return member;
+    }
+    return null;
+  }, [members]);
 
   // Auto-select matching member when dialog opens on "new" tab
   useEffect(() => {
@@ -419,7 +440,7 @@ export default function PaymentsPage() {
           toast({
             title: 'Payment updated',
             action: undoData ? (
-              <button
+              <ToastUndoButton
                 onClick={() => {
                   const redoData = { amountCents: editingPayment.amountCents, paidAt: editingPayment.paidAt, rawPayerName: editingPayment.rawPayerName, memo: editingPayment.memo };
                   updatePayment.mutate(
@@ -428,25 +449,20 @@ export default function PaymentsPage() {
                       onSuccess: () => toast({
                         title: 'Change reverted',
                         action: (
-                          <button
+                          <ToastUndoButton
                             onClick={() => updatePayment.mutate(
                               { orgId: currentOrgId!, paymentId, data: redoData },
                               { onSuccess: () => toast({ title: 'Payment updated' }) },
                             )}
-                            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-                          >
-                            Redo
-                          </button>
+                            label="Redo"
+                          />
                         ),
                       }),
                       onError: () => toast({ title: 'Failed to undo', variant: 'destructive' }),
                     },
                   );
                 }}
-                className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-              >
-                Undo
-              </button>
+              />
             ) : undefined,
           });
           setEditingPayment(null);
@@ -478,12 +494,9 @@ export default function PaymentsPage() {
             title: 'Payment deleted',
             description: 'You can undo this action.',
             action: (
-              <button
+              <ToastUndoButton
                 onClick={() => handleRestorePayment(paymentId)}
-                className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-              >
-                Undo
-              </button>
+              />
             ),
           });
           setDeletingPayment(null);
@@ -509,15 +522,13 @@ export default function PaymentsPage() {
           toast({
             title: 'Payment restored',
             action: (
-              <button
+              <ToastUndoButton
                 onClick={() => deletePayment.mutate(
                   { orgId: currentOrgId!, paymentId },
                   { onSuccess: () => toast({ title: 'Payment deleted' }) },
                 )}
-                className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-              >
-                Redo
-              </button>
+                label="Redo"
+              />
             ),
           });
         },
@@ -541,7 +552,7 @@ export default function PaymentsPage() {
           toast({
             title: 'Allocation removed',
             action: (
-              <button
+              <ToastUndoButton
                 onClick={() => {
                   allocatePayment.mutate(
                     { orgId: currentOrgId!, paymentId, allocations: [{ chargeId: allocation.chargeId, amountCents: allocation.amountCents }] },
@@ -551,15 +562,13 @@ export default function PaymentsPage() {
                         toast({
                           title: 'Allocation restored',
                           action: newAllocId ? (
-                            <button
+                            <ToastUndoButton
                               onClick={() => removeAllocation.mutate(
                                 { orgId: currentOrgId!, allocationId: newAllocId },
                                 { onSuccess: () => toast({ title: 'Allocation removed' }) },
                               )}
-                              className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-                            >
-                              Redo
-                            </button>
+                              label="Redo"
+                            />
                           ) : undefined,
                         });
                       },
@@ -567,10 +576,7 @@ export default function PaymentsPage() {
                     },
                   );
                 }}
-                className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-              >
-                Undo
-              </button>
+              />
             ),
           });
         },
@@ -653,31 +659,26 @@ export default function PaymentsPage() {
           toast({
             title: 'Payment allocated',
             action: allocationId ? (
-              <button
+              <ToastUndoButton
                 onClick={() => removeAllocation.mutate(
                   { orgId: currentOrgId!, allocationId },
                   {
                     onSuccess: () => toast({
                       title: 'Allocation removed',
                       action: (
-                        <button
+                        <ToastUndoButton
                           onClick={() => allocatePayment.mutate(
                             { orgId: currentOrgId!, paymentId: redoPaymentId, allocations: [{ chargeId: redoChargeId, amountCents: redoAmount }] },
                             { onSuccess: () => toast({ title: 'Payment allocated' }) },
                           )}
-                          className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-                        >
-                          Redo
-                        </button>
+                          label="Redo"
+                        />
                       ),
                     }),
                     onError: () => toast({ title: 'Failed to undo', variant: 'destructive' }),
                   },
                 )}
-                className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-              >
-                Undo
-              </button>
+              />
             ) : undefined,
           });
           closeChargeDialog();
@@ -898,7 +899,7 @@ export default function PaymentsPage() {
       toast({
         title: `Deleted ${deletedCount} payment${deletedCount !== 1 ? 's' : ''}`,
         action: (
-          <button
+          <ToastUndoButton
             onClick={async () => {
               let restoredCount = 0;
               for (const paymentId of paymentIds) {
@@ -907,22 +908,17 @@ export default function PaymentsPage() {
               toast({
                 title: `Restored ${restoredCount} payment${restoredCount !== 1 ? 's' : ''}`,
                 action: (
-                  <button
+                  <ToastUndoButton
                     onClick={async () => {
                       const redoResult = await bulkDeletePayments.mutateAsync({ orgId: currentOrgId, paymentIds });
                       toast({ title: `Deleted ${redoResult.deletedCount} payment${redoResult.deletedCount !== 1 ? 's' : ''}` });
                     }}
-                    className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-                  >
-                    Redo
-                  </button>
+                    label="Redo"
+                  />
                 ),
               });
             }}
-            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-          >
-            Undo
-          </button>
+          />
         ),
       });
     } catch {
@@ -960,10 +956,155 @@ export default function PaymentsPage() {
     }
   };
 
+  const handleBulkCreateMembers = async () => {
+    if (!currentOrgId || selectedPayments.size === 0) return;
+
+    const selectedList = paginatedPayments.filter((p) => selectedPayments.has(p.id));
+    const uniqueNames = new Map<string, string>();
+    for (const p of selectedList) {
+      const name = (p.rawPayerName || '').trim();
+      if (name && !uniqueNames.has(name.toLowerCase())) {
+        uniqueNames.set(name.toLowerCase(), name);
+      }
+    }
+
+    const unmatchedNames = Array.from(uniqueNames.values()).filter(
+      (name) => !findMatchingMember(name)
+    );
+
+    if (unmatchedNames.length === 0) {
+      toast({ title: 'All payers already have matching members' });
+      return;
+    }
+
+    try {
+      const created = await createMembers.mutateAsync({
+        orgId: currentOrgId,
+        members: unmatchedNames.map((name) => ({ name })),
+      });
+      setSelectedPayments(new Set());
+      const names = created.map((m: any) => m.name).join(', ');
+      toast({ title: `Created ${created.length} member${created.length !== 1 ? 's' : ''}: ${names}` });
+    } catch (error: any) {
+      toast({
+        title: 'Error creating members',
+        description: error.message || 'Please try again',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleBulkCreateCharges = async () => {
+    if (!currentOrgId || selectedPayments.size === 0) return;
+
+    const selectedList = paginatedPayments.filter(
+      (p) => selectedPayments.has(p.id) && p.unallocatedCents > 0
+    );
+
+    if (selectedList.length === 0) {
+      toast({ title: 'No unallocated payments selected' });
+      return;
+    }
+
+    // Deduplicate: one charge per member (sum unallocated cents from all their payments)
+    const memberMap = new Map<string, { member: any; totalCents: number }>();
+    let skipped = 0;
+    for (const payment of selectedList) {
+      const member = findMatchingMember(payment.rawPayerName || '');
+      if (member) {
+        const existing = memberMap.get(member.id);
+        if (existing) {
+          existing.totalCents += payment.unallocatedCents;
+        } else {
+          memberMap.set(member.id, { member, totalCents: payment.unallocatedCents });
+        }
+      } else {
+        skipped++;
+      }
+    }
+
+    const memberEntries = Array.from(memberMap.values());
+
+    if (memberEntries.length === 0) {
+      toast({
+        title: 'No matching members found',
+        description: 'Create members first.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      // Bulk create one charge per member (batched audit log)
+      const chargeSpecs = memberEntries.map(({ member, totalCents }) => ({
+        membershipId: member.id,
+        category: 'DUES' as string,
+        title: 'Dues',
+        amountCents: totalCents,
+        dueDate: new Date().toISOString(),
+      }));
+
+      const createdCharges = await bulkCreateCharges.mutateAsync({
+        orgId: currentOrgId,
+        charges: chargeSpecs,
+      });
+
+      const chargeArray = Array.isArray(createdCharges) ? createdCharges : [createdCharges];
+
+      // Auto-allocate each charge using fresh server data (locked transaction).
+      // The server reads actual unallocated amounts and caps allocation accordingly.
+      let totalAllocatedCents = 0;
+      let allocatedCount = 0;
+      for (const charge of chargeArray) {
+        if (!charge?.id) continue;
+        try {
+          const result = await autoAllocate.mutateAsync({ orgId: currentOrgId, chargeId: charge.id });
+          const cents = result?.allocatedCents || 0;
+          totalAllocatedCents += cents;
+          if (cents > 0) allocatedCount++;
+        } catch {
+          // auto-allocate failed for this charge — continue
+        }
+      }
+
+      setSelectedPayments(new Set());
+      const parts: string[] = [`Created ${chargeArray.length} charge${chargeArray.length !== 1 ? 's' : ''}`];
+      if (totalAllocatedCents > 0) {
+        parts.push(`allocated $${(totalAllocatedCents / 100).toFixed(2)}`);
+      }
+      toast({
+        title: parts.join(', '),
+        description: skipped > 0 ? `${skipped} payment${skipped !== 1 ? 's' : ''} skipped (no matching member).` : undefined,
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Error creating charges',
+        description: error.message || 'Please try again',
+        variant: 'destructive',
+      });
+    }
+  };
+
   // Reset selection when filters change
   useEffect(() => {
     setSelectedPayments(new Set());
   }, [allocationFilter, searchQuery, page]);
+
+  const handleExportPayments = (format: 'csv' | 'pdf') => {
+    const headers = ['Payer', 'Amount', 'Date', 'Source', 'Allocated', 'Unallocated', 'Memo'];
+    const rows = filteredPayments.map((p) => [
+      p.rawPayerName || '',
+      `$${(p.amountCents / 100).toFixed(2)}`,
+      new Date(p.paidAt).toLocaleDateString(),
+      p.source,
+      `$${(p.allocatedCents / 100).toFixed(2)}`,
+      `$${(p.unallocatedCents / 100).toFixed(2)}`,
+      p.memo || '',
+    ]);
+    const filename = `payments-${new Date().toISOString().split('T')[0]}`;
+    if (format === 'csv') exportCSV(headers, rows, filename);
+    else exportPDF('Payments', headers, rows, filename);
+  };
 
   return (
     <div data-tour="payments-list" className="space-y-8">
@@ -972,14 +1113,22 @@ export default function PaymentsPage() {
         <PageHeader
           title="Payments"
           helpText="View and manage payments. Allocate payments to charges or create new charges from unallocated payments. Use selection checkboxes for bulk actions."
-          actions={isAdmin && (
-            <Button asChild className="bg-gradient-to-r from-primary to-blue-400 hover:opacity-90 transition-opacity">
-              <Link href="/payments/new">
-                <Plus className="w-4 h-4 mr-2" />
-                Record Payment
-              </Link>
-            </Button>
-          )}
+          actions={
+            <div className="flex items-center gap-2">
+              <ExportDropdown
+                onExportCSV={() => handleExportPayments('csv')}
+                onExportPDF={() => handleExportPayments('pdf')}
+              />
+              {isAdmin && (
+                <Button asChild size="sm" className="hover:opacity-90 transition-opacity">
+                  <Link href="/payments/new">
+                    <Plus className="w-4 h-4 mr-1.5" />
+                    Record Payment
+                  </Link>
+                </Button>
+              )}
+            </div>
+          }
         />
       </FadeIn>
 
@@ -1056,29 +1205,7 @@ export default function PaymentsPage() {
               </Select>
               <span className="text-sm text-muted-foreground">per page</span>
             </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="text-sm text-muted-foreground min-w-[80px] text-center">
-                {page} / {totalPages || 1}
-              </span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
           </div>
         </FadeIn>
       )}
@@ -1092,24 +1219,17 @@ export default function PaymentsPage() {
         </div>
       ) : filteredPayments.length === 0 ? (
         <FadeIn delay={0.3}>
-          <div className="rounded-xl border border-border/50 bg-card/50 py-16 text-center animate-in-scale">
-            <div className="w-16 h-16 rounded-2xl bg-success/10 flex items-center justify-center mx-auto mb-4">
-              <CreditCard className="h-8 w-8 text-success" />
-            </div>
-            <h3 className="text-lg font-semibold mb-2">
-              {searchQuery ? 'No payments found' : 'No payments yet'}
-            </h3>
-            <p className="text-muted-foreground mb-6">
-              {searchQuery
-                ? 'Try adjusting your search'
-                : 'Record your first payment to start tracking'}
-            </p>
-            {!searchQuery && isAdmin && (
-              <Button asChild className="bg-gradient-to-r from-primary to-blue-400">
+          <EmptyState
+            icon={CreditCard}
+            title="No payments yet"
+            description="Payments will appear here once recorded"
+            action={isAdmin && (
+              <Button asChild>
                 <Link href="/payments/new">Record your first payment</Link>
               </Button>
             )}
-          </div>
+            className="rounded-xl border border-border/50 bg-card/50"
+          />
         </FadeIn>
       ) : (
         <>
@@ -1148,6 +1268,22 @@ export default function PaymentsPage() {
                     )}
                   </button>
                   <button
+                    onClick={handleBulkCreateCharges}
+                    className="w-7 h-7 flex items-center justify-center transition-all hover:text-primary"
+                    title={`Create charges for ${selectedPayments.size} selected`}
+                    disabled={bulkCreateCharges.isPending}
+                  >
+                    <Receipt className="w-4 h-4 text-muted-foreground hover:text-primary" />
+                  </button>
+                  <button
+                    onClick={handleBulkCreateMembers}
+                    className="w-7 h-7 flex items-center justify-center transition-all hover:text-primary"
+                    title={`Create members from ${selectedPayments.size} selected`}
+                    disabled={createMembers.isPending}
+                  >
+                    <UserPlus className="w-4 h-4 text-muted-foreground hover:text-primary" />
+                  </button>
+                  <button
                     onClick={handleBulkDeletePayments}
                     className="w-7 h-7 flex items-center justify-center transition-all hover:text-destructive"
                     title={`Delete ${selectedPayments.size} selected`}
@@ -1179,29 +1315,7 @@ export default function PaymentsPage() {
 
           {/* Pagination Controls - Bottom */}
           {filteredPayments.length > pageSize && (
-            <div className="flex items-center justify-center gap-2 pt-4">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="text-sm text-muted-foreground min-w-[80px] text-center">
-                {page} / {totalPages}
-              </span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} className="justify-center pt-4" />
           )}
         </>
       )}
@@ -1240,11 +1354,9 @@ export default function PaymentsPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="paidAt">Payment Date</Label>
-                <Input
-                  id="paidAt"
-                  type="date"
+                <DatePicker
                   value={editingPayment.paidAt}
-                  onChange={(e) => setEditingPayment({ ...editingPayment, paidAt: e.target.value })}
+                  onChange={(date) => setEditingPayment({ ...editingPayment, paidAt: date })}
                 />
               </div>
               <div className="space-y-2">
@@ -1265,7 +1377,7 @@ export default function PaymentsPage() {
             <Button
               onClick={handleSaveEdit}
               disabled={updatePayment.isPending}
-              className="bg-gradient-to-r from-primary to-blue-400"
+             
             >
               {updatePayment.isPending ? (
                 <>
@@ -1411,7 +1523,7 @@ export default function PaymentsPage() {
                   </div>
 
                   {/* Tab content */}
-                  <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 scrollbar-none">
+                  <div className="flex-1 overflow-y-auto min-h-0 scrollbar-none px-0.5 -mx-0.5">
                     {chargeDialogTab === 'existing' ? (
                   <div className="space-y-2 py-2">
                     {/* Suggested charges based on payer name similarity */}
@@ -1606,11 +1718,9 @@ export default function PaymentsPage() {
                         </div>
                         <div className="space-y-1">
                           <Label className="text-xs">Due Date (optional)</Label>
-                          <Input
-                            type="date"
+                          <DatePicker
                             value={newChargeDueDate}
-                            onChange={(e) => setNewChargeDueDate(e.target.value)}
-                            className="h-9"
+                            onChange={setNewChargeDueDate}
                           />
                         </div>
                       </div>
@@ -1635,7 +1745,7 @@ export default function PaymentsPage() {
                           className="pl-9 h-9"
                         />
                       </div>
-                      <div className="space-y-1 max-h-[200px] overflow-y-auto scrollbar-none">
+                      <div className="space-y-1">
                         {/* Inline new member creation (hidden when payer matches existing member) */}
                         {!payerMatchesMember && (
                         <div className="flex items-center gap-2 p-2 rounded-xl border border-dashed border-border/50">
@@ -1675,7 +1785,7 @@ export default function PaymentsPage() {
                               className={cn(
                                 'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors',
                                 selectAll
-                                  ? 'bg-gradient-to-br from-primary to-blue-400 border-transparent'
+                                  ? 'bg-primary border-transparent'
                                   : 'border-muted-foreground/30',
                               )}
                             >
@@ -1703,7 +1813,7 @@ export default function PaymentsPage() {
                               className={cn(
                                 'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors',
                                 selectedMembers.has(member.id)
-                                  ? 'bg-gradient-to-br from-primary to-blue-400 border-transparent'
+                                  ? 'bg-primary border-transparent'
                                   : 'border-muted-foreground/30',
                               )}
                             >
@@ -1738,7 +1848,7 @@ export default function PaymentsPage() {
                 <Button
                   onClick={handleConfirmAllocate}
                   disabled={allocatePayment.isPending || !selectedChargeId}
-                  className="bg-gradient-to-r from-primary to-blue-400"
+                 
                 >
                   {allocatePayment.isPending ? (
                     <>
@@ -1753,7 +1863,7 @@ export default function PaymentsPage() {
                 <Button
                   onClick={handleConfirmCreateCharge}
                   disabled={createCharge.isPending || allocatePayment.isPending || selectedMembers.size === 0}
-                  className="bg-gradient-to-r from-primary to-blue-400"
+                 
                 >
                   {(createCharge.isPending || allocatePayment.isPending) ? (
                     <>
@@ -1804,7 +1914,7 @@ export default function PaymentsPage() {
                       className={cn(
                         'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors shrink-0',
                         selectedSimilarPayments.has(payment.id)
-                          ? 'bg-gradient-to-br from-primary to-blue-400 border-transparent'
+                          ? 'bg-primary border-transparent'
                           : 'border-muted-foreground/30',
                       )}
                     >
@@ -1838,7 +1948,7 @@ export default function PaymentsPage() {
             <Button
               onClick={handleAllocateSimilarPayments}
               disabled={allocatePayment.isPending || selectedSimilarPayments.size === 0}
-              className="bg-gradient-to-r from-primary to-blue-400"
+             
             >
               {allocatePayment.isPending ? (
                 <>
@@ -1852,6 +1962,25 @@ export default function PaymentsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <BatchActionsBar selectedCount={selectedPayments.size} onClear={() => setSelectedPayments(new Set())}>
+        <Button variant="secondary" size="sm" onClick={handleBulkAutoAllocate} disabled={bulkAutoAllocate.isPending} className="h-8">
+          <Link2 className="w-3.5 h-3.5 mr-1.5" />
+          Auto-Allocate
+        </Button>
+        <Button variant="secondary" size="sm" onClick={handleBulkCreateCharges} disabled={bulkCreateCharges.isPending} className="h-8">
+          <Receipt className="w-3.5 h-3.5 mr-1.5" />
+          Create Charges
+        </Button>
+        <Button variant="secondary" size="sm" onClick={handleBulkCreateMembers} disabled={createMembers.isPending} className="h-8">
+          <UserPlus className="w-3.5 h-3.5 mr-1.5" />
+          Create Members
+        </Button>
+        <Button variant="destructive" size="sm" onClick={handleBulkDeletePayments} className="h-8">
+          <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+          Delete
+        </Button>
+      </BatchActionsBar>
     </div>
   );
 }

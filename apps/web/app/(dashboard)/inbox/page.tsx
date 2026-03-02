@@ -23,8 +23,6 @@ import {
   Trash2,
   Search,
   Plus,
-  ChevronLeft,
-  ChevronRight,
 } from 'lucide-react';
 import { useAuthStore } from '@/lib/stores/auth';
 import { useMembers, useCreateMembers, useDeleteMember } from '@/lib/queries/members';
@@ -50,7 +48,8 @@ import {
   MotionCard,
   MotionCardContent,
 } from '@/components/ui/motion-card';
-import { FadeIn, StaggerChildren, StaggerItem } from '@/components/ui/page-transition';
+import { FadeIn } from '@/components/ui/page-transition';
+import { AnimatedList } from '@/components/ui/animated-list';
 import {
   Select,
   SelectContent,
@@ -59,7 +58,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
+import { ToastUndoButton } from '@/components/ui/toast-undo-button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Pagination } from '@/components/ui/pagination';
+import { EmptyState } from '@/components/ui/empty-state';
+import { BatchActionsBar } from '@/components/ui/batch-actions-bar';
 import {
   Tooltip,
   TooltipContent,
@@ -143,169 +146,167 @@ function ImportCard({
   const isOutgoing = item.parsedDirection === 'outgoing';
 
   return (
-    <StaggerItem>
-      <MotionCard className={isOutgoing
-        ? 'border-l-4 border-l-destructive/30 bg-destructive/5'
-        : 'border-l-4 border-l-success/30 bg-success/5'
-      }>
-        <MotionCardContent className="p-3">
-          <div className="flex items-start justify-between gap-3">
-            {onToggleSelect && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleSelect();
-                }}
-                className="mt-1 flex items-center justify-center transition-colors"
-                title={isSelected ? "Deselect" : "Select"}
-              >
-                {isSelected ? (
-                  <CheckCircle2 className="w-5 h-5 text-primary" />
-                ) : (
-                  <Circle className="w-5 h-5 text-muted-foreground hover:text-primary" />
-                )}
-              </button>
-            )}
-            <div className="flex items-start gap-3 flex-1 min-w-0">
-              <AvatarGradient
-                name={item.parsedPayerName || 'Unknown'}
-                size="md"
-              />
-              <div className="space-y-1 flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap min-w-0">
-                  <p className="font-medium text-sm truncate" title={isOutgoing ? `To: ${item.parsedPayerName || 'Unknown'}` : item.parsedPayerName || 'Unknown Payer'}>
-                    {isOutgoing ? `To: ${item.parsedPayerName || 'Unknown'}` : item.parsedPayerName || 'Unknown Payer'}
-                  </p>
-                  <Badge
-                    variant="outline"
-                    className={`text-xs ${isOutgoing
-                      ? 'bg-destructive/10 text-destructive border-destructive/20'
-                      : 'bg-success/10 text-success border-success/20'
-                    }`}
-                  >
-                    {isOutgoing ? (
-                      <><ArrowUpRight className="w-3 h-3 mr-1" />Out</>
-                    ) : (
-                      <><ArrowDownLeft className="w-3 h-3 mr-1" />In</>
-                    )}
-                  </Badge>
-                  <Badge
-                    variant="outline"
-                    className={`text-xs ${sourceColors[item.parsedSource] || ''}`}
-                  >
-                    {item.parsedSource}
-                  </Badge>
-                </div>
-                <div className="flex items-center gap-3">
-                  {item.parsedAmount && (
-                    <Money cents={item.parsedAmount} size="md" />
-                  )}
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-                    <span>
-                      {new Date(item.emailDate).toLocaleDateString()}
-                    </span>
-                    {item.parsedMemo && (
-                      <>
-                        <span className="opacity-30">•</span>
-                        <span>"{item.parsedMemo}"</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-                {item.needsReviewReason && (
-                  <div className="flex items-center gap-1.5">
-                    <AlertCircle className="w-3 h-3 text-warning" />
-                    <p className="text-xs text-warning">{item.needsReviewReason}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {!isOutgoing && (
-                <Select
-                  value={selectedMemberId}
-                  onValueChange={(v) => {
-                    setSelectedMemberId(v);
-                    setMemberSearch('');
-                  }}
-                >
-                  <SelectTrigger className="h-8 w-40 text-xs bg-secondary/30 border-border/50">
-                    <SelectValue placeholder="Member" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <div className="px-2 pb-2">
-                      <div className="relative">
-                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
-                        <Input
-                          placeholder="Search or create..."
-                          value={memberSearch}
-                          onChange={(e) => setMemberSearch(e.target.value)}
-                          className="h-7 pl-7 text-xs"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      </div>
-                    </div>
-                    <SelectItem value="none">Unassigned</SelectItem>
-                    {canCreateNew && (
-                      <div
-                        className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-xs outline-none hover:bg-accent hover:text-accent-foreground text-primary font-medium"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleCreateAndSelect();
-                        }}
-                      >
-                        <Plus className="w-3 h-3 mr-2" />
-                        {isCreatingMember ? 'Creating...' : `Create "${createName}"`}
-                      </div>
-                    )}
-                    {filteredMembers.map((member) => (
-                      <SelectItem key={member.id} value={member.id}>
-                        <div className="flex items-center gap-2">
-                          <AvatarGradient name={member.displayName} size="xs" />
-                          {member.displayName}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+    <MotionCard className={isOutgoing
+      ? 'border-l-4 border-l-destructive/30 bg-destructive/5'
+      : 'border-l-4 border-l-success/30 bg-success/5'
+    }>
+      <MotionCardContent className="p-3">
+        <div className="flex items-start justify-between gap-3">
+          {onToggleSelect && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleSelect();
+              }}
+              className="mt-1 flex items-center justify-center transition-colors"
+              title={isSelected ? "Deselect" : "Select"}
+            >
+              {isSelected ? (
+                <CheckCircle2 className="w-5 h-5 text-primary" />
+              ) : (
+                <Circle className="w-5 h-5 text-muted-foreground hover:text-primary" />
               )}
-              <Button
-                size="sm"
-                variant="outline"
-                className={isOutgoing
-                  ? 'border-destructive/30 text-destructive hover:bg-destructive/10'
-                  : 'border-success/30 text-success hover:bg-success/10'
-                }
-                onClick={() =>
-                  onConfirm(isOutgoing ? undefined : (selectedMemberId === 'none' ? undefined : selectedMemberId))
-                }
-                disabled={isConfirming || isIgnoring || !item.parsedAmount}
-              >
-                {isConfirming ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <CheckCircle2 className="w-3 h-3" />
+            </button>
+          )}
+          <div className="flex items-start gap-3 flex-1 min-w-0">
+            <AvatarGradient
+              name={item.parsedPayerName || 'Unknown'}
+              size="md"
+            />
+            <div className="space-y-1 flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap min-w-0">
+                <p className="font-medium text-sm truncate" title={isOutgoing ? `To: ${item.parsedPayerName || 'Unknown'}` : item.parsedPayerName || 'Unknown Payer'}>
+                  {isOutgoing ? `To: ${item.parsedPayerName || 'Unknown'}` : item.parsedPayerName || 'Unknown Payer'}
+                </p>
+                <Badge
+                  variant="outline"
+                  className={`text-xs ${isOutgoing
+                    ? 'bg-destructive/10 text-destructive border-destructive/20'
+                    : 'bg-success/10 text-success border-success/20'
+                  }`}
+                >
+                  {isOutgoing ? (
+                    <><ArrowUpRight className="w-3 h-3 mr-1" />Out</>
+                  ) : (
+                    <><ArrowDownLeft className="w-3 h-3 mr-1" />In</>
+                  )}
+                </Badge>
+                <Badge
+                  variant="outline"
+                  className={`text-xs ${sourceColors[item.parsedSource] || ''}`}
+                >
+                  {item.parsedSource}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-3">
+                {item.parsedAmount && (
+                  <Money cents={item.parsedAmount} size="md" />
                 )}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="text-muted-foreground hover:text-foreground"
-                onClick={onIgnore}
-                disabled={isConfirming || isIgnoring}
-              >
-                {isIgnoring ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <X className="w-3 h-3" />
-                )}
-              </Button>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                  <span>
+                    {new Date(item.emailDate).toLocaleDateString()}
+                  </span>
+                  {item.parsedMemo && (
+                    <>
+                      <span className="opacity-30">•</span>
+                      <span>"{item.parsedMemo}"</span>
+                    </>
+                  )}
+                </div>
+              </div>
+              {item.needsReviewReason && (
+                <div className="flex items-center gap-1.5">
+                  <AlertCircle className="w-3 h-3 text-warning" />
+                  <p className="text-xs text-warning">{item.needsReviewReason}</p>
+                </div>
+              )}
             </div>
           </div>
-        </MotionCardContent>
-      </MotionCard>
-    </StaggerItem>
+
+          <div className="flex items-center gap-2">
+            {!isOutgoing && (
+              <Select
+                value={selectedMemberId}
+                onValueChange={(v) => {
+                  setSelectedMemberId(v);
+                  setMemberSearch('');
+                }}
+              >
+                <SelectTrigger className="h-8 w-40 text-xs bg-secondary/30 border-border/50">
+                  <SelectValue placeholder="Member" />
+                </SelectTrigger>
+                <SelectContent>
+                  <div className="px-2 pb-2">
+                    <div className="relative">
+                      <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                      <Input
+                        placeholder="Search or create..."
+                        value={memberSearch}
+                        onChange={(e) => setMemberSearch(e.target.value)}
+                        className="h-7 pl-7 text-xs"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                  </div>
+                  <SelectItem value="none">Unassigned</SelectItem>
+                  {canCreateNew && (
+                    <div
+                      className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-xs outline-none hover:bg-accent hover:text-accent-foreground text-primary font-medium"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCreateAndSelect();
+                      }}
+                    >
+                      <Plus className="w-3 h-3 mr-2" />
+                      {isCreatingMember ? 'Creating...' : `Create "${createName}"`}
+                    </div>
+                  )}
+                  {filteredMembers.map((member) => (
+                    <SelectItem key={member.id} value={member.id}>
+                      <div className="flex items-center gap-2">
+                        <AvatarGradient name={member.displayName} size="xs" />
+                        {member.displayName}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <Button
+              size="sm"
+              variant="outline"
+              className={isOutgoing
+                ? 'border-destructive/30 text-destructive hover:bg-destructive/10'
+                : 'border-success/30 text-success hover:bg-success/10'
+              }
+              onClick={() =>
+                onConfirm(isOutgoing ? undefined : (selectedMemberId === 'none' ? undefined : selectedMemberId))
+              }
+              disabled={isConfirming || isIgnoring || !item.parsedAmount}
+            >
+              {isConfirming ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <CheckCircle2 className="w-3 h-3" />
+              )}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-muted-foreground hover:text-foreground"
+              onClick={onIgnore}
+              disabled={isConfirming || isIgnoring}
+            >
+              {isIgnoring ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <X className="w-3 h-3" />
+              )}
+            </Button>
+          </div>
+        </div>
+      </MotionCardContent>
+    </MotionCard>
   );
 }
 
@@ -438,31 +439,26 @@ export default function InboxPage() {
           toast({
             title: 'Payment confirmed!',
             action: (
-              <button
+              <ToastUndoButton
                 onClick={() => unconfirmImport.mutate(
                   { orgId: currentOrgId!, importId },
                   {
                     onSuccess: () => toast({
                       title: 'Moved back to pending',
                       action: (
-                        <button
+                        <ToastUndoButton
                           onClick={() => confirmImport.mutate(
                             { orgId: currentOrgId!, importId },
                             { onSuccess: () => toast({ title: 'Payment confirmed!' }) },
                           )}
-                          className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-                        >
-                          Redo
-                        </button>
+                          label="Redo"
+                        />
                       ),
                     }),
                     onError: () => toast({ title: 'Failed to undo', variant: 'destructive' }),
                   },
                 )}
-                className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-              >
-                Undo
-              </button>
+              />
             ),
           });
           setConfirmingId(null);
@@ -490,31 +486,26 @@ export default function InboxPage() {
           toast({
             title: 'Import ignored',
             action: (
-              <button
+              <ToastUndoButton
                 onClick={() => restoreImport.mutate(
                   { orgId: currentOrgId!, importId },
                   {
                     onSuccess: () => toast({
                       title: 'Import restored',
                       action: (
-                        <button
+                        <ToastUndoButton
                           onClick={() => ignoreImport.mutate(
                             { orgId: currentOrgId!, importId },
                             { onSuccess: () => toast({ title: 'Import ignored' }) },
                           )}
-                          className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-                        >
-                          Redo
-                        </button>
+                          label="Redo"
+                        />
                       ),
                     }),
                     onError: () => toast({ title: 'Failed to undo', variant: 'destructive' }),
                   },
                 )}
-                className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-              >
-                Undo
-              </button>
+              />
             ),
           });
         },
@@ -576,31 +567,26 @@ export default function InboxPage() {
           toast({
             title: 'Moved back to pending',
             action: (
-              <button
+              <ToastUndoButton
                 onClick={() => confirmImport.mutate(
                   { orgId: currentOrgId!, importId },
                   {
                     onSuccess: () => toast({
                       title: 'Payment confirmed!',
                       action: (
-                        <button
+                        <ToastUndoButton
                           onClick={() => unconfirmImport.mutate(
                             { orgId: currentOrgId!, importId },
                             { onSuccess: () => toast({ title: 'Moved back to pending' }) },
                           )}
-                          className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-                        >
-                          Redo
-                        </button>
+                          label="Redo"
+                        />
                       ),
                     }),
                     onError: () => toast({ title: 'Failed to undo', variant: 'destructive' }),
                   },
                 )}
-                className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-              >
-                Undo
-              </button>
+              />
             ),
           });
           setUnconfirmingId(null);
@@ -639,6 +625,7 @@ export default function InboxPage() {
   };
 
   const toggleConfirmedSelection = (importId: string) => {
+    setSelectedImports(new Set()); // mutual exclusion
     setSelectedConfirmed((prev) => {
       const next = new Set(prev);
       if (next.has(importId)) next.delete(importId);
@@ -658,7 +645,7 @@ export default function InboxPage() {
       toast({
         title: `Member "${name}" created`,
         action: createdId ? (
-          <button
+          <ToastUndoButton
             onClick={() => {
               deleteMember.mutate(
                 { orgId: currentOrgId, memberId: createdId },
@@ -666,25 +653,20 @@ export default function InboxPage() {
                   onSuccess: () => toast({
                     title: `${name} removed`,
                     action: (
-                      <button
+                      <ToastUndoButton
                         onClick={() => createMembers.mutate(
                           { orgId: currentOrgId!, members: [{ name }] },
                           { onSuccess: () => toast({ title: `${name} re-added` }) },
                         )}
-                        className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-                      >
-                        Redo
-                      </button>
+                        label="Redo"
+                      />
                     ),
                   }),
                   onError: () => toast({ title: 'Failed to undo', variant: 'destructive' }),
                 },
               );
             }}
-            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-          >
-            Undo
-          </button>
+          />
         ) : undefined,
       });
       return createdId || null;
@@ -699,6 +681,7 @@ export default function InboxPage() {
   };
 
   const toggleImportSelection = (importId: string) => {
+    setSelectedConfirmed(new Set()); // mutual exclusion
     setSelectedImports((prev) => {
       const next = new Set(prev);
       if (next.has(importId)) {
@@ -742,7 +725,7 @@ export default function InboxPage() {
       toast({
         title: `Moved ${undoneCount} payment${undoneCount !== 1 ? 's' : ''} back to pending`,
         action: (
-          <button
+          <ToastUndoButton
             onClick={async () => {
               let redoneCount = 0;
               for (const importId of approvedIds) {
@@ -750,10 +733,8 @@ export default function InboxPage() {
               }
               toast({ title: `Re-approved ${redoneCount} payment${redoneCount !== 1 ? 's' : ''}` });
             }}
-            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-          >
-            Redo
-          </button>
+            label="Redo"
+          />
         ),
       });
     };
@@ -761,12 +742,9 @@ export default function InboxPage() {
     toast({
       title: `Approved ${approvedIds.length} payment${approvedIds.length !== 1 ? 's' : ''}`,
       action: approvedIds.length > 0 ? (
-        <button
+        <ToastUndoButton
           onClick={handleUndoBulkApprove}
-          className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-        >
-          Undo
-        </button>
+        />
       ) : undefined,
     });
   };
@@ -803,7 +781,7 @@ export default function InboxPage() {
       toast({
         title: `Restored ${restoredCount} import${restoredCount !== 1 ? 's' : ''}`,
         action: (
-          <button
+          <ToastUndoButton
             onClick={async () => {
               let redoneCount = 0;
               for (const importId of ignoredIds) {
@@ -811,10 +789,8 @@ export default function InboxPage() {
               }
               toast({ title: `Re-ignored ${redoneCount} import${redoneCount !== 1 ? 's' : ''}` });
             }}
-            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-          >
-            Redo
-          </button>
+            label="Redo"
+          />
         ),
       });
     };
@@ -822,12 +798,9 @@ export default function InboxPage() {
     toast({
       title: `Ignored ${ignoredIds.length} import${ignoredIds.length !== 1 ? 's' : ''}`,
       action: (
-        <button
+        <ToastUndoButton
           onClick={handleUndo}
-          className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-        >
-          Undo
-        </button>
+        />
       ),
     });
   };
@@ -917,7 +890,7 @@ export default function InboxPage() {
             <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-blue-500/5 to-primary/5 animate-pulse" />
             <div className="relative">
               <div className="flex items-center gap-4 mb-6">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-blue-400 flex items-center justify-center shadow-lg glow-md animate-in-scale">
+                <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center shadow-lg animate-in-scale">
                   <Zap className="w-7 h-7 text-primary-foreground" />
                 </div>
                 <div>
@@ -969,7 +942,7 @@ export default function InboxPage() {
                 href={currentOrgId ? getGmailConnectUrl(currentOrgId) : '#'}
                 className="inline-flex"
               >
-                <Button className="bg-gradient-to-r from-primary to-blue-400 hover:opacity-90">
+                <Button className="hover:opacity-90">
                   <Mail className="w-4 h-4 mr-2" />
                   Connect Gmail
                   <ExternalLink className="w-4 h-4 ml-2" />
@@ -1070,6 +1043,7 @@ export default function InboxPage() {
             const isAllCurrentPageSelected = currentPageIds.length > 0 && currentPageIds.every((id) => selectedImports.has(id));
 
             const toggleSelectAllCurrentPage = () => {
+              setSelectedConfirmed(new Set()); // mutual exclusion
               if (isAllCurrentPageSelected) {
                 setSelectedImports((prev) => {
                   const next = new Set(prev);
@@ -1168,10 +1142,12 @@ export default function InboxPage() {
                           </button>
                         </div>
                       </div>
-                      <StaggerChildren className="space-y-3">
-                        {paginatedImports.map((item) => (
+                      <AnimatedList
+                        items={paginatedImports}
+                        getKey={(item) => item.id}
+                        className="space-y-3"
+                        renderItem={(item) => (
                           <ImportCard
-                            key={item.id}
                             item={item}
                             members={members}
                             onConfirm={(membershipId) => handleConfirm(item.id, membershipId)}
@@ -1182,8 +1158,8 @@ export default function InboxPage() {
                             isSelected={selectedImports.has(item.id)}
                             onToggleSelect={() => toggleImportSelection(item.id)}
                           />
-                        ))}
-                      </StaggerChildren>
+                        )}
+                      />
 
                       {/* Pagination */}
                       {totalPendingPages > 1 && (
@@ -1191,27 +1167,7 @@ export default function InboxPage() {
                           <span className="text-sm text-muted-foreground">
                             Showing {pendingStartIndex + 1}-{Math.min(pendingStartIndex + pendingPerPage, filteredImports.length)} of {filteredImports.length}
                           </span>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setPendingPage((p) => Math.max(1, p - 1))}
-                              disabled={pendingPage === 1}
-                            >
-                              <ChevronLeft className="w-4 h-4" />
-                            </Button>
-                            <span className="text-sm">
-                              Page {pendingPage} of {totalPendingPages}
-                            </span>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setPendingPage((p) => Math.min(totalPendingPages, p + 1))}
-                              disabled={pendingPage === totalPendingPages}
-                            >
-                              <ChevronRight className="w-4 h-4" />
-                            </Button>
-                          </div>
+                          <Pagination page={pendingPage} totalPages={totalPendingPages} onPageChange={setPendingPage} />
                         </div>
                       )}
                     </>
@@ -1253,53 +1209,54 @@ export default function InboxPage() {
               {ignoredLoading ? (
                 <LoadingSkeleton />
               ) : ignored.length > 0 ? (
-                <StaggerChildren className="space-y-3">
-                  {ignored.map((item) => (
-                    <StaggerItem key={item.id}>
-                      <MotionCard className="opacity-60 hover:opacity-100 transition-opacity">
-                        <MotionCardContent className="p-5">
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="flex items-start gap-4 flex-1">
-                              <AvatarGradient
-                                name={item.parsedPayerName || 'Unknown'}
-                                size="lg"
-                              />
-                              <div className="space-y-2 flex-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <p className="font-semibold">
-                                    {item.parsedPayerName || 'Unknown Payer'}
-                                  </p>
-                                  <Badge variant="outline" className="text-muted-foreground">
-                                    Ignored
-                                  </Badge>
-                                </div>
-                                {item.parsedAmount && (
-                                  <Money cents={item.parsedAmount} size="lg" className="text-muted-foreground" />
-                                )}
-                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                  <span>{new Date(item.emailDate).toLocaleDateString()}</span>
-                                </div>
+                <AnimatedList
+                  items={ignored}
+                  getKey={(item) => item.id}
+                  className="space-y-3"
+                  renderItem={(item) => (
+                    <MotionCard className="opacity-60 hover:opacity-100 transition-opacity">
+                      <MotionCardContent className="p-5">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex items-start gap-4 flex-1">
+                            <AvatarGradient
+                              name={item.parsedPayerName || 'Unknown'}
+                              size="lg"
+                            />
+                            <div className="space-y-2 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="font-semibold">
+                                  {item.parsedPayerName || 'Unknown Payer'}
+                                </p>
+                                <Badge variant="outline" className="text-muted-foreground">
+                                  Ignored
+                                </Badge>
+                              </div>
+                              {item.parsedAmount && (
+                                <Money cents={item.parsedAmount} size="lg" className="text-muted-foreground" />
+                              )}
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <span>{new Date(item.emailDate).toLocaleDateString()}</span>
                               </div>
                             </div>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleRestore(item.id)}
-                              disabled={restoringId === item.id}
-                            >
-                              {restoringId === item.id ? (
-                                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                              ) : (
-                                <Undo2 className="w-4 h-4 mr-2" />
-                              )}
-                              Restore
-                            </Button>
                           </div>
-                        </MotionCardContent>
-                      </MotionCard>
-                    </StaggerItem>
-                  ))}
-                </StaggerChildren>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleRestore(item.id)}
+                            disabled={restoringId === item.id}
+                          >
+                            {restoringId === item.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                            ) : (
+                              <Undo2 className="w-4 h-4 mr-2" />
+                            )}
+                            Restore
+                          </Button>
+                        </div>
+                      </MotionCardContent>
+                    </MotionCard>
+                  )}
+                />
               ) : (
                 <FadeIn delay={0.3}>
                   <div className="rounded-xl border border-dashed border-border/50 bg-card/30 py-12 text-center animate-in-scale">
@@ -1317,6 +1274,49 @@ export default function InboxPage() {
           )}
         </div>
       )}
+
+      {/* Floating Batch Actions Bar — Pending */}
+      <BatchActionsBar
+        selectedCount={selectedImports.size}
+        onClear={() => setSelectedImports(new Set())}
+      >
+        <Button
+          size="sm"
+          variant="outline"
+          className="border-success/30 text-success hover:bg-success/10"
+          onClick={handleBulkApprove}
+          disabled={isBulkProcessing}
+        >
+          {isBulkProcessing ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />}
+          Approve
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="border-destructive/30 text-destructive hover:bg-destructive/10"
+          onClick={handleBulkIgnore}
+          disabled={isBulkProcessing}
+        >
+          <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+          Ignore
+        </Button>
+      </BatchActionsBar>
+
+      {/* Floating Batch Actions Bar — Confirmed */}
+      <BatchActionsBar
+        selectedCount={selectedConfirmed.size}
+        onClear={() => setSelectedConfirmed(new Set())}
+      >
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={handleBulkUnconfirm}
+          disabled={isBulkUnconfirming}
+        >
+          {isBulkUnconfirming ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Undo2 className="w-3.5 h-3.5 mr-1.5" />}
+          Move to Pending
+        </Button>
+      </BatchActionsBar>
 
       {/* Confirmed Payments */}
       {isConnected && confirmed.length > 0 && (() => {
@@ -1391,6 +1391,7 @@ export default function InboxPage() {
               const isAllConfirmedSelected = confirmedPageIds.length > 0 && confirmedPageIds.every((id) => selectedConfirmed.has(id));
 
               const toggleSelectAllConfirmed = () => {
+                setSelectedImports(new Set()); // mutual exclusion
                 if (isAllConfirmedSelected) {
                   setSelectedConfirmed((prev) => {
                     const next = new Set(prev);
@@ -1407,15 +1408,12 @@ export default function InboxPage() {
               };
 
               return filteredConfirmed.length === 0 ? (
-              <div className="rounded-xl border border-border/50 bg-card/50 py-12 text-center">
-                <div className="w-12 h-12 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-3">
-                  <Search className="h-6 w-6 text-muted-foreground" />
-                </div>
-                <h3 className="text-lg font-semibold mb-1">No payments found</h3>
-                <p className="text-sm text-muted-foreground">
-                  Try adjusting your search
-                </p>
-              </div>
+              <EmptyState
+                icon={Mail}
+                title="No payments found"
+                description="Confirmed payments will appear here"
+                className="rounded-xl border border-border/50 bg-card/50"
+              />
             ) : (
               <>
                 {/* Select All Row */}
@@ -1451,99 +1449,112 @@ export default function InboxPage() {
                   </div>
                 </div>
 
-                <StaggerChildren className="space-y-2">
-                  {paginatedConfirmed.map((item) => {
+                <AnimatedList
+                  items={paginatedConfirmed}
+                  getKey={(item) => item.id}
+                  className="space-y-2"
+                  renderItem={(item) => {
                     const isOutgoing = item.parsedDirection === 'outgoing';
                     return (
-                      <StaggerItem key={item.id}>
-                        <div className={`flex items-center justify-between p-4 rounded-xl border ${
-                          isOutgoing ? 'border-l-4 border-l-destructive/30' : 'border-l-4 border-l-success/30'
-                        } bg-card/50`}>
-                          <div className="flex items-center gap-3">
-                            <button
-                              onClick={() => toggleConfirmedSelection(item.id)}
-                              className="flex items-center justify-center transition-colors shrink-0"
-                              title={selectedConfirmed.has(item.id) ? "Deselect" : "Select"}
-                            >
-                              {selectedConfirmed.has(item.id) ? (
-                                <CheckCircle2 className="w-5 h-5 text-primary" />
-                              ) : (
-                                <Circle className="w-5 h-5 text-muted-foreground hover:text-primary" />
-                              )}
-                            </button>
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                              isOutgoing ? 'bg-destructive/10' : 'bg-success/10'
-                            }`}>
-                              {isOutgoing ? (
-                                <ArrowUpRight className="w-5 h-5 text-destructive" />
-                              ) : (
-                                <ArrowDownLeft className="w-5 h-5 text-success" />
-                              )}
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <p className="font-medium">
-                                  {isOutgoing ? `To: ${item.parsedPayerName || 'Unknown'}` : item.parsedPayerName || 'Unknown'}
-                                </p>
-                                <Badge
-                                  variant="outline"
-                                  className={`text-xs ${isOutgoing
-                                    ? 'bg-destructive/10 text-destructive border-destructive/20'
-                                    : 'bg-success/10 text-success border-success/20'
-                                  }`}
-                                >
-                                  {isOutgoing ? 'Expense' : 'Payment'}
-                                </Badge>
-                                {item.status === 'AUTO_CONFIRMED' && (
-                                  <Badge variant="outline" className="text-xs border-success/30 text-success">
-                                    Auto
-                                  </Badge>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                <span>{new Date(item.emailDate).toLocaleDateString()}</span>
-                                {item.derivedCategory && (
-                                  <>
-                                    <span className="opacity-30">•</span>
-                                    <Badge variant="outline" className="text-xs">
-                                      {item.derivedCategory}
-                                    </Badge>
-                                  </>
-                                )}
-                                {item.matchConfidence && (
-                                  <>
-                                    <span className="opacity-30">•</span>
-                                    <span className="text-xs">
-                                      {Math.round(item.matchConfidence * 100)}% match
-                                    </span>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            {item.parsedAmount && (
-                              <Money cents={item.parsedAmount} size="md" />
+                      <div className={`flex items-center justify-between p-4 rounded-xl border ${
+                        isOutgoing ? 'border-l-4 border-l-destructive/30' : 'border-l-4 border-l-success/30'
+                      } bg-card/50`}>
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => toggleConfirmedSelection(item.id)}
+                            className="flex items-center justify-center transition-colors shrink-0"
+                            title={selectedConfirmed.has(item.id) ? "Deselect" : "Select"}
+                          >
+                            {selectedConfirmed.has(item.id) ? (
+                              <CheckCircle2 className="w-5 h-5 text-primary" />
+                            ) : (
+                              <Circle className="w-5 h-5 text-muted-foreground hover:text-primary" />
                             )}
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-muted-foreground hover:text-foreground"
-                              onClick={() => handleUnconfirm(item.id)}
-                              disabled={unconfirmingId === item.id}
-                            >
-                              {unconfirmingId === item.id ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <Undo2 className="w-4 h-4" />
+                          </button>
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                            isOutgoing ? 'bg-destructive/10' : 'bg-success/10'
+                          }`}>
+                            {isOutgoing ? (
+                              <ArrowUpRight className="w-5 h-5 text-destructive" />
+                            ) : (
+                              <ArrowDownLeft className="w-5 h-5 text-success" />
+                            )}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium">
+                                {isOutgoing ? `To: ${item.parsedPayerName || 'Unknown'}` : item.parsedPayerName || 'Unknown'}
+                              </p>
+                              <Badge
+                                variant="outline"
+                                className={`text-xs ${isOutgoing
+                                  ? 'bg-destructive/10 text-destructive border-destructive/20'
+                                  : 'bg-success/10 text-success border-success/20'
+                                }`}
+                              >
+                                {isOutgoing ? 'Expense' : 'Payment'}
+                              </Badge>
+                              {item.status === 'AUTO_CONFIRMED' && (
+                                <Badge variant="outline" className="text-xs border-success/30 text-success">
+                                  Auto
+                                </Badge>
                               )}
-                            </Button>
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <span>{new Date(item.emailDate).toLocaleDateString()}</span>
+                              {item.parsedSource && (
+                                <>
+                                  <span className="opacity-30">•</span>
+                                  <span className="capitalize">{item.parsedSource}</span>
+                                </>
+                              )}
+                              {item.parsedMemo && (
+                                <>
+                                  <span className="opacity-30">•</span>
+                                  <span className="truncate max-w-[200px]">"{item.parsedMemo}"</span>
+                                </>
+                              )}
+                              {item.derivedCategory && (
+                                <>
+                                  <span className="opacity-30">•</span>
+                                  <Badge variant="outline" className="text-xs">
+                                    {item.derivedCategory}
+                                  </Badge>
+                                </>
+                              )}
+                              {item.matchConfidence && (
+                                <>
+                                  <span className="opacity-30">•</span>
+                                  <span className="text-xs">
+                                    {Math.round(item.matchConfidence * 100)}% match
+                                  </span>
+                                </>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </StaggerItem>
+                        <div className="flex items-center gap-3">
+                          {item.parsedAmount && (
+                            <Money cents={item.parsedAmount} size="md" />
+                          )}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-muted-foreground hover:text-foreground"
+                            onClick={() => handleUnconfirm(item.id)}
+                            disabled={unconfirmingId === item.id}
+                          >
+                            {unconfirmingId === item.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Undo2 className="w-4 h-4" />
+                            )}
+                          </Button>
+                        </div>
+                      </div>
                     );
-                  })}
-                </StaggerChildren>
+                  }}
+                />
 
                 {/* Pagination */}
                 {totalPages > 1 && (
@@ -1551,27 +1562,7 @@ export default function InboxPage() {
                     <span className="text-sm text-muted-foreground">
                       Showing {startIndex + 1}-{Math.min(startIndex + confirmedPerPage, filteredConfirmed.length)} of {filteredConfirmed.length}
                     </span>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setConfirmedPage((p) => Math.max(1, p - 1))}
-                        disabled={confirmedPage === 1}
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                      </Button>
-                      <span className="text-sm">
-                        Page {confirmedPage} of {totalPages}
-                      </span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setConfirmedPage((p) => Math.min(totalPages, p + 1))}
-                        disabled={confirmedPage === totalPages}
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </Button>
-                    </div>
+                    <Pagination page={confirmedPage} totalPages={totalPages} onPageChange={setConfirmedPage} />
                   </div>
                 )}
               </>

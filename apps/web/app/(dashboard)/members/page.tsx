@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useCallback, memo } from 'react';
 import Link from 'next/link';
 
-import { Plus, Search, Users, AlertCircle, MoreHorizontal, Pencil, Trash2, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Circle, CheckCircle2, Mail, Clock } from 'lucide-react';
+import { Plus, Search, Users, AlertCircle, MoreHorizontal, Pencil, Trash2, ArrowUp, ArrowDown, Circle, CheckCircle2, Mail, Clock, Upload } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import { useMembers, useCreateMembers, useUpdateMember, useDeleteMember, useRestoreMember, useResendInvitation, useBulkDeleteMembers } from '@/lib/queries/members';
 import { useAuthStore } from '@/lib/stores/auth';
@@ -40,8 +40,21 @@ import { AvatarGradient } from '@/components/ui/avatar-gradient';
 import { MotionCard, MotionCardContent } from '@/components/ui/motion-card';
 import { FadeIn } from '@/components/ui/page-transition';
 import { AnimatedList } from '@/components/ui/animated-list';
+import { Pagination } from '@/components/ui/pagination';
 import { PageHeader } from '@/components/ui/page-header';
+import { ToastUndoButton } from '@/components/ui/toast-undo-button';
+import { EmptyState } from '@/components/ui/empty-state';
+import { BatchActionsBar } from '@/components/ui/batch-actions-bar';
+import { ExportDropdown } from '@/components/export-dropdown';
+import { CSVImportDialog, type ImportField } from '@/components/import/csv-import-dialog';
+import { exportCSV, exportPDF } from '@/lib/export';
 import type { MemberWithBalance } from '@ledgly/shared';
+
+const MEMBER_IMPORT_FIELDS: ImportField[] = [
+  { key: 'name', label: 'Name', required: true, aliases: ['full name', 'member name', 'first name'] },
+  { key: 'email', label: 'Email', required: false, aliases: ['email address', 'e-mail'] },
+  { key: 'role', label: 'Role', required: false, aliases: ['member role', 'type'] },
+];
 
 const MemberCard = memo(function MemberCard({
   member,
@@ -243,7 +256,7 @@ function EditMemberDialog({
       toast({
         title: 'Member updated',
         action: (
-          <button
+          <ToastUndoButton
             onClick={() => {
               const redoName = name.trim();
               const redoRole = role;
@@ -253,25 +266,20 @@ function EditMemberDialog({
                   onSuccess: () => toast({
                     title: 'Change reverted',
                     action: (
-                      <button
+                      <ToastUndoButton
                         onClick={() => updateMember.mutate(
                           { orgId: currentOrgId!, memberId, data: { name: redoName, role: redoRole } },
                           { onSuccess: () => toast({ title: 'Member updated' }) },
                         )}
-                        className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-                      >
-                        Redo
-                      </button>
+                        label="Redo"
+                      />
                     ),
                   }),
                   onError: () => toast({ title: 'Failed to undo', variant: 'destructive' }),
                 },
               );
             }}
-            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-          >
-            Undo
-          </button>
+          />
         ),
       });
       onOpenChange(false);
@@ -327,7 +335,7 @@ function EditMemberDialog({
             <Button
               type="submit"
               disabled={updateMember.isPending}
-              className="bg-gradient-to-r from-primary to-blue-400"
+             
             >
               {updateMember.isPending ? 'Saving...' : 'Save Changes'}
             </Button>
@@ -365,7 +373,7 @@ function AddMemberDialog() {
       toast({
         title: `${createdName} added`,
         action: createdId ? (
-          <button
+          <ToastUndoButton
             onClick={() => {
               deleteMemberMutation.mutate(
                 { orgId: currentOrgId, memberId: createdId },
@@ -373,25 +381,20 @@ function AddMemberDialog() {
                   onSuccess: () => toast({
                     title: `${createdName} removed`,
                     action: (
-                      <button
+                      <ToastUndoButton
                         onClick={() => restoreMember.mutate(
                           { orgId: currentOrgId!, memberId: createdId },
                           { onSuccess: () => toast({ title: `${createdName} restored` }) },
                         )}
-                        className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-                      >
-                        Redo
-                      </button>
+                        label="Redo"
+                      />
                     ),
                   }),
                   onError: () => toast({ title: 'Failed to undo', variant: 'destructive' }),
                 },
               );
             }}
-            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-          >
-            Undo
-          </button>
+          />
         ) : undefined,
       });
       setOpen(false);
@@ -410,8 +413,8 @@ function AddMemberDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="bg-gradient-to-r from-primary to-blue-400 hover:opacity-90 transition-opacity">
-          <Plus className="w-4 h-4 mr-2" />
+        <Button size="sm" className="hover:opacity-90 transition-opacity">
+          <Plus className="w-4 h-4 mr-1.5" />
           Add Member
         </Button>
       </DialogTrigger>
@@ -475,7 +478,7 @@ function AddMemberDialog() {
             <Button
               type="submit"
               disabled={createMembers.isPending}
-              className="bg-gradient-to-r from-primary to-blue-400"
+             
             >
               {createMembers.isPending ? 'Adding...' : 'Add Member'}
             </Button>
@@ -495,6 +498,7 @@ export default function MembersPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
+  const [showImport, setShowImport] = useState(false);
   const { toast } = useToast();
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
   const user = useAuthStore((s) => s.user);
@@ -505,6 +509,21 @@ export default function MembersPage() {
   const restoreMember = useRestoreMember();
   const resendInvitation = useResendInvitation();
   const bulkDeleteMembers = useBulkDeleteMembers();
+  const createMembersForImport = useCreateMembers();
+
+  const handleImportMembers = async (records: Record<string, string>[]) => {
+    if (!currentOrgId) throw new Error('No org selected');
+    const members = records
+      .filter((r) => r.name?.trim())
+      .map((r) => ({
+        name: r.name.trim(),
+        email: r.email?.trim() || undefined,
+        role: r.role?.trim()?.toUpperCase() === 'ADMIN' ? 'ADMIN' : 'MEMBER',
+      }));
+    if (members.length === 0) throw new Error('No valid members found');
+    const result = await createMembersForImport.mutateAsync({ orgId: currentOrgId, members });
+    return { success: result.length, errors: records.length - result.length };
+  };
 
   // Sort and paginate members
   const sortedMembers = useMemo(() => {
@@ -567,12 +586,9 @@ export default function MembersPage() {
             title: 'Member removed',
             description: `${member.displayName} has been removed.`,
             action: (
-              <button
+              <ToastUndoButton
                 onClick={() => handleRestore(member.id, member.displayName)}
-                className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-              >
-                Undo
-              </button>
+              />
             ),
           });
         },
@@ -597,15 +613,13 @@ export default function MembersPage() {
           toast({
             title: `${memberName} has been restored`,
             action: (
-              <button
+              <ToastUndoButton
                 onClick={() => deleteMember.mutate(
                   { orgId: currentOrgId!, memberId },
                   { onSuccess: () => toast({ title: `${memberName} removed` }) },
                 )}
-                className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-              >
-                Redo
-              </button>
+                label="Redo"
+              />
             ),
           });
         },
@@ -662,7 +676,7 @@ export default function MembersPage() {
       toast({
         title: `Removed ${deletedCount} member${deletedCount !== 1 ? 's' : ''}`,
         action: (
-          <button
+          <ToastUndoButton
             onClick={async () => {
               let restoredCount = 0;
               for (const memberId of memberIds) {
@@ -671,27 +685,39 @@ export default function MembersPage() {
               toast({
                 title: `Restored ${restoredCount} member${restoredCount !== 1 ? 's' : ''}`,
                 action: (
-                  <button
+                  <ToastUndoButton
                     onClick={async () => {
                       const redoResult = await bulkDeleteMembers.mutateAsync({ orgId: currentOrgId, memberIds });
                       toast({ title: `Removed ${redoResult.deletedCount} member${redoResult.deletedCount !== 1 ? 's' : ''}` });
                     }}
-                    className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-                  >
-                    Redo
-                  </button>
+                    label="Redo"
+                  />
                 ),
               });
             }}
-            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-          >
-            Undo
-          </button>
+          />
         ),
       });
     } catch {
       setSelectedRows(new Set());
     }
+  };
+
+  const handleExportMembers = (format: 'csv' | 'pdf') => {
+    const members = sortedMembers;
+    const headers = ['Name', 'Email', 'Role', 'Status', 'Balance', 'Total Charged', 'Total Paid'];
+    const rows = members.map((m) => [
+      m.displayName,
+      m.invitedEmail || '',
+      m.role,
+      m.status,
+      `$${(m.balanceCents / 100).toFixed(2)}`,
+      `$${(m.totalChargedCents / 100).toFixed(2)}`,
+      `$${(m.totalPaidCents / 100).toFixed(2)}`,
+    ]);
+    const filename = `members-${new Date().toISOString().split('T')[0]}`;
+    if (format === 'csv') exportCSV(headers, rows, filename);
+    else exportPDF('Members', headers, rows, filename);
   };
 
   return (
@@ -701,7 +727,21 @@ export default function MembersPage() {
         <PageHeader
           title="Members"
           helpText="Add and manage organization members. Members can have charges assigned to them and receive payment allocations. Use selection checkboxes to select multiple members for bulk actions."
-          actions={isAdmin && <AddMemberDialog />}
+          actions={
+            <div className="flex items-center gap-2">
+              <ExportDropdown
+                onExportCSV={() => handleExportMembers('csv')}
+                onExportPDF={() => handleExportMembers('pdf')}
+              />
+              {isAdmin && (
+                <Button variant="outline" size="sm" onClick={() => setShowImport(true)}>
+                  <Upload className="w-4 h-4 mr-1.5" />
+                  Import
+                </Button>
+              )}
+              {isAdmin && <AddMemberDialog />}
+            </div>
+          }
         />
       </FadeIn>
 
@@ -761,29 +801,7 @@ export default function MembersPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="text-sm text-muted-foreground min-w-[80px] text-center">
-                  {page} / {totalPages || 1}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page >= totalPages}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
+              <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
             </div>
           </div>
         </FadeIn>
@@ -798,16 +816,13 @@ export default function MembersPage() {
         </div>
       ) : sortedMembers.length === 0 ? (
         <FadeIn delay={0.2}>
-          <div className="rounded-xl border border-border/50 bg-card/50 py-16 text-center animate-in-scale">
-            <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-              <Users className="h-8 w-8 text-primary" />
-            </div>
-            <h3 className="text-lg font-semibold mb-2">No members found</h3>
-            <p className="text-muted-foreground mb-6">
-              Start by adding members to your organization
-            </p>
-            {isAdmin && <AddMemberDialog />}
-          </div>
+          <EmptyState
+            icon={Users}
+            title="No members found"
+            description="Start by adding members to your organization"
+            action={isAdmin && <AddMemberDialog />}
+            className="rounded-xl border border-border/50 bg-card/50"
+          />
         </FadeIn>
       ) : (
         <div className="space-y-3">
@@ -864,29 +879,7 @@ export default function MembersPage() {
       {/* Pagination Controls - Bottom */}
       {sortedMembers.length > 0 && (
         <FadeIn delay={0.3}>
-          <div className="flex items-center justify-end gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="text-sm text-muted-foreground min-w-[80px] text-center">
-              {page} / {totalPages || 1}
-            </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} className="justify-center pt-4" />
         </FadeIn>
       )}
 
@@ -894,6 +887,22 @@ export default function MembersPage() {
         member={editingMember}
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
+      />
+
+      <BatchActionsBar selectedCount={selectedRows.size} onClear={() => setSelectedRows(new Set())}>
+        <Button variant="destructive" size="sm" onClick={handleBulkDelete} className="h-8">
+          <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+          Delete
+        </Button>
+      </BatchActionsBar>
+
+      <CSVImportDialog
+        open={showImport}
+        onOpenChange={setShowImport}
+        title="Import Members"
+        description="Upload a CSV file to bulk import members"
+        fields={MEMBER_IMPORT_FIELDS}
+        onImport={handleImportMembers}
       />
     </div>
   );

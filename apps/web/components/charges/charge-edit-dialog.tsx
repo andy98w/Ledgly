@@ -3,6 +3,7 @@
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 import {
   Dialog,
@@ -62,11 +63,9 @@ export function ChargeEditDialog({ charge, onChange, onSave, isPending }: Charge
             </div>
             <div className="space-y-2">
               <Label htmlFor="dueDate">Due Date</Label>
-              <Input
-                id="dueDate"
-                type="date"
+              <DatePicker
                 value={charge.dueDate || ''}
-                onChange={(e) => onChange({ ...charge, dueDate: e.target.value || null })}
+                onChange={(date) => onChange({ ...charge, dueDate: date || null })}
               />
             </div>
           </div>
@@ -78,7 +77,7 @@ export function ChargeEditDialog({ charge, onChange, onSave, isPending }: Charge
           <Button
             onClick={onSave}
             disabled={isPending}
-            className="bg-gradient-to-r from-primary to-blue-400"
+           
           >
             {isPending ? (
               <>

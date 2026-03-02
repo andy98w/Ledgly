@@ -232,7 +232,7 @@ export default function LandingPage() {
           </p>
           <div className="mt-10 animate-reveal-up" style={{ animationDelay: '300ms' }}>
             <Link
-              href="/login"
+              href="/register"
               className="inline-flex items-center justify-center rounded-xl px-8 py-3.5 text-sm font-medium bg-gradient-to-r from-primary via-violet-500 to-cyan-400 text-primary-foreground hover:opacity-90 transition-all duration-150 shadow-layered-lg active:scale-[0.98]"
             >
               Get Started
@@ -339,7 +339,7 @@ export default function LandingPage() {
                 Join organizations already using Ledgly to manage their dues and payments.
               </p>
               <Link
-                href="/login"
+                href="/register"
                 className="inline-flex items-center justify-center rounded-xl px-8 py-3.5 text-sm font-medium bg-gradient-to-r from-primary via-violet-500 to-cyan-400 text-primary-foreground hover:opacity-90 transition-all duration-150 shadow-layered-lg active:scale-[0.98]"
               >
                 Get Started Free

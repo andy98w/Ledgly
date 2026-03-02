@@ -10,6 +10,7 @@ import { useMembers } from '@/lib/queries/members';
 import { useAuthStore } from '@/lib/stores/auth';
 import { parseCents } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -23,6 +24,8 @@ import { useToast } from '@/components/ui/use-toast';
 import { AvatarGradient } from '@/components/ui/avatar-gradient';
 import { MotionCard, MotionCardContent, MotionCardHeader, MotionCardTitle } from '@/components/ui/motion-card';
 import { FadeIn } from '@/components/ui/page-transition';
+import { ToastUndoButton } from '@/components/ui/toast-undo-button';
+import { Breadcrumb } from '@/components/ui/breadcrumb';
 
 const schema = z.object({
   membershipId: z.string().optional(),
@@ -76,31 +79,26 @@ export default function NewPaymentPage() {
       toast({
         title: 'Payment recorded',
         action: createdId ? (
-          <button
+          <ToastUndoButton
             onClick={() => deletePayment.mutate(
               { orgId: currentOrgId!, paymentId: createdId },
               {
                 onSuccess: () => toast({
                   title: 'Payment deleted',
                   action: (
-                    <button
+                    <ToastUndoButton
                       onClick={() => restorePayment.mutate(
                         { orgId: currentOrgId!, paymentId: createdId },
                         { onSuccess: () => toast({ title: 'Payment restored' }) },
                       )}
-                      className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-                    >
-                      Redo
-                    </button>
+                      label="Redo"
+                    />
                   ),
                 }),
                 onError: () => toast({ title: 'Failed to undo', variant: 'destructive' }),
               },
             )}
-            className="text-xs font-medium px-2.5 py-1 rounded-md border border-border/50 bg-secondary/50 hover:bg-secondary transition-colors"
-          >
-            Undo
-          </button>
+          />
         ) : undefined,
       });
       router.push('/payments');
@@ -115,6 +113,9 @@ export default function NewPaymentPage() {
 
   return (
     <div className="space-y-8">
+      {/* Breadcrumb */}
+      <Breadcrumb items={[{ label: 'Payments', href: '/payments' }, { label: 'New Payment' }]} />
+
       {/* Header */}
       <FadeIn>
         <div className="flex items-center gap-4">
@@ -195,11 +196,10 @@ export default function NewPaymentPage() {
 
                 <div className="space-y-2">
                   <Label htmlFor="paidAt" className="text-sm font-medium">Date *</Label>
-                  <Input
-                    id="paidAt"
-                    type="date"
-                    className="h-11 bg-secondary/30 border-border/50 focus:border-primary"
-                    {...register('paidAt')}
+                  <DatePicker
+                    value={watch('paidAt')}
+                    onChange={(date) => setValue('paidAt', date)}
+                    className="h-11"
                   />
                   {errors.paidAt && (
                     <p className="text-sm text-destructive">{errors.paidAt.message}</p>

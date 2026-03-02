@@ -61,7 +61,7 @@ function VerifyContent() {
     return (
       <div className="animate-in-up">
         <div className="text-center mb-6">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-primary to-blue-400 flex items-center justify-center shadow-lg">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-primary flex items-center justify-center shadow-lg">
             <Building2 className="w-8 h-8 text-primary-foreground" />
           </div>
           <h2 className="text-xl font-semibold mb-1">Choose an organization</h2>
