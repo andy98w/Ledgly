@@ -147,6 +147,15 @@ export class MembersService {
     };
   }
 
+  async findByUserId(orgId: string, userId: string) {
+    const membership = await this.prisma.membership.findFirst({
+      where: { orgId, userId, status: 'ACTIVE' },
+      select: { id: true },
+    });
+    if (!membership) throw new NotFoundException('Membership not found');
+    return this.findOne(orgId, membership.id);
+  }
+
   async findOne(orgId: string, membershipId: string) {
     const member = await this.prisma.membership.findFirst({
       where: { id: membershipId, orgId },
@@ -556,6 +565,27 @@ export class MembersService {
     }
 
     return { success: true, deletedCount };
+  }
+
+  async approve(orgId: string, membershipId: string, actorId?: string) {
+    const member = await this.prisma.membership.findFirst({
+      where: { id: membershipId, orgId, status: 'PENDING' },
+    });
+
+    if (!member) {
+      throw new NotFoundException('Pending member not found');
+    }
+
+    await this.prisma.membership.update({
+      where: { id: membershipId },
+      data: { status: 'ACTIVE' },
+    });
+
+    if (actorId) {
+      await this.auditService.logUpdate(orgId, actorId, 'MEMBER', membershipId, { status: 'PENDING' }, { status: 'ACTIVE', approvedBy: actorId });
+    }
+
+    return { success: true };
   }
 
   async restore(orgId: string, membershipId: string, actorId?: string) {

@@ -19,6 +19,9 @@ model Organization {
   autoApprovePayments     Boolean          @default(true) @map("auto_approve_payments")
   autoApproveExpenses     Boolean          @default(true) @map("auto_approve_expenses")
   enabledPaymentSources   String[]         @default(["venmo", "zelle", "cashapp", "paypal"]) @map("enabled_payment_sources")
+  joinCode                String?          @unique @map("join_code")
+  joinCodeEnabled         Boolean          @default(true) @map("join_code_enabled")
+  joinRequiresApproval    Boolean          @default(false) @map("join_requires_approval")
   gmailConnection         GmailConnection?
   memberships         Membership[]
   notifications       Notification[]
@@ -281,6 +284,7 @@ enum MembershipStatus {
   INACTIVE
   LEFT
   INVITED
+  PENDING
 }
 
 enum ChargeCategory {

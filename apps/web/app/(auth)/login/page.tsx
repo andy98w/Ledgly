@@ -1,11 +1,14 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { ArrowRight, Loader2, Mail, ArrowLeft, Building2, Eye, EyeOff } from 'lucide-react';
 import { useLogin, useSendMagicLink, useForgotPassword } from '@/lib/queries/auth';
+import { useJoinOrganization } from '@/lib/queries/organizations';
+import { useAuthStore } from '@/lib/stores/auth';
+import { getPostLoginRedirect } from '@/lib/utils/auth-redirect';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,12 +16,16 @@ import { useToast } from '@/components/ui/use-toast';
 
 type LoginView = 'login' | 'forgot-password' | 'forgot-password-sent' | 'magic-link-sent' | 'forgot-org' | 'forgot-org-sent';
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
   const { toast } = useToast();
   const login = useLogin();
   const sendMagicLink = useSendMagicLink();
   const forgotPassword = useForgotPassword();
+  const joinOrg = useJoinOrganization();
+  const setCurrentOrgId = useAuthStore((s) => s.setCurrentOrgId);
+  const searchParams = useSearchParams();
+  const joinCode = searchParams.get('joinCode');
 
   const [view, setView] = useState<LoginView>('login');
   const [email, setEmail] = useState('');
@@ -32,11 +39,21 @@ export default function LoginPage() {
 
     try {
       const data = await login.mutateAsync({ email: email.trim(), password });
-      if (data.user.memberships.length > 0) {
-        router.push('/dashboard');
-      } else {
-        router.push('/onboarding');
+
+      // Auto-join if joinCode param present
+      if (joinCode) {
+        try {
+          const result = await joinOrg.mutateAsync(joinCode);
+          setCurrentOrgId(result.orgId);
+          toast({ title: result.status === 'PENDING' ? 'Join request sent!' : `Joined ${result.orgName}!` });
+          window.location.href = '/portal';
+          return;
+        } catch {
+          // Join failed (e.g., already a member) — continue with normal redirect
+        }
       }
+
+      router.push(getPostLoginRedirect(data.user));
     } catch (error: any) {
       toast({
         title: 'Sign in failed',
@@ -334,5 +351,13 @@ export default function LoginPage() {
       </div>
 
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   );
 }

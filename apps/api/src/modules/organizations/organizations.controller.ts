@@ -1,8 +1,8 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { IsString, IsBoolean, IsOptional, IsArray } from 'class-validator';
 import { OrganizationsService } from './organizations.service';
-import { CurrentUser, CurrentUserData, Roles } from '../../common/decorators';
+import { CurrentUser, CurrentUserData, Roles, Public } from '../../common/decorators';
 import { RolesGuard } from '../../common/guards';
 
 class CreateOrganizationDto {
@@ -37,6 +37,21 @@ class UpdateOrganizationDto {
   enabledPaymentSources?: string[];
 }
 
+class UpdateJoinCodeSettingsDto {
+  @IsBoolean()
+  @IsOptional()
+  enabled?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  requiresApproval?: boolean;
+}
+
+class JoinWithCodeDto {
+  @IsString()
+  code: string;
+}
+
 @Controller('organizations')
 @UseGuards(AuthGuard('jwt'))
 export class OrganizationsController {
@@ -50,6 +65,19 @@ export class OrganizationsController {
   @Post()
   async create(@CurrentUser() user: CurrentUserData, @Body() dto: CreateOrganizationDto) {
     return this.organizationsService.create(user.userId, dto);
+  }
+
+  // Public: resolve join code → org name (for /join page before auth)
+  @Public()
+  @Get('resolve-code/:code')
+  async resolveJoinCode(@Param('code') code: string) {
+    return this.organizationsService.resolveJoinCode(code);
+  }
+
+  // Authenticated (no role needed): join an org with a code
+  @Post('join')
+  async joinWithCode(@Body() dto: JoinWithCodeDto, @CurrentUser() user: CurrentUserData) {
+    return this.organizationsService.joinWithCode(dto.code, user.userId);
   }
 
   @Get(':orgId')
@@ -69,6 +97,30 @@ export class OrganizationsController {
     // Verify membership
     await this.organizationsService.findOne(orgId, user.userId);
     return this.organizationsService.getDashboard(orgId);
+  }
+
+  // Admin: generate/regenerate join code
+  @Post(':orgId/join-code')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  async generateJoinCode(@Param('orgId') orgId: string, @Req() req: any) {
+    return this.organizationsService.generateJoinCode(orgId, req.membership.id);
+  }
+
+  // Admin: disable join code
+  @Delete(':orgId/join-code')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  async disableJoinCode(@Param('orgId') orgId: string, @Req() req: any) {
+    return this.organizationsService.disableJoinCode(orgId, req.membership.id);
+  }
+
+  // Admin: toggle enabled/approval settings
+  @Patch(':orgId/join-code')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  async updateJoinCodeSettings(@Param('orgId') orgId: string, @Body() dto: UpdateJoinCodeSettingsDto, @Req() req: any) {
+    return this.organizationsService.updateJoinCodeSettings(orgId, dto, req.membership.id);
   }
 
   @Delete(':orgId')

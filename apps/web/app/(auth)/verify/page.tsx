@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { XCircle, Building2, ChevronRight, Shield } from 'lucide-react';
 import { useVerifyMagicLink } from '@/lib/queries/auth';
+import { getPostLoginRedirect } from '@/lib/utils/auth-redirect';
 import { useAuthStore } from '@/lib/stores/auth';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -33,7 +34,7 @@ function VerifyContent() {
           setUser(authUser);
           setShowOrgSelect(true);
         } else {
-          router.push('/');
+          router.push(getPostLoginRedirect(authUser));
         }
       },
       onError: (err: any) => {
@@ -75,7 +76,8 @@ function VerifyContent() {
               key={m.id}
               onClick={() => {
                 setCurrentOrgId(m.orgId);
-                router.push('/dashboard');
+                const dest = (m.role === 'ADMIN' || m.role === 'TREASURER') ? '/dashboard' : '/portal';
+                router.push(dest);
               }}
               className="w-full flex items-center justify-between p-4 rounded-xl border border-border/50 bg-secondary/30 hover:bg-secondary/60 hover:border-border transition-all group"
             >

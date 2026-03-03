@@ -194,3 +194,13 @@ export function useRestoreCharge() {
     },
   });
 }
+
+export function useSendChargeReminders() {
+  return useMutation({
+    mutationFn: ({ orgId, chargeIds }: { orgId: string; chargeIds: string[] }) =>
+      api.post<{ sent: number; skipped: number }>(
+        `/organizations/${orgId}/charges/remind`,
+        { chargeIds },
+      ),
+  });
+}

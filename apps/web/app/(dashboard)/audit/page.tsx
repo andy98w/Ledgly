@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { History, Receipt, CreditCard, Users, TrendingDown, Building2, Link2, Filter, Undo2, Redo2, Loader2, ChevronDown, ChevronRight, Search } from 'lucide-react';
 import { useAuditLogs, useUndoAuditLog, useUndoBatch, useRedoAuditLog, useRedoBatch, type AuditLogEntry, type BatchedAuditLogEntry, type AuditLogItem } from '@/lib/queries/audit';
-import { useAuthStore } from '@/lib/stores/auth';
+import { useAuthStore, useIsAdminOrTreasurer } from '@/lib/stores/auth';
 import { formatRelativeDate } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -473,6 +473,8 @@ function BatchAuditLogCard({
               <button
                 onClick={() => setExpanded(!expanded)}
                 className="p-2 rounded-lg hover:bg-secondary/50 transition-colors"
+                aria-expanded={expanded}
+                aria-label={expanded ? 'Collapse batch details' : 'Expand batch details'}
               >
                 {expanded ? (
                   <ChevronDown className="w-4 h-4" />
@@ -546,11 +548,8 @@ export default function AuditLogPage() {
   const [pageSize, setPageSize] = useState(20);
   const [searchQuery, setSearchQuery] = useState('');
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
-  const user = useAuthStore((s) => s.user);
-  const currentMembership = user?.memberships.find((m) => m.orgId === currentOrgId);
   const { toast } = useToast();
-
-  const isAdmin = currentMembership?.role === 'ADMIN' || currentMembership?.role === 'TREASURER';
+  const isAdmin = useIsAdminOrTreasurer();
 
   const { data, isLoading } = useAuditLogs(currentOrgId, {
     entityType: entityTypeFilter !== 'all' ? entityTypeFilter : undefined,
@@ -661,14 +660,23 @@ export default function AuditLogPage() {
         />
       </FadeIn>
 
-      {/* Filter */}
+      {/* Search + Filter */}
       <FadeIn delay={0.1}>
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-muted-foreground" />
+        <div className="space-y-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <Input
+              placeholder="Search audit logs..."
+              aria-label="Search audit logs"
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
+              className="pl-9 h-9 bg-secondary/30 border-border/50"
+            />
+          </div>
+          <div className="flex gap-2">
             <Select value={entityTypeFilter} onValueChange={handleFilterChange}>
-              <SelectTrigger className="w-48 bg-secondary/30 border-border/50">
-                <SelectValue placeholder="Filter by type" />
+              <SelectTrigger className="w-[130px] h-8 bg-secondary/30 border-border/50 text-xs">
+                <SelectValue placeholder="All Types" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
@@ -681,45 +689,8 @@ export default function AuditLogPage() {
               </SelectContent>
             </Select>
           </div>
-          <div className="relative w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search actor, type, details..."
-              value={searchQuery}
-              onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
-              className="pl-9 h-9 bg-secondary/30 border-border/50"
-            />
-          </div>
         </div>
       </FadeIn>
-
-      {/* Pagination Controls - Top */}
-      {!isLoading && logs.length > 0 && (
-        <FadeIn delay={0.15}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">Show</span>
-                <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}>
-                  <SelectTrigger className="w-[70px] h-8 bg-secondary/30 border-border/50">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="20">20</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                    <SelectItem value="100">100</SelectItem>
-                  </SelectContent>
-                </Select>
-                <span className="text-sm text-muted-foreground">per page</span>
-              </div>
-              <span className="text-sm text-muted-foreground">
-                {logs.length} total
-              </span>
-            </div>
-            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
-          </div>
-        </FadeIn>
-      )}
 
       {/* Audit Log List */}
       {isLoading ? (

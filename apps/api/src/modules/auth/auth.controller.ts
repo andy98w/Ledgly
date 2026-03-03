@@ -1,9 +1,11 @@
-import { Controller, Post, Get, Patch, Body, UseGuards, Req, Param } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Body, UseGuards, Req, Res, Param, UnauthorizedException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { Throttle } from '@nestjs/throttler';
 import { IsEmail, IsString, IsOptional, MinLength, MaxLength } from 'class-validator';
+import { Response } from 'express';
 import { AuthService } from './auth.service';
 import { CurrentUser, CurrentUserData, Public } from '../../common/decorators';
+import { setAuthCookies, clearAuthCookies, parseCookies, REFRESH_TOKEN_COOKIE } from '../../common/utils/cookies';
 
 class SendMagicLinkDto {
   @IsEmail()
@@ -74,12 +76,14 @@ class UpdateProfileDto {
 
 class RefreshDto {
   @IsString()
-  refreshToken: string;
+  @IsOptional()
+  refreshToken?: string;
 }
 
 class LogoutDto {
   @IsString()
-  refreshToken: string;
+  @IsOptional()
+  refreshToken?: string;
 }
 
 @Controller('auth')
@@ -89,15 +93,19 @@ export class AuthController {
   @Public()
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('register')
-  async register(@Body() dto: RegisterDto, @Req() req: any) {
-    return this.authService.register(dto.email, dto.password, dto.name, req.ip, req.headers['user-agent']);
+  async register(@Body() dto: RegisterDto, @Req() req: any, @Res({ passthrough: true }) res: Response) {
+    const result = await this.authService.register(dto.email, dto.password, dto.name, req.ip, req.headers['user-agent']);
+    setAuthCookies(res, result.accessToken, result.refreshToken);
+    return result;
   }
 
   @Public()
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('login')
-  async login(@Body() dto: LoginDto, @Req() req: any) {
-    return this.authService.login(dto.email, dto.password, req.ip, req.headers['user-agent']);
+  async login(@Body() dto: LoginDto, @Req() req: any, @Res({ passthrough: true }) res: Response) {
+    const result = await this.authService.login(dto.email, dto.password, req.ip, req.headers['user-agent']);
+    setAuthCookies(res, result.accessToken, result.refreshToken);
+    return result;
   }
 
   @Public()
@@ -110,8 +118,10 @@ export class AuthController {
   @Public()
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('verify')
-  async verifyMagicLink(@Body() dto: VerifyMagicLinkDto, @Req() req: any) {
-    return this.authService.verifyMagicLink(dto.token, req.ip, req.headers['user-agent']);
+  async verifyMagicLink(@Body() dto: VerifyMagicLinkDto, @Req() req: any, @Res({ passthrough: true }) res: Response) {
+    const result = await this.authService.verifyMagicLink(dto.token, req.ip, req.headers['user-agent']);
+    setAuthCookies(res, result.accessToken, result.refreshToken);
+    return result;
   }
 
   @Public()
@@ -163,15 +173,28 @@ export class AuthController {
   @Public()
   @Throttle({ default: { limit: 30, ttl: 60000 } })
   @Post('refresh')
-  async refresh(@Body() dto: RefreshDto, @Req() req: any) {
-    return this.authService.refresh(dto.refreshToken, req.ip, req.headers['user-agent']);
+  async refresh(@Body() dto: RefreshDto, @Req() req: any, @Res({ passthrough: true }) res: Response) {
+    // Accept refresh token from cookie or body (cookie preferred)
+    const cookies = parseCookies(req.headers.cookie);
+    const rt = cookies[REFRESH_TOKEN_COOKIE] || dto.refreshToken;
+    if (!rt) {
+      throw new UnauthorizedException('No refresh token provided');
+    }
+    const result = await this.authService.refresh(rt, req.ip, req.headers['user-agent']);
+    setAuthCookies(res, result.accessToken, result.refreshToken);
+    return result;
   }
 
   @Public()
   @Post('logout')
-  async logout(@Body() dto: LogoutDto, @Req() req: any) {
-    await this.authService.revokeRefreshToken(dto.refreshToken, req.ip, req.headers['user-agent']);
+  async logout(@Body() dto: LogoutDto, @Req() req: any, @Res({ passthrough: true }) res: Response) {
+    // Accept refresh token from cookie or body
+    const cookies = parseCookies(req.headers.cookie);
+    const rt = cookies[REFRESH_TOKEN_COOKIE] || dto.refreshToken;
+    if (rt) {
+      await this.authService.revokeRefreshToken(rt, req.ip, req.headers['user-agent']);
+    }
+    clearAuthCookies(res);
     return { success: true };
   }
-
 }

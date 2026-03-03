@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import type { AuthUser } from '@ledgly/shared';
 
 interface AuthState {
+  /** Cached user — populated by useMe() and auth mutations. Use useMe().data for React Query benefits. */
   user: AuthUser | null;
   currentOrgId: string | null;
   setUser: (user: AuthUser | null) => void;
@@ -19,10 +20,6 @@ export const useAuthStore = create<AuthState>()(
       setCurrentOrgId: (currentOrgId) => set({ currentOrgId }),
       logout: () => {
         set({ user: null, currentOrgId: null });
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('auth_token');
-          localStorage.removeItem('refresh_token');
-        }
       },
     }),
     {
@@ -47,4 +44,12 @@ export function useCurrentRole() {
 export function useIsAdminOrTreasurer() {
   const role = useCurrentRole();
   return role === 'ADMIN' || role === 'TREASURER';
+}
+
+/** Returns the user's membership in the current org */
+export function useCurrentMembership() {
+  const user = useAuthStore((s) => s.user);
+  const currentOrgId = useAuthStore((s) => s.currentOrgId);
+  if (!user || !currentOrgId) return null;
+  return user.memberships.find((m) => m.orgId === currentOrgId) ?? null;
 }

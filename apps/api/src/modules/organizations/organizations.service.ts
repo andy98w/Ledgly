@@ -1,5 +1,7 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
+import { randomBytes } from 'crypto';
 
 interface CreateOrganizationDto {
   name: string;
@@ -14,9 +16,24 @@ interface UpdateOrganizationDto {
   enabledPaymentSources?: string[];
 }
 
+// Safe alphabet: no ambiguous chars (0/O, 1/I/L)
+const JOIN_CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+
+function generateCode(length = 6): string {
+  const bytes = randomBytes(length);
+  let code = '';
+  for (let i = 0; i < length; i++) {
+    code += JOIN_CODE_CHARS[bytes[i] % JOIN_CODE_CHARS.length];
+  }
+  return code;
+}
+
 @Injectable()
 export class OrganizationsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private auditService: AuditService,
+  ) {}
 
   async create(userId: string, dto: CreateOrganizationDto) {
     // Look up the user's name so the membership record has it
@@ -87,6 +104,9 @@ export class OrganizationsService {
       autoApprovePayments: org.autoApprovePayments,
       autoApproveExpenses: org.autoApproveExpenses,
       enabledPaymentSources: org.enabledPaymentSources,
+      joinCode: org.joinCode,
+      joinCodeEnabled: org.joinCodeEnabled,
+      joinRequiresApproval: org.joinRequiresApproval,
       createdAt: org.createdAt,
       membership: org.memberships[0],
       memberCount: org._count.memberships,
@@ -188,6 +208,133 @@ export class OrganizationsService {
         role: m.role,
       },
     }));
+  }
+
+  async generateJoinCode(orgId: string, actorId: string) {
+    const code = generateCode();
+    const org = await this.prisma.organization.update({
+      where: { id: orgId },
+      data: { joinCode: code, joinCodeEnabled: true },
+    });
+
+    await this.auditService.logUpdate(orgId, actorId, 'ORG_SETTINGS', orgId, {}, { joinCode: 'generated' });
+
+    return { joinCode: org.joinCode, joinCodeEnabled: org.joinCodeEnabled, joinRequiresApproval: org.joinRequiresApproval };
+  }
+
+  async disableJoinCode(orgId: string, actorId: string) {
+    await this.prisma.organization.update({
+      where: { id: orgId },
+      data: { joinCode: null, joinCodeEnabled: false },
+    });
+
+    await this.auditService.logUpdate(orgId, actorId, 'ORG_SETTINGS', orgId, { joinCode: 'active' }, { joinCode: 'disabled' });
+
+    return { success: true };
+  }
+
+  async updateJoinCodeSettings(orgId: string, dto: { enabled?: boolean; requiresApproval?: boolean }, actorId: string) {
+    const org = await this.prisma.organization.findUnique({ where: { id: orgId } });
+    if (!org) throw new NotFoundException('Organization not found');
+
+    const before: Record<string, any> = {};
+    const after: Record<string, any> = {};
+
+    if (dto.enabled !== undefined && dto.enabled !== org.joinCodeEnabled) {
+      before.joinCodeEnabled = org.joinCodeEnabled;
+      after.joinCodeEnabled = dto.enabled;
+    }
+    if (dto.requiresApproval !== undefined && dto.requiresApproval !== org.joinRequiresApproval) {
+      before.joinRequiresApproval = org.joinRequiresApproval;
+      after.joinRequiresApproval = dto.requiresApproval;
+    }
+
+    const updated = await this.prisma.organization.update({
+      where: { id: orgId },
+      data: {
+        ...(dto.enabled !== undefined && { joinCodeEnabled: dto.enabled }),
+        ...(dto.requiresApproval !== undefined && { joinRequiresApproval: dto.requiresApproval }),
+      },
+    });
+
+    if (Object.keys(after).length > 0) {
+      await this.auditService.logUpdate(orgId, actorId, 'ORG_SETTINGS', orgId, before, after);
+    }
+
+    return { joinCode: updated.joinCode, joinCodeEnabled: updated.joinCodeEnabled, joinRequiresApproval: updated.joinRequiresApproval };
+  }
+
+  async resolveJoinCode(code: string) {
+    const org = await this.prisma.organization.findUnique({
+      where: { joinCode: code.toUpperCase() },
+      select: { id: true, name: true, joinCodeEnabled: true },
+    });
+
+    if (!org || !org.joinCodeEnabled) {
+      throw new NotFoundException('Invalid or disabled join code');
+    }
+
+    return { orgId: org.id, orgName: org.name };
+  }
+
+  async joinWithCode(code: string, userId: string) {
+    const org = await this.prisma.organization.findUnique({
+      where: { joinCode: code.toUpperCase() },
+    });
+
+    if (!org || !org.joinCodeEnabled) {
+      throw new BadRequestException('Invalid or disabled join code');
+    }
+
+    // Check if user is already a member
+    const existing = await this.prisma.membership.findFirst({
+      where: { orgId: org.id, userId },
+    });
+
+    if (existing) {
+      if (existing.status === 'ACTIVE' || existing.status === 'PENDING') {
+        throw new ConflictException('You are already a member of this organization');
+      }
+      // Reactivate LEFT/INACTIVE membership
+      const status = org.joinRequiresApproval ? 'PENDING' : 'ACTIVE';
+      const updated = await this.prisma.membership.update({
+        where: { id: existing.id },
+        data: { status, leftAt: null },
+      });
+
+      await this.auditService.logCreate(org.id, undefined, 'MEMBER', updated.id, {
+        memberName: updated.name,
+        joinMethod: 'code',
+        status,
+      });
+
+      return { membershipId: updated.id, orgId: org.id, orgName: org.name, status };
+    }
+
+    // Look up user name
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true, email: true },
+    });
+
+    const status = org.joinRequiresApproval ? 'PENDING' : 'ACTIVE';
+    const membership = await this.prisma.membership.create({
+      data: {
+        orgId: org.id,
+        userId,
+        role: 'MEMBER',
+        status,
+        name: user?.name || user?.email || null,
+      },
+    });
+
+    await this.auditService.logCreate(org.id, undefined, 'MEMBER', membership.id, {
+      memberName: membership.name,
+      joinMethod: 'code',
+      status,
+    });
+
+    return { membershipId: membership.id, orgId: org.id, orgName: org.name, status };
   }
 
   async delete(orgId: string) {

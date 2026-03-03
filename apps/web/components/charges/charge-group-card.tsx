@@ -86,7 +86,8 @@ export const ChargeGroupCard = memo(function ChargeGroupCard({
                   onToggleSelectGroup(groupChargeIds);
                 }}
                 className="mr-3 flex items-center justify-center transition-colors shrink-0"
-                title={isGroupSelected ? "Deselect group" : "Select group"}
+                aria-label={isGroupSelected ? "Deselect charge group" : "Select charge group"}
+                aria-pressed={isGroupSelected}
               >
                 {isGroupSelected ? (
                   <CheckCircle2 className="w-5 h-5 text-primary" />
@@ -156,7 +157,7 @@ export const ChargeGroupCard = memo(function ChargeGroupCard({
               {isAdmin ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Group actions">
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -180,6 +181,8 @@ export const ChargeGroupCard = memo(function ChargeGroupCard({
               <button
                 onClick={() => setExpanded(!expanded)}
                 className="p-2 rounded-lg hover:bg-secondary/50 transition-colors"
+                aria-label={expanded ? 'Collapse group' : 'Expand group'}
+                aria-expanded={expanded}
               >
                 {expanded ? (
                   <ChevronDown className="w-4 h-4" />

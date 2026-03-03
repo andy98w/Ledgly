@@ -2,11 +2,11 @@
 
 import { useCallback, useMemo, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Plus, Receipt, TrendingUp, Percent, Search, Trash2, Circle, CheckCircle2 } from 'lucide-react';
-import { useCharges, useUpdateCharge, useVoidCharge, useRestoreCharge, useCreateCharge, useBulkVoidCharges } from '@/lib/queries/charges';
+import { Plus, Receipt, TrendingUp, Percent, Search, Trash2, Circle, CheckCircle2, Mail, Upload, MoreVertical, Download, FileSpreadsheet, FileText, ArrowUpDown } from 'lucide-react';
+import { useCharges, useUpdateCharge, useVoidCharge, useRestoreCharge, useCreateCharge, useBulkVoidCharges, useSendChargeReminders, useBulkCreateCharges } from '@/lib/queries/charges';
 import { useMembers, useCreateMembers } from '@/lib/queries/members';
 import { usePayments, useAutoAllocateToCharge, useRemoveAllocation, useAllocatePayment } from '@/lib/queries/payments';
-import { useAuthStore } from '@/lib/stores/auth';
+import { useAuthStore, useIsAdminOrTreasurer } from '@/lib/stores/auth';
 import { cn, formatCents, parseCents } from '@/lib/utils';
 import { CHARGE_CATEGORY_LABELS, type ChargeCategory } from '@ledgly/shared';
 import { useToast } from '@/components/ui/use-toast';
@@ -19,6 +19,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { StatCard } from '@/components/ui/stat-card';
 import { FadeIn } from '@/components/ui/page-transition';
 import { AnimatedList } from '@/components/ui/animated-list';
@@ -42,8 +48,17 @@ import { useChargeFilters } from '@/hooks/use-charge-filters';
 import { useBulkSelection } from '@/hooks/use-bulk-selection';
 import { BatchActionsBar } from '@/components/ui/batch-actions-bar';
 import { ExportDropdown } from '@/components/export-dropdown';
+import { CSVImportDialog, type ImportField } from '@/components/import/csv-import-dialog';
 import { exportCSV, exportPDF } from '@/lib/export';
+import { calculateNameSimilarity } from '@/lib/utils/name-similarity';
 
+const CHARGE_IMPORT_FIELDS: ImportField[] = [
+  { key: 'member', label: 'Member', required: true, aliases: ['member name', 'name', 'student'] },
+  { key: 'title', label: 'Title', required: true, aliases: ['charge', 'description', 'item'] },
+  { key: 'amount', label: 'Amount', required: true, aliases: ['cost', 'price', 'fee'] },
+  { key: 'category', label: 'Category', required: false, aliases: ['type', 'charge type'] },
+  { key: 'dueDate', label: 'Due Date', required: false, aliases: ['due', 'due date', 'deadline'] },
+];
 
 export default function ChargesPage() {
   const {
@@ -61,11 +76,10 @@ export default function ChargesPage() {
   const [groupEditData, setGroupEditData] = useState({ title: '', amountCents: 0, dueDate: null as string | null });
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [allocatingCharge, setAllocatingCharge] = useState<any | null>(null);
+  const [showImport, setShowImport] = useState(false);
 
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
-  const user = useAuthStore((s) => s.user);
-  const currentMembership = user?.memberships.find((m) => m.orgId === currentOrgId);
-  const isAdmin = currentMembership?.role === 'ADMIN' || currentMembership?.role === 'TREASURER';
+  const isAdmin = useIsAdminOrTreasurer();
   const { toast } = useToast();
 
   const { data, isLoading } = useCharges(currentOrgId, {
@@ -77,6 +91,7 @@ export default function ChargesPage() {
   const voidCharge = useVoidCharge();
   const restoreCharge = useRestoreCharge();
   const bulkVoidCharges = useBulkVoidCharges();
+  const sendReminders = useSendChargeReminders();
   const createCharge = useCreateCharge();
   const autoAllocate = useAutoAllocateToCharge();
   const removeAllocation = useRemoveAllocation();
@@ -85,6 +100,71 @@ export default function ChargesPage() {
   const { data: membersData, isLoading: loadingMembers } = useMembers(currentOrgId, { status: 'ACTIVE', limit: 100 });
   const members = membersData?.data || [];
   const createMembers = useCreateMembers();
+  const bulkCreateCharges = useBulkCreateCharges();
+
+  const handleImportCharges = async (records: Record<string, string>[]) => {
+    if (!currentOrgId) throw new Error('No org selected');
+    const validCategories = ['DUES', 'EVENT', 'FINE', 'MERCH', 'OTHER'];
+    const charges: Array<{ membershipId: string; category: string; title: string; amountCents: number; dueDate?: string }> = [];
+    const errors: string[] = [];
+
+    for (let i = 0; i < records.length; i++) {
+      const r = records[i];
+      const memberName = r.member?.trim();
+      const title = r.title?.trim();
+      const amountStr = r.amount?.trim();
+
+      if (!memberName || !title || !amountStr) {
+        errors.push(`Row ${i + 1}: missing required field(s)`);
+        continue;
+      }
+
+      // Match member name to membership
+      let bestMatch: { id: string; name: string; score: number } | null = null;
+      for (const m of members) {
+        const name = m.displayName || m.name || '';
+        const score = calculateNameSimilarity(memberName, name);
+        if (score > (bestMatch?.score || 0)) {
+          bestMatch = { id: m.id, name, score };
+        }
+      }
+
+      if (!bestMatch || bestMatch.score < 0.7) {
+        errors.push(`Row ${i + 1}: could not match member "${memberName}"`);
+        continue;
+      }
+
+      // Parse amount
+      const cleaned = amountStr.replace(/[$,]/g, '');
+      const amountCents = Math.round(parseFloat(cleaned) * 100);
+      if (isNaN(amountCents) || amountCents <= 0) {
+        errors.push(`Row ${i + 1}: invalid amount "${amountStr}"`);
+        continue;
+      }
+
+      // Parse category
+      const rawCat = r.category?.trim().toUpperCase() || 'OTHER';
+      const category = validCategories.includes(rawCat) ? rawCat : 'OTHER';
+
+      // Parse due date
+      let dueDate: string | undefined;
+      if (r.dueDate?.trim()) {
+        const parsed = new Date(r.dueDate.trim());
+        if (!isNaN(parsed.getTime())) {
+          dueDate = parsed.toISOString();
+        }
+      }
+
+      charges.push({ membershipId: bestMatch.id, category, title, amountCents, dueDate });
+    }
+
+    if (charges.length === 0) {
+      throw new Error(errors.length > 0 ? errors.slice(0, 5).join('\n') : 'No valid charges found');
+    }
+
+    await bulkCreateCharges.mutateAsync({ orgId: currentOrgId, charges });
+    return { success: charges.length, errors: errors.length };
+  };
 
   // Filter charges by search query
   const filteredCharges = data?.data.filter((charge) => {
@@ -333,6 +413,22 @@ export default function ChargesPage() {
     }
   };
 
+  const handleSendReminders = async () => {
+    if (!currentOrgId || selectedCharges.size === 0) return;
+    const chargeIds = Array.from(selectedCharges);
+
+    try {
+      const result = await sendReminders.mutateAsync({ orgId: currentOrgId, chargeIds });
+      clearSelection();
+      toast({
+        title: `Sent ${result.sent} reminder${result.sent !== 1 ? 's' : ''}`,
+        description: result.skipped > 0 ? `${result.skipped} skipped (no email or already paid)` : undefined,
+      });
+    } catch (error: any) {
+      toast({ title: 'Failed to send reminders', description: error.message, variant: 'destructive' });
+    }
+  };
+
   const handleUnallocate = useCallback((allocation: { id: string; paymentId: string; amountCents: number }, chargeId: string) => {
     if (!currentOrgId) return;
     removeAllocation.mutate(
@@ -494,13 +590,9 @@ export default function ChargesPage() {
       <FadeIn>
         <PageHeader
           title="Charges"
-          helpText="Create charges for dues, events, fines, or other fees. Assign to one or multiple members and track payment status. Use selection checkboxes for bulk actions."
+          helpText="Create charges for dues, events, fines, or other fees. Assign to one or multiple members and track payment status."
           actions={
             <div className="flex items-center gap-2">
-              <ExportDropdown
-                onExportCSV={() => handleExportCharges('csv')}
-                onExportPDF={() => handleExportCharges('pdf')}
-              />
               {isAdmin && (
                 <Button
                   size="sm"
@@ -511,24 +603,59 @@ export default function ChargesPage() {
                   Create Charge
                 </Button>
               )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" className="h-9 w-9">
+                    <MoreVertical className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {isAdmin && (
+                    <DropdownMenuItem onClick={() => setShowImport(true)} className="cursor-pointer">
+                      <Upload className="w-4 h-4 mr-2" />
+                      Import CSV
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onClick={() => handleExportCharges('csv')} className="cursor-pointer">
+                    <FileSpreadsheet className="w-4 h-4 mr-2" />
+                    Export CSV
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExportCharges('pdf')} className="cursor-pointer">
+                    <FileText className="w-4 h-4 mr-2" />
+                    Export PDF
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           }
         />
       </FadeIn>
 
       {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <StatCard title="Total Charges" value={totalCharges} description="All time charges" icon={Receipt} delay={0} color="amber" />
-        <StatCard title="Total Amount" value={totalAmount} isMoney description="Amount billed" icon={TrendingUp} delay={0.1} color="emerald" />
-        <StatCard title="Collection Rate" value={`${collectionRate}%`} description={`${totalCollected > 0 ? `$${(totalCollected / 100).toFixed(0)}` : '$0'} collected`} icon={Percent} delay={0.2} color="violet" />
-      </div>
+      {totalCharges > 0 && (
+        <div className="grid gap-4 md:grid-cols-3">
+          <StatCard title="Total Charges" value={totalCharges} description="All time charges" icon={Receipt} delay={0} color="amber" />
+          <StatCard title="Total Amount" value={totalAmount} isMoney description="Amount billed" icon={TrendingUp} delay={0.1} color="emerald" />
+          <StatCard title="Collection Rate" value={`${collectionRate}%`} description={`${totalCollected > 0 ? `$${(totalCollected / 100).toFixed(0)}` : '$0'} collected`} icon={Percent} delay={0.2} color="violet" />
+        </div>
+      )}
 
-      {/* Filters */}
+      {/* Search + Filters */}
       <FadeIn delay={0.2}>
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex gap-3">
+        <div className="space-y-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <Input
+              placeholder="Search charges..."
+              aria-label="Search charges"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 h-9 bg-secondary/30 border-border/50"
+            />
+          </div>
+          <div className="flex gap-2">
             <Select value={statusFilter || 'all'} onValueChange={(v) => setStatusFilter(v === 'all' ? '' : v)}>
-              <SelectTrigger className="w-[150px] bg-secondary/30 border-border/50">
+              <SelectTrigger className="w-[130px] h-8 bg-secondary/30 border-border/50 text-xs">
                 <SelectValue placeholder="All Statuses" />
               </SelectTrigger>
               <SelectContent>
@@ -539,7 +666,7 @@ export default function ChargesPage() {
               </SelectContent>
             </Select>
             <Select value={categoryFilter || 'all'} onValueChange={(v) => setCategoryFilter(v === 'all' ? '' : v)}>
-              <SelectTrigger className="w-[150px] bg-secondary/30 border-border/50">
+              <SelectTrigger className="w-[140px] h-8 bg-secondary/30 border-border/50 text-xs">
                 <SelectValue placeholder="All Categories" />
               </SelectTrigger>
               <SelectContent>
@@ -552,38 +679,8 @@ export default function ChargesPage() {
               </SelectContent>
             </Select>
           </div>
-          <div className="relative w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search title, member..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 h-9 bg-secondary/30 border-border/50"
-            />
-          </div>
         </div>
       </FadeIn>
-
-      {/* Pagination Top */}
-      {!isLoading && groupedCharges.length > 0 && (
-        <FadeIn delay={0.25}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Show</span>
-              <Select value={String(pageSize)} onValueChange={(v) => handlePageSizeChange(Number(v))}>
-                <SelectTrigger className="w-[70px] h-8 bg-secondary/30 border-border/50"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="20">20</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                  <SelectItem value="100">100</SelectItem>
-                </SelectContent>
-              </Select>
-              <span className="text-sm text-muted-foreground">per page</span>
-            </div>
-            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
-          </div>
-        </FadeIn>
-      )}
 
       {/* Charges List */}
       {isLoading ? (
@@ -611,11 +708,11 @@ export default function ChargesPage() {
           <div className="space-y-3">
             {isAdmin && paginatedGroups.length > 0 && (
               <div className="rounded-xl border border-border/50 bg-secondary/20 p-4 flex items-center justify-between">
-                <button onClick={toggleSelectAllCharges} className="flex items-center gap-3 transition-colors" title={isAllChargesSelected ? "Deselect all" : "Select all"}>
+                <button onClick={toggleSelectAllCharges} className="flex items-center gap-3 transition-colors" aria-label={isAllChargesSelected ? "Deselect all charges" : "Select all charges"} aria-pressed={isAllChargesSelected}>
                   {isAllChargesSelected ? <CheckCircle2 className="w-5 h-5 text-primary" /> : <Circle className="w-5 h-5 text-muted-foreground hover:text-primary" />}
                   <span className="text-sm text-muted-foreground">{isAllChargesSelected ? 'Deselect all' : 'Select all'}</span>
                 </button>
-                <button onClick={handleBulkDeleteCharges} className={cn("w-7 h-7 flex items-center justify-center transition-all hover:text-destructive", selectedCharges.size === 0 && "invisible")} title={`Delete ${selectedCharges.size} selected`}>
+                <button onClick={handleBulkDeleteCharges} className={cn("w-7 h-7 flex items-center justify-center transition-all hover:text-destructive", selectedCharges.size === 0 && "invisible")} aria-label={`Delete ${selectedCharges.size} selected charges`}>
                   <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
                 </button>
               </div>
@@ -666,7 +763,20 @@ export default function ChargesPage() {
       <ChargeCreateDialog open={showCreateDialog} onClose={() => setShowCreateDialog(false)} onCreate={handleCreateCharge} members={members} loadingMembers={loadingMembers} isPending={createCharge.isPending} onAddMember={handleAddMember} isAddingMember={createMembers.isPending} />
       <ChargeAllocatePaymentDialog charge={allocatingCharge} payments={paymentsData?.data || []} onClose={() => setAllocatingCharge(null)} onAllocate={handleAllocatePaymentToCharge} isPending={allocatePayment.isPending} />
 
+      <CSVImportDialog
+        open={showImport}
+        onOpenChange={setShowImport}
+        title="Import Charges"
+        description="Upload a CSV file to bulk import charges. Member names will be fuzzy-matched to existing members."
+        fields={CHARGE_IMPORT_FIELDS}
+        onImport={handleImportCharges}
+      />
+
       <BatchActionsBar selectedCount={selectedCharges.size} onClear={clearSelection}>
+        <Button variant="outline" size="sm" onClick={handleSendReminders} className="h-8" disabled={sendReminders.isPending}>
+          <Mail className="w-3.5 h-3.5 mr-1.5" />
+          Send Reminders
+        </Button>
         <Button variant="destructive" size="sm" onClick={handleBulkDeleteCharges} className="h-8">
           <Trash2 className="w-3.5 h-3.5 mr-1.5" />
           Void

@@ -119,6 +119,18 @@ export function useBulkDeleteMembers() {
   });
 }
 
+export function useApproveMember() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ orgId, memberId }: { orgId: string; memberId: string }) =>
+      api.post(`/organizations/${orgId}/members/${memberId}/approve`),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.members.all(variables.orgId) });
+    },
+  });
+}
+
 export function useResendInvitation() {
   const queryClient = useQueryClient();
 

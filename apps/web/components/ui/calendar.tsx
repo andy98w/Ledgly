@@ -70,13 +70,13 @@ export function Calendar({ selected, onSelect, className }: CalendarProps) {
     <div className={cn('p-3', className)}>
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={prevMonth}>
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={prevMonth} aria-label="Previous month">
           <ChevronLeft className="h-4 w-4" />
         </Button>
         <span className="text-sm font-medium">
           {MONTHS[month]} {year}
         </span>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={nextMonth}>
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={nextMonth} aria-label="Next month">
           <ChevronRight className="h-4 w-4" />
         </Button>
       </div>
@@ -91,7 +91,7 @@ export function Calendar({ selected, onSelect, className }: CalendarProps) {
       </div>
 
       {/* Day grid */}
-      <div className="grid grid-cols-7">
+      <div className="grid grid-cols-7" role="grid" aria-label={`${MONTHS[month]} ${year}`}>
         {days.map(({ date, isCurrentMonth }, i) => {
           const isSelected = selected && isSameDay(date, selected);
           const isToday = isSameDay(date, today);
@@ -101,6 +101,9 @@ export function Calendar({ selected, onSelect, className }: CalendarProps) {
               key={i}
               type="button"
               onClick={() => onSelect(date)}
+              aria-label={`${MONTHS[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`}
+              aria-selected={isSelected || undefined}
+              aria-current={isToday ? 'date' : undefined}
               className={cn(
                 'h-8 w-8 mx-auto rounded-md text-sm transition-colors',
                 !isCurrentMonth && 'text-muted-foreground/40',

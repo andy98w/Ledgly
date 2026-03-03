@@ -58,12 +58,12 @@ const navItems: Array<{
   badge?: string;
 }> = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/spreadsheet', label: 'Spreadsheet', icon: Table2 },
   { href: '/members', label: 'Members', icon: Users },
   { href: '/charges', label: 'Charges', icon: Receipt },
   { href: '/expenses', label: 'Expenses', icon: TrendingDown },
   { href: '/payments', label: 'Payments', icon: CreditCard },
   { href: '/inbox', label: 'Inbox', icon: Inbox },
-  { href: '/spreadsheet', label: 'Spreadsheet', icon: Table2 },
   { href: '/audit', label: 'Audit Log', icon: History },
 ];
 
@@ -107,12 +107,12 @@ export function Sidebar() {
 
   return (
     <aside className={cn(
-      'hidden md:flex md:flex-col md:fixed md:inset-y-0 border-r border-border/50 bg-card/50 backdrop-blur-xl transition-all duration-300',
+      'hidden md:flex md:flex-col md:fixed md:inset-y-0 border-r border-border bg-card transition-all duration-300',
       isCollapsed ? 'md:w-[68px]' : 'md:w-64',
     )}>
       <div className="flex flex-col flex-1 min-h-0">
         {/* Logo / Expand toggle */}
-        <div className={cn('flex items-center justify-between h-16 border-b border-border/50', isCollapsed ? 'justify-center px-2' : 'px-5')}>
+        <div className={cn('flex items-center justify-between h-16 border-b border-border', isCollapsed ? 'justify-center px-2' : 'px-5')}>
           {isCollapsed ? (
             <TooltipProvider delayDuration={0}>
               <Tooltip>
@@ -120,6 +120,7 @@ export function Sidebar() {
                   <button
                     onClick={toggle}
                     className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+                    aria-label="Expand sidebar"
                   >
                     <PanelLeft className="h-5 w-5" />
                   </button>
@@ -142,6 +143,7 @@ export function Sidebar() {
               <button
                 onClick={toggle}
                 className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+                aria-label="Collapse sidebar"
               >
                 <PanelLeftClose className="h-5 w-5" />
               </button>
@@ -314,7 +316,7 @@ export function Sidebar() {
 
         {/* User Info */}
         {user && (
-          <div className={cn('border-t border-border/50', isCollapsed ? 'p-2' : 'p-3')}>
+          <div className={cn('border-t border-border', isCollapsed ? 'p-2' : 'p-3')}>
             {isCollapsed ? (
               <TooltipProvider delayDuration={0}>
                 <Tooltip>

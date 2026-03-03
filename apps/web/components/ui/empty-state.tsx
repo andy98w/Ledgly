@@ -11,9 +11,9 @@ interface EmptyStateProps {
 
 export function EmptyState({ icon: Icon, title, description, action, className }: EmptyStateProps) {
   return (
-    <div className={cn('flex flex-col items-center justify-center text-center py-12', className)}>
+    <div className={cn('flex flex-col items-center justify-center text-center py-12', className)} role="status">
       {/* Decorative rings */}
-      <div className="relative mb-4">
+      <div className="relative mb-4" aria-hidden="true">
         <div className="absolute inset-0 -m-3 rounded-full border border-border/50" />
         <div className="absolute inset-0 -m-6 rounded-full border border-border/30" />
         <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center relative">

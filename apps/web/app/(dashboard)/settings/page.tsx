@@ -3,11 +3,11 @@
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { Moon, Sun, Monitor, User, Building2, Shield, Loader2, Camera, Plus, Trash2, AlertTriangle, Mail, Settings, GraduationCap, KeyRound, Eye, EyeOff } from 'lucide-react';
+import { Moon, Sun, Monitor, User, Building2, Shield, Loader2, Camera, Plus, AlertTriangle, Mail, GraduationCap, KeyRound, Eye, EyeOff, Link2, Copy, Check, RefreshCw } from 'lucide-react';
 import { useAuthStore } from '@/lib/stores/auth';
 import { useTutorialStore } from '@/lib/stores/tutorial';
 import { useUpdateProfile, useChangePassword } from '@/lib/queries/auth';
-import { useCreateOrganization, useDeleteOrganization, useOrganization, useUpdateOrganization } from '@/lib/queries/organizations';
+import { useCreateOrganization, useDeleteOrganization, useOrganization, useUpdateOrganization, useGenerateJoinCode, useDisableJoinCode, useUpdateJoinCodeSettings } from '@/lib/queries/organizations';
 import { uploadAvatar } from '@/lib/supabase';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
@@ -65,6 +65,12 @@ export default function SettingsPage() {
   const [confirmPw, setConfirmPw] = useState('');
   const [showCurrentPw, setShowCurrentPw] = useState(false);
   const [showNewPw, setShowNewPw] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
+
+  const generateJoinCode = useGenerateJoinCode(currentOrgId ?? null);
+  const disableJoinCode = useDisableJoinCode(currentOrgId ?? null);
+  const updateJoinCodeSettings = useUpdateJoinCodeSettings(currentOrgId ?? null);
 
   const hasChanges = name !== (user?.name || '');
 
@@ -300,19 +306,11 @@ export default function SettingsPage() {
 
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Email Address</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    value={user?.email || ''}
-                    disabled
-                    className="h-11 bg-secondary/30 border-border/50 opacity-60"
-                  />
-                  <Button variant="outline" size="sm" disabled>
-                    Change
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Email changes coming soon. Contact support if needed.
-                </p>
+                <Input
+                  value={user?.email || ''}
+                  disabled
+                  className="h-11 bg-secondary/30 border-border/50 opacity-60"
+                />
               </div>
 
               <Button
@@ -483,6 +481,157 @@ export default function SettingsPage() {
         </MotionCard>
       </FadeIn>
 
+      {/* Join Code Section — admin only */}
+      {currentOrg?.role === 'ADMIN' && (
+        <FadeIn delay={0.35}>
+          <MotionCard hover={false}>
+            <MotionCardHeader>
+              <MotionCardTitle className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Link2 className="h-4 w-4 text-primary" />
+                </div>
+                Member Join Code
+              </MotionCardTitle>
+            </MotionCardHeader>
+            <MotionCardContent>
+              <div className="space-y-4">
+                {orgDetails?.joinCode ? (
+                  <>
+                    <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/30">
+                      <div className="flex items-center gap-3">
+                        <code className="text-2xl font-mono font-bold tracking-[0.3em] text-foreground">
+                          {orgDetails.joinCode}
+                        </code>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            navigator.clipboard.writeText(orgDetails.joinCode!);
+                            setCopiedCode(true);
+                            setTimeout(() => setCopiedCode(false), 2000);
+                            toast({ title: 'Code copied!' });
+                          }}
+                        >
+                          {copiedCode ? <Check className="h-4 w-4 mr-1" /> : <Copy className="h-4 w-4 mr-1" />}
+                          {copiedCode ? 'Copied' : 'Copy'}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            if (showRegenerateConfirm) {
+                              generateJoinCode.mutate(undefined, {
+                                onSuccess: () => {
+                                  toast({ title: 'Join code regenerated' });
+                                  setShowRegenerateConfirm(false);
+                                },
+                                onError: (error: any) => {
+                                  toast({ title: 'Error', description: error.message, variant: 'destructive' });
+                                },
+                              });
+                            } else {
+                              setShowRegenerateConfirm(true);
+                              setTimeout(() => setShowRegenerateConfirm(false), 3000);
+                            }
+                          }}
+                          disabled={generateJoinCode.isPending}
+                        >
+                          <RefreshCw className="h-4 w-4 mr-1" />
+                          {showRegenerateConfirm ? 'Confirm?' : 'Regenerate'}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-muted-foreground">
+                      Share this code with people who want to join. They can enter it at <span className="font-mono text-foreground">/join</span>.
+                    </p>
+
+                    <Separator className="opacity-50" />
+
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <Label className="text-sm font-medium">Enable join code</Label>
+                        <p className="text-xs text-muted-foreground">
+                          When disabled, the code cannot be used to join
+                        </p>
+                      </div>
+                      <Switch
+                        checked={orgDetails.joinCodeEnabled}
+                        onCheckedChange={(checked) =>
+                          updateJoinCodeSettings.mutate({ enabled: checked })
+                        }
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <Label className="text-sm font-medium">Require admin approval</Label>
+                        <p className="text-xs text-muted-foreground">
+                          New members will be pending until an admin approves them
+                        </p>
+                      </div>
+                      <Switch
+                        checked={orgDetails.joinRequiresApproval}
+                        onCheckedChange={(checked) =>
+                          updateJoinCodeSettings.mutate({ requiresApproval: checked })
+                        }
+                      />
+                    </div>
+
+                    <Separator className="opacity-50" />
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => {
+                        disableJoinCode.mutate(undefined, {
+                          onSuccess: () => toast({ title: 'Join code disabled' }),
+                          onError: (error: any) => toast({ title: 'Error', description: error.message, variant: 'destructive' }),
+                        });
+                      }}
+                      disabled={disableJoinCode.isPending}
+                    >
+                      Disable & Remove Code
+                    </Button>
+                  </>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">No join code set</p>
+                      <p className="text-xs text-muted-foreground">
+                        Generate a code to let members self-join your organization
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        generateJoinCode.mutate(undefined, {
+                          onSuccess: () => toast({ title: 'Join code generated!' }),
+                          onError: (error: any) => toast({ title: 'Error', description: error.message, variant: 'destructive' }),
+                        });
+                      }}
+                      disabled={generateJoinCode.isPending}
+                    >
+                      {generateJoinCode.isPending ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Generating...
+                        </>
+                      ) : (
+                        'Generate Code'
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </MotionCardContent>
+          </MotionCard>
+        </FadeIn>
+      )}
+
       {/* Gmail Sync Section — admin only */}
       {currentOrg?.role === 'ADMIN' && (
         <FadeIn delay={0.45}>
@@ -532,93 +681,38 @@ export default function SettingsPage() {
         </FadeIn>
       )}
 
-      {/* Email Preferences */}
-      <FadeIn delay={0.45}>
-        <MotionCard hover={false}>
-          <MotionCardHeader>
-            <MotionCardTitle className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-cyan-500/10">
-                <Mail className="h-4 w-4 text-cyan-500" />
-              </div>
-              Email Notifications
-            </MotionCardTitle>
-          </MotionCardHeader>
-          <MotionCardContent className="space-y-1">
-            <div className="flex items-center justify-between py-2">
-              <div>
-                <p className="text-sm font-medium">Payment Receipts</p>
-                <p className="text-xs text-muted-foreground">Get notified when a payment is received</p>
-              </div>
-              <Switch defaultChecked />
-            </div>
-            <Separator className="opacity-50" />
-            <div className="flex items-center justify-between py-2">
-              <div>
-                <p className="text-sm font-medium">Overdue Reminders</p>
-                <p className="text-xs text-muted-foreground">Get notified when charges become overdue</p>
-              </div>
-              <Switch defaultChecked />
-            </div>
-            <Separator className="opacity-50" />
-            <div className="flex items-center justify-between py-2">
-              <div>
-                <p className="text-sm font-medium">Weekly Summary</p>
-                <p className="text-xs text-muted-foreground">Receive a weekly digest of activity</p>
-              </div>
-              <Switch />
-            </div>
-          </MotionCardContent>
-        </MotionCard>
-      </FadeIn>
-
-      {/* Danger Zone */}
-      <FadeIn delay={0.5}>
-        <MotionCard hover={false} className="border-destructive/30">
-          <MotionCardHeader>
-            <MotionCardTitle className="flex items-center gap-2 text-destructive">
-              <div className="p-2 rounded-lg bg-destructive/10">
-                <Shield className="h-4 w-4 text-destructive" />
-              </div>
-              Danger Zone
-            </MotionCardTitle>
-          </MotionCardHeader>
-          <MotionCardContent>
-            <div className="space-y-4">
-              {currentOrg?.role === 'ADMIN' && (
-                <>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium">Delete Organization</p>
-                      <p className="text-xs text-muted-foreground">
-                        Permanently delete {currentOrg.orgName} and all its data
-                      </p>
-                    </div>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => setShowDeleteOrgDialog(true)}
-                    >
-                      Delete
-                    </Button>
-                  </div>
-                  <Separator className="opacity-50" />
-                </>
-              )}
+      {/* Danger Zone — admin only */}
+      {currentOrg?.role === 'ADMIN' && (
+        <FadeIn delay={0.5}>
+          <MotionCard hover={false} className="border-destructive/30">
+            <MotionCardHeader>
+              <MotionCardTitle className="flex items-center gap-2 text-destructive">
+                <div className="p-2 rounded-lg bg-destructive/10">
+                  <Shield className="h-4 w-4 text-destructive" />
+                </div>
+                Danger Zone
+              </MotionCardTitle>
+            </MotionCardHeader>
+            <MotionCardContent>
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
-                  <p className="text-sm font-medium">Delete Account</p>
+                  <p className="text-sm font-medium">Delete Organization</p>
                   <p className="text-xs text-muted-foreground">
-                    Permanently delete your account and all associated data
+                    Permanently delete {currentOrg.orgName} and all its data
                   </p>
                 </div>
-                <Button variant="destructive" size="sm" disabled>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setShowDeleteOrgDialog(true)}
+                >
                   Delete
                 </Button>
               </div>
-            </div>
-          </MotionCardContent>
-        </MotionCard>
-      </FadeIn>
+            </MotionCardContent>
+          </MotionCard>
+        </FadeIn>
+      )}
 
       {/* Create Organization Dialog */}
       <Dialog open={showCreateOrgDialog} onOpenChange={setShowCreateOrgDialog}>

@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect, useLayoutEffect } from 'react';
-import { ArrowUpRight, ArrowDownRight, Download, Filter, Plus, DollarSign, Wallet, Search, Minus, ArrowUp, ArrowDown, Trash2, Circle, CheckCircle2, Link2, Loader2, CreditCard } from 'lucide-react';
-import { useCharges, useUpdateCharge, useCreateCharge, useVoidCharge, useRestoreCharge } from '@/lib/queries/charges';
+import { ArrowUpRight, ArrowDownRight, Download, Upload, Filter, Plus, DollarSign, Wallet, Search, Minus, ArrowUp, ArrowDown, Trash2, Circle, CheckCircle2, Check, Link2, Loader2, CreditCard, MoreVertical, FileSpreadsheet } from 'lucide-react';
+import { useCharges, useUpdateCharge, useCreateCharge, useVoidCharge, useRestoreCharge, useBulkCreateCharges } from '@/lib/queries/charges';
 import { useExpenses, useUpdateExpense, useCreateExpense, useDeleteExpense, useRestoreExpense } from '@/lib/queries/expenses';
-import { usePayments, useUpdatePayment, useCreatePayment, useDeletePayment, useRestorePayment, useAllocatePayment, useAutoAllocateToCharge } from '@/lib/queries/payments';
+import { usePayments, useUpdatePayment, useCreatePayment, useDeletePayment, useRestorePayment, useAllocatePayment, useAutoAllocateToCharge, useBulkCreatePayments } from '@/lib/queries/payments';
 import { useMembers } from '@/lib/queries/members';
-import { useAuthStore } from '@/lib/stores/auth';
+import { useAuthStore, useIsAdminOrTreasurer, useCurrentMembership } from '@/lib/stores/auth';
 import { formatDate } from '@/lib/utils';
 import {
   CHARGE_CATEGORIES,
@@ -51,6 +51,15 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import { DatePicker } from '@/components/ui/date-picker';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { CSVImportDialog, type ImportField } from '@/components/import/csv-import-dialog';
+import { calculateNameSimilarity } from '@/lib/utils/name-similarity';
 
 /** Strip "VENMO payment to " etc. prefixes from Gmail-imported expense titles */
 function cleanExpenseTitle(title: string): string {
@@ -86,6 +95,7 @@ function EditableCell({
   onEdit,
   onSave,
   onCancel,
+  onNavigate,
   isAdmin,
   rowType,
   column,
@@ -98,6 +108,7 @@ function EditableCell({
   onEdit: () => void;
   onSave: (newValue: string | number) => void;
   onCancel: () => void;
+  onNavigate?: (direction: 'next' | 'prev' | 'down') => void;
   isAdmin: boolean;
   rowType: 'charge' | 'expense' | 'payment';
   column: string;
@@ -132,8 +143,14 @@ function EditableCell({
   }, [value, type]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Tab') {
+      e.preventDefault();
       handleSave();
+      onNavigate?.(e.shiftKey ? 'prev' : 'next');
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSave();
+      onNavigate?.('down');
     } else if (e.key === 'Escape') {
       onCancel();
     }
@@ -256,10 +273,11 @@ function EditableCell({
             ) : (
               <>
                 <div className="relative mb-2">
-                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" aria-hidden="true" />
                   <Input
                     ref={searchInputRef}
                     placeholder="Search members..."
+                    aria-label="Search members"
                     value={memberSearch}
                     onChange={(e) => setMemberSearch(e.target.value)}
                     className="h-7 text-xs pl-7"
@@ -412,6 +430,8 @@ export default function SpreadsheetPage() {
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showAllocateDialog, setShowAllocateDialog] = useState(false);
+  const [inlineNewRow, setInlineNewRow] = useState(false);
+  const [inlineNewRowField, setInlineNewRowField] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [newRowType, setNewRowType] = useState<'charge' | 'expense' | 'payment'>('charge');
@@ -426,11 +446,9 @@ export default function SpreadsheetPage() {
   });
 
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
-  const user = useAuthStore((s) => s.user);
-  const currentMembership = user?.memberships.find((m) => m.orgId === currentOrgId);
   const { toast } = useToast();
-
-  const isAdmin = currentMembership?.role === 'ADMIN' || currentMembership?.role === 'TREASURER';
+  const isAdmin = useIsAdminOrTreasurer();
+  const currentMembership = useCurrentMembership();
 
   const { data: chargesData, isLoading: chargesLoading } = useCharges(currentOrgId, { limit: 100 });
   const { data: expensesData, isLoading: expensesLoading } = useExpenses(currentOrgId, { limit: 100 });
@@ -453,6 +471,11 @@ export default function SpreadsheetPage() {
   const restoreMember = useRestoreMember();
   const allocatePayment = useAllocatePayment();
   const autoAllocate = useAutoAllocateToCharge();
+  const bulkCreateCharges = useBulkCreateCharges();
+  const bulkCreatePayments = useBulkCreatePayments();
+
+  const [showImport, setShowImport] = useState(false);
+  const [importType, setImportType] = useState<'charge' | 'expense' | 'payment'>('charge');
 
   const isLoading = chargesLoading || expensesLoading || paymentsLoading;
   const members = membersData?.data || [];
@@ -646,6 +669,43 @@ export default function SpreadsheetPage() {
       net: income - expenses,
     };
   }, [rows]);
+
+  const editableColumns: Array<'date' | 'member' | 'category' | 'description' | 'amount'> = ['date', 'member', 'category', 'description', 'amount'];
+
+  const handleCellNavigate = (rowId: string, column: string, direction: 'next' | 'prev' | 'down') => {
+    const colIdx = editableColumns.indexOf(column as any);
+    if (direction === 'next') {
+      if (colIdx < editableColumns.length - 1) {
+        setEditingCell({ rowId, column: editableColumns[colIdx + 1] });
+      } else {
+        // Move to first column of next row
+        const rowIdx = paginatedRows.findIndex((r) => r.id === rowId);
+        if (rowIdx < paginatedRows.length - 1) {
+          setEditingCell({ rowId: paginatedRows[rowIdx + 1].id, column: editableColumns[0] });
+        } else {
+          setEditingCell(null);
+        }
+      }
+    } else if (direction === 'prev') {
+      if (colIdx > 0) {
+        setEditingCell({ rowId, column: editableColumns[colIdx - 1] });
+      } else {
+        const rowIdx = paginatedRows.findIndex((r) => r.id === rowId);
+        if (rowIdx > 0) {
+          setEditingCell({ rowId: paginatedRows[rowIdx - 1].id, column: editableColumns[editableColumns.length - 1] });
+        } else {
+          setEditingCell(null);
+        }
+      }
+    } else if (direction === 'down') {
+      const rowIdx = paginatedRows.findIndex((r) => r.id === rowId);
+      if (rowIdx < paginatedRows.length - 1) {
+        setEditingCell({ rowId: paginatedRows[rowIdx + 1].id, column: column as any });
+      } else {
+        setEditingCell(null);
+      }
+    }
+  };
 
   const handleSaveCell = async (row: SpreadsheetRow, column: 'description' | 'category' | 'amount' | 'date' | 'member', newValue: string | number) => {
     if (!currentOrgId) return;
@@ -846,6 +906,88 @@ export default function SpreadsheetPage() {
     }
   };
 
+  const handleStartInlineRow = () => {
+    setInlineNewRow(true);
+    setNewRowType('charge');
+    setNewRowData({
+      date: new Date().toISOString().split('T')[0],
+      category: '',
+      description: '',
+      membershipId: '',
+      vendor: '',
+      amountCents: 0,
+      memo: '',
+    });
+    // Auto-focus the type selector on next render
+    setTimeout(() => setInlineNewRowField('type'), 50);
+  };
+
+  const handleCancelInlineRow = () => {
+    setInlineNewRow(false);
+    setInlineNewRowField(null);
+  };
+
+  const handleSaveInlineRow = async () => {
+    if (!currentOrgId || !currentMembership) return;
+
+    try {
+      if (newRowType === 'charge') {
+        if (!newRowData.membershipId || !newRowData.description || !newRowData.amountCents) {
+          toast({ title: 'Please fill in member, description, and amount', variant: 'destructive' });
+          return;
+        }
+        await createCharge.mutateAsync({
+          orgId: currentOrgId,
+          data: {
+            membershipIds: [newRowData.membershipId],
+            category: (newRowData.category || 'OTHER') as ChargeCategory,
+            title: newRowData.description,
+            amountCents: newRowData.amountCents,
+            dueDate: newRowData.date ? new Date(newRowData.date).toISOString() : undefined,
+          },
+        });
+      } else if (newRowType === 'expense') {
+        if (!newRowData.description || !newRowData.amountCents) {
+          toast({ title: 'Please fill in description and amount', variant: 'destructive' });
+          return;
+        }
+        await createExpense.mutateAsync({
+          orgId: currentOrgId,
+          data: {
+            category: (newRowData.category || 'OTHER') as ExpenseCategory,
+            title: newRowData.description,
+            amountCents: newRowData.amountCents,
+            date: newRowData.date ? new Date(newRowData.date).toISOString() : new Date().toISOString(),
+            vendor: newRowData.vendor || undefined,
+          },
+        });
+      } else if (newRowType === 'payment') {
+        if (!newRowData.amountCents || !newRowData.membershipId) {
+          toast({ title: 'Please fill in member and amount', variant: 'destructive' });
+          return;
+        }
+        const selectedMember = members.find(m => m.id === newRowData.membershipId);
+        const memberName = selectedMember?.name || selectedMember?.user?.name || undefined;
+        await createPayment.mutateAsync({
+          orgId: currentOrgId,
+          data: {
+            amountCents: newRowData.amountCents,
+            paidAt: newRowData.date ? new Date(newRowData.date).toISOString() : new Date().toISOString(),
+            rawPayerName: memberName,
+            memo: newRowData.memo || undefined,
+            membershipId: newRowData.membershipId,
+          },
+        });
+      }
+
+      toast({ title: `${newRowType.charAt(0).toUpperCase() + newRowType.slice(1)} created` });
+      setInlineNewRow(false);
+      setInlineNewRowField(null);
+    } catch (error: any) {
+      toast({ title: 'Error creating', description: error.message || 'Please try again', variant: 'destructive' });
+    }
+  };
+
   const handleDeleteRow = async (row: SpreadsheetRow) => {
     if (!currentOrgId) return;
 
@@ -1037,113 +1179,250 @@ export default function SpreadsheetPage() {
     URL.revokeObjectURL(url);
   };
 
+  const importFieldsByType: Record<string, ImportField[]> = {
+    charge: [
+      { key: 'member', label: 'Member', required: true, aliases: ['member name', 'name', 'student'] },
+      { key: 'title', label: 'Title', required: true, aliases: ['charge', 'description', 'item'] },
+      { key: 'amount', label: 'Amount', required: true, aliases: ['cost', 'price', 'fee'] },
+      { key: 'category', label: 'Category', required: false, aliases: ['type', 'charge type'] },
+      { key: 'dueDate', label: 'Due Date', required: false, aliases: ['due', 'due date', 'deadline'] },
+    ],
+    expense: [
+      { key: 'title', label: 'Title', required: true, aliases: ['name', 'expense', 'description'] },
+      { key: 'amount', label: 'Amount', required: true, aliases: ['cost', 'price', 'total'] },
+      { key: 'date', label: 'Date', required: true, aliases: ['expense date', 'paid date'] },
+      { key: 'category', label: 'Category', required: false, aliases: ['type', 'expense type'] },
+      { key: 'vendor', label: 'Vendor', required: false, aliases: ['payee', 'paid to', 'store'] },
+      { key: 'description', label: 'Description', required: false, aliases: ['notes', 'memo', 'details'] },
+    ],
+    payment: [
+      { key: 'payerName', label: 'Payer Name', required: true, aliases: ['name', 'member', 'payer', 'from'] },
+      { key: 'amount', label: 'Amount', required: true, aliases: ['cost', 'price', 'total'] },
+      { key: 'date', label: 'Date', required: true, aliases: ['payment date', 'paid date', 'paid at'] },
+      { key: 'memo', label: 'Memo', required: false, aliases: ['notes', 'description', 'details'] },
+    ],
+  };
+
+  const handleImportRecords = async (records: Record<string, string>[]) => {
+    if (!currentOrgId) throw new Error('No org selected');
+
+    if (importType === 'charge') {
+      const validCategories = ['DUES', 'EVENT', 'FINE', 'MERCH', 'OTHER'];
+      const charges: Array<{ membershipId: string; category: string; title: string; amountCents: number; dueDate?: string }> = [];
+      const errors: string[] = [];
+
+      for (let i = 0; i < records.length; i++) {
+        const r = records[i];
+        const memberName = r.member?.trim();
+        const title = r.title?.trim();
+        const amountStr = r.amount?.trim();
+        if (!memberName || !title || !amountStr) { errors.push(`Row ${i + 1}: missing required field(s)`); continue; }
+
+        let bestMatch: { id: string; name: string; score: number } | null = null;
+        for (const m of members) {
+          const name = (m as any).displayName || (m as any).name || '';
+          const score = calculateNameSimilarity(memberName, name);
+          if (score > (bestMatch?.score || 0)) bestMatch = { id: m.id, name, score };
+        }
+        if (!bestMatch || bestMatch.score < 0.7) { errors.push(`Row ${i + 1}: could not match member "${memberName}"`); continue; }
+
+        const cleaned = amountStr.replace(/[$,]/g, '');
+        const amountCents = Math.round(parseFloat(cleaned) * 100);
+        if (isNaN(amountCents) || amountCents <= 0) { errors.push(`Row ${i + 1}: invalid amount`); continue; }
+
+        const rawCat = r.category?.trim().toUpperCase() || 'OTHER';
+        const category = validCategories.includes(rawCat) ? rawCat : 'OTHER';
+        let dueDate: string | undefined;
+        if (r.dueDate?.trim()) { const d = new Date(r.dueDate.trim()); if (!isNaN(d.getTime())) dueDate = d.toISOString(); }
+
+        charges.push({ membershipId: bestMatch.id, category, title, amountCents, dueDate });
+      }
+
+      if (charges.length === 0) throw new Error(errors.length > 0 ? errors.slice(0, 5).join('\n') : 'No valid charges found');
+      await bulkCreateCharges.mutateAsync({ orgId: currentOrgId, charges });
+      return { success: charges.length, errors: errors.length };
+    }
+
+    if (importType === 'expense') {
+      const validCategories = ['EVENT', 'SUPPLIES', 'FOOD', 'VENUE', 'MARKETING', 'SERVICES', 'OTHER'];
+      let success = 0, errorCount = 0;
+      for (const r of records) {
+        if (!r.title?.trim() || !r.amount?.trim()) { errorCount++; continue; }
+        const amountCents = Math.round(parseFloat(r.amount.replace(/[$,]/g, '')) * 100);
+        if (isNaN(amountCents) || amountCents <= 0) { errorCount++; continue; }
+        const category = validCategories.includes(r.category?.toUpperCase() || '') ? r.category!.toUpperCase() : 'OTHER';
+        try {
+          await createExpense.mutateAsync({
+            orgId: currentOrgId,
+            data: {
+              title: r.title.trim(),
+              category,
+              amountCents,
+              date: r.date?.trim() || new Date().toISOString().split('T')[0],
+              vendor: r.vendor?.trim() || undefined,
+              description: r.description?.trim() || undefined,
+            },
+          });
+          success++;
+        } catch { errorCount++; }
+      }
+      return { success, errors: errorCount };
+    }
+
+    if (importType === 'payment') {
+      const payments: Array<{ amountCents: number; paidAt: string; rawPayerName?: string; memo?: string; membershipId?: string }> = [];
+      const errors: string[] = [];
+
+      for (let i = 0; i < records.length; i++) {
+        const r = records[i];
+        const payerName = r.payerName?.trim();
+        const amountStr = r.amount?.trim();
+        const dateStr = r.date?.trim();
+        if (!payerName || !amountStr || !dateStr) { errors.push(`Row ${i + 1}: missing required field(s)`); continue; }
+
+        const amountCents = Math.round(parseFloat(amountStr.replace(/[$,]/g, '')) * 100);
+        if (isNaN(amountCents) || amountCents <= 0) { errors.push(`Row ${i + 1}: invalid amount`); continue; }
+
+        const paidAt = new Date(dateStr);
+        if (isNaN(paidAt.getTime())) { errors.push(`Row ${i + 1}: invalid date`); continue; }
+
+        // Try to match payer to a member
+        let membershipId: string | undefined;
+        for (const m of members) {
+          const name = (m as any).displayName || (m as any).name || '';
+          if (calculateNameSimilarity(payerName, name) >= 0.7) { membershipId = m.id; break; }
+        }
+
+        payments.push({
+          amountCents,
+          paidAt: paidAt.toISOString().split('T')[0],
+          rawPayerName: payerName,
+          memo: r.memo?.trim() || undefined,
+          membershipId,
+        });
+      }
+
+      if (payments.length === 0) throw new Error(errors.length > 0 ? errors.slice(0, 5).join('\n') : 'No valid payments found');
+      const result = await bulkCreatePayments.mutateAsync({ orgId: currentOrgId, payments });
+      return { success: result.createdCount, errors: result.errorCount + errors.length };
+    }
+
+    throw new Error('Unknown import type');
+  };
+
   return (
     <div className="space-y-6" data-tour="spreadsheet-view">
       {/* Header */}
       <FadeIn>
         <PageHeader
           title="Spreadsheet"
-          helpText={`Combined view of all charges, expenses, and payments in one place. ${isAdmin ? 'Click on any cell to edit values directly. Use the selection checkboxes to select multiple rows, then click the trash icon to delete. Sort by clicking column headers.' : 'View all your organization\'s financial transactions.'}`}
+          helpText={`Combined view of all charges, expenses, and payments in one place. ${isAdmin ? 'Click any cell to edit. Sort by clicking column headers.' : 'View all financial transactions.'}`}
           actions={
-            <Button variant="outline" onClick={handleExportCSV}>
-              <Download className="w-4 h-4 mr-2" />
-              Export CSV
-            </Button>
+            <div className="flex items-center gap-2">
+              {isAdmin && (
+                <Button size="sm" onClick={handleStartInlineRow} className="hover:opacity-90 transition-opacity" disabled={inlineNewRow}>
+                  <Plus className="w-4 h-4 mr-1.5" />
+                  Add Row
+                </Button>
+              )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" className="h-9 w-9">
+                    <MoreVertical className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {isAdmin && (
+                    <>
+                      {(['charge', 'expense', 'payment'] as const).map((t) => (
+                        <DropdownMenuItem
+                          key={t}
+                          onClick={() => { setImportType(t); setShowImport(true); }}
+                          className="cursor-pointer"
+                        >
+                          <Upload className="w-4 h-4 mr-2" />
+                          Import {t === 'charge' ? 'Charges' : t === 'expense' ? 'Expenses' : 'Payments'}
+                        </DropdownMenuItem>
+                      ))}
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
+                  <DropdownMenuItem onClick={handleExportCSV} className="cursor-pointer">
+                    <FileSpreadsheet className="w-4 h-4 mr-2" />
+                    Export CSV
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           }
         />
       </FadeIn>
 
       {/* Summary Cards */}
-      <FadeIn delay={0.1}>
-        <div className="grid gap-4 md:grid-cols-4">
-          <div className="rounded-xl border bg-card p-4">
-            <div className="flex items-center gap-2 text-success mb-2">
-              <ArrowUpRight className="w-4 h-4" />
-              <span className="text-sm font-medium">Income</span>
+      {rows.length > 0 && (
+        <FadeIn delay={0.1}>
+          <div className="grid gap-4 md:grid-cols-4">
+            <div className="rounded-xl border bg-card p-4">
+              <div className="flex items-center gap-2 text-success mb-2">
+                <ArrowUpRight className="w-4 h-4" />
+                <span className="text-sm font-medium">Income</span>
+              </div>
+              <Money cents={totals.income} size="lg" className="text-success" />
             </div>
-            <Money cents={totals.income} size="lg" className="text-success" />
-          </div>
-          <div className="rounded-xl border bg-card p-4">
-            <div className="flex items-center gap-2 text-warning mb-2">
-              <Wallet className="w-4 h-4" />
-              <span className="text-sm font-medium">Outstanding</span>
+            <div className="rounded-xl border bg-card p-4">
+              <div className="flex items-center gap-2 text-warning mb-2">
+                <Wallet className="w-4 h-4" />
+                <span className="text-sm font-medium">Outstanding</span>
+              </div>
+              <Money cents={totals.outstanding} size="lg" className="text-warning" />
             </div>
-            <Money cents={totals.outstanding} size="lg" className="text-warning" />
-          </div>
-          <div className="rounded-xl border bg-card p-4">
-            <div className="flex items-center gap-2 text-destructive mb-2">
-              <ArrowDownRight className="w-4 h-4" />
-              <span className="text-sm font-medium">Total Expenses</span>
+            <div className="rounded-xl border bg-card p-4">
+              <div className="flex items-center gap-2 text-destructive mb-2">
+                <ArrowDownRight className="w-4 h-4" />
+                <span className="text-sm font-medium">Total Expenses</span>
+              </div>
+              <Money cents={totals.expenses} size="lg" className="text-destructive" />
             </div>
-            <Money cents={totals.expenses} size="lg" className="text-destructive" />
-          </div>
-          <div className="rounded-xl border bg-card p-4">
-            <div className="flex items-center gap-2 text-muted-foreground mb-2">
-              <span className="text-sm font-medium">Net Balance</span>
+            <div className="rounded-xl border bg-card p-4">
+              <div className="flex items-center gap-2 text-muted-foreground mb-2">
+                <span className="text-sm font-medium">Net Balance</span>
+              </div>
+              <Money
+                cents={totals.net}
+                size="lg"
+                className={totals.net >= 0 ? 'text-success' : 'text-destructive'}
+              />
             </div>
-            <Money
-              cents={totals.net}
-              size="lg"
-              className={totals.net >= 0 ? 'text-success' : 'text-destructive'}
-            />
           </div>
-        </div>
-      </FadeIn>
+        </FadeIn>
+      )}
 
-      {/* Filters */}
+      {/* Search + Filter */}
       <FadeIn delay={0.15}>
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-muted-foreground" />
-              <Select value={typeFilter} onValueChange={setTypeFilter}>
-                <SelectTrigger className="w-40 bg-secondary/30 border-border/50">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Transactions</SelectItem>
-                  <SelectItem value="charge">Charges Only</SelectItem>
-                  <SelectItem value="expense">Expenses Only</SelectItem>
-                  <SelectItem value="payment">Payments Only</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="relative w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <div className="space-y-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
             <Input
-              placeholder="Search..."
+              placeholder="Search transactions..."
+              aria-label="Search spreadsheet"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9 h-9 bg-secondary/30 border-border/50"
             />
           </div>
-        </div>
-      </FadeIn>
-
-      {/* Pagination Controls - Top */}
-      <FadeIn delay={0.2}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Show</span>
-              <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
-                <SelectTrigger className="w-[70px] h-8 bg-secondary/30 border-border/50">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="20">20</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                  <SelectItem value="100">100</SelectItem>
-                </SelectContent>
-              </Select>
-              <span className="text-sm text-muted-foreground">per page</span>
-            </div>
-            <span className="text-sm text-muted-foreground">
-              {rows.length} total
-            </span>
+          <div className="flex gap-2">
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="w-[150px] h-8 bg-secondary/30 border-border/50 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Transactions</SelectItem>
+                <SelectItem value="charge">Charges Only</SelectItem>
+                <SelectItem value="expense">Expenses Only</SelectItem>
+                <SelectItem value="payment">Payments Only</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
         </div>
       </FadeIn>
 
@@ -1301,18 +1580,159 @@ export default function SpreadsheetPage() {
                 </tr>
               </thead>
               <tbody>
-                {/* Add Row */}
+                {/* Inline New Row */}
+                {isAdmin && inlineNewRow && (
+                  <tr className="border-b border-border/50 bg-primary/5 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <td className="pl-5 pr-2 py-2">
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={handleSaveInlineRow}
+                          className="w-7 h-7 flex items-center justify-center transition-colors hover:text-success text-success/70"
+                          title="Save row"
+                          disabled={createCharge.isPending || createExpense.isPending || createPayment.isPending}
+                        >
+                          {(createCharge.isPending || createExpense.isPending || createPayment.isPending) ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Check className="w-4 h-4" />
+                          )}
+                        </button>
+                        <button
+                          onClick={handleCancelInlineRow}
+                          className="w-7 h-7 flex items-center justify-center transition-colors text-muted-foreground hover:text-destructive"
+                          title="Cancel"
+                        >
+                          <Minus className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                    {/* Type selector */}
+                    <td className="px-5 py-2 w-28">
+                      <Select value={newRowType} onValueChange={(v) => {
+                        setNewRowType(v as any);
+                        setNewRowData(d => ({ ...d, category: '' }));
+                        setInlineNewRowField('date');
+                      }}>
+                        <SelectTrigger className="h-7 text-xs bg-transparent border-border/50 w-24">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="charge">Charge</SelectItem>
+                          <SelectItem value="expense">Expense</SelectItem>
+                          <SelectItem value="payment">Payment</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </td>
+                    {/* Member */}
+                    <td className="px-5 py-2 w-36">
+                      {newRowType === 'expense' ? (
+                        <input
+                          placeholder="Vendor..."
+                          value={newRowData.vendor}
+                          onChange={(e) => setNewRowData(d => ({ ...d, vendor: e.target.value }))}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); setInlineNewRowField('category'); }
+                            if (e.key === 'Tab' && e.shiftKey) { e.preventDefault(); setInlineNewRowField('date'); }
+                            if (e.key === 'Escape') handleCancelInlineRow();
+                            if (e.key === 'Enter') handleSaveInlineRow();
+                          }}
+                          autoFocus={inlineNewRowField === 'member'}
+                          className="h-6 text-xs bg-transparent border-0 shadow-none ring-0 outline-none focus:ring-0 w-full"
+                        />
+                      ) : (
+                        <Select value={newRowData.membershipId || 'none'} onValueChange={(v) => setNewRowData(d => ({ ...d, membershipId: v === 'none' ? '' : v }))}>
+                          <SelectTrigger className="h-7 text-xs bg-transparent border-border/50">
+                            <SelectValue placeholder="Member..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none" disabled>Select member...</SelectItem>
+                            {members.filter(m => m.id).map((m) => (
+                              <SelectItem key={m.id} value={m.id}>
+                                {(m as any).displayName || (m as any).name || (m as any).user?.name || 'Unknown'}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </td>
+                    {/* Category */}
+                    <td className="px-5 py-2 w-28">
+                      {newRowType === 'payment' ? (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      ) : (
+                        <Select value={newRowData.category || 'none'} onValueChange={(v) => setNewRowData(d => ({ ...d, category: v === 'none' ? '' : v }))}>
+                          <SelectTrigger className="h-7 text-xs bg-transparent border-border/50 w-24">
+                            <SelectValue placeholder="Category..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none" disabled>Category...</SelectItem>
+                            {(newRowType === 'charge' ? CHARGE_CATEGORIES : EXPENSE_CATEGORIES).map((cat) => (
+                              <SelectItem key={cat} value={cat}>
+                                {(newRowType === 'charge' ? CHARGE_CATEGORY_LABELS : EXPENSE_CATEGORY_LABELS)[cat as keyof typeof CHARGE_CATEGORY_LABELS & keyof typeof EXPENSE_CATEGORY_LABELS]}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </td>
+                    {/* Description */}
+                    <td className="px-5 py-2 w-48">
+                      <input
+                        placeholder={newRowType === 'payment' ? 'Memo...' : 'Description...'}
+                        value={newRowType === 'payment' ? newRowData.memo : newRowData.description}
+                        onChange={(e) => newRowType === 'payment'
+                          ? setNewRowData(d => ({ ...d, memo: e.target.value }))
+                          : setNewRowData(d => ({ ...d, description: e.target.value }))
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); setInlineNewRowField('amount'); }
+                          if (e.key === 'Tab' && e.shiftKey) { e.preventDefault(); setInlineNewRowField('category'); }
+                          if (e.key === 'Escape') handleCancelInlineRow();
+                          if (e.key === 'Enter') handleSaveInlineRow();
+                        }}
+                        autoFocus={inlineNewRowField === 'description'}
+                        className="h-6 text-xs bg-transparent border-0 shadow-none ring-0 outline-none focus:ring-0 w-full"
+                      />
+                    </td>
+                    {/* Amount cells (spans 3 columns) */}
+                    <td className="px-5 py-2 text-right w-24" colSpan={3}>
+                      <div className="flex items-center justify-end gap-1">
+                        <span className="text-xs text-muted-foreground">$</span>
+                        <input
+                          placeholder="0.00"
+                          value={newRowData.amountCents ? (newRowData.amountCents / 100).toFixed(2) : ''}
+                          onChange={(e) => {
+                            const cents = Math.round(parseFloat(e.target.value || '0') * 100);
+                            setNewRowData(d => ({ ...d, amountCents: isNaN(cents) ? 0 : cents }));
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Tab' && e.shiftKey) { e.preventDefault(); setInlineNewRowField('description'); }
+                            if (e.key === 'Escape') handleCancelInlineRow();
+                            if (e.key === 'Enter') handleSaveInlineRow();
+                          }}
+                          autoFocus={inlineNewRowField === 'amount'}
+                          type="number"
+                          step="0.01"
+                          className="h-6 text-xs bg-transparent border-0 shadow-none ring-0 outline-none focus:ring-0 w-20 text-right"
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                {/* Select All / Add Row */}
                 {isAdmin && !isLoading && (
                   <tr className="border-b border-border/50 bg-secondary/20 hover:bg-secondary/40 transition-colors">
                     <td className="pl-5 pr-2 py-2">
                       <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => setShowAddDialog(true)}
-                          className="w-7 h-7 flex items-center justify-center transition-colors hover:text-primary"
-                          title="Add new row"
-                        >
-                          <Plus className="w-4 h-4 text-muted-foreground hover:text-primary" />
-                        </button>
+                        {!inlineNewRow && (
+                          <button
+                            onClick={handleStartInlineRow}
+                            className="w-7 h-7 flex items-center justify-center transition-colors hover:text-primary"
+                            title="Add new row"
+                          >
+                            <Plus className="w-4 h-4 text-muted-foreground hover:text-primary" />
+                          </button>
+                        )}
                         <button
                           onClick={toggleSelectAll}
                           className="w-7 h-7 flex items-center justify-center transition-colors hover:text-primary"
@@ -1392,6 +1812,7 @@ export default function SpreadsheetPage() {
                           onEdit={() => setEditingCell({ rowId: row.id, column: 'date' })}
                           onSave={(v) => handleSaveCell(row, 'date', v)}
                           onCancel={() => setEditingCell(null)}
+                          onNavigate={(dir) => handleCellNavigate(row.id, 'date', dir)}
                           isAdmin={isAdmin}
                           rowType={row.type}
                           column="date"
@@ -1406,6 +1827,7 @@ export default function SpreadsheetPage() {
                             onEdit={() => setEditingCell({ rowId: row.id, column: 'member' })}
                             onSave={(v) => handleSaveCell(row, 'member', v)}
                             onCancel={() => setEditingCell(null)}
+                            onNavigate={(dir) => handleCellNavigate(row.id, 'member', dir)}
                             isAdmin={isAdmin}
                             rowType={row.type}
                             column="member"
@@ -1420,6 +1842,7 @@ export default function SpreadsheetPage() {
                             onEdit={() => setEditingCell({ rowId: row.id, column: 'member' })}
                             onSave={(v) => handleSaveCell(row, 'member', v)}
                             onCancel={() => setEditingCell(null)}
+                            onNavigate={(dir) => handleCellNavigate(row.id, 'member', dir)}
                             isAdmin={isAdmin}
                             rowType={row.type}
                             column="member"
@@ -1437,6 +1860,7 @@ export default function SpreadsheetPage() {
                             onEdit={() => setEditingCell({ rowId: row.id, column: 'category' })}
                             onSave={(v) => handleSaveCell(row, 'category', v)}
                             onCancel={() => setEditingCell(null)}
+                            onNavigate={(dir) => handleCellNavigate(row.id, 'category', dir)}
                             isAdmin={isAdmin}
                             rowType={row.type}
                             column="category"
@@ -1451,6 +1875,7 @@ export default function SpreadsheetPage() {
                           onEdit={() => setEditingCell({ rowId: row.id, column: 'description' })}
                           onSave={(v) => handleSaveCell(row, 'description', v)}
                           onCancel={() => setEditingCell(null)}
+                          onNavigate={(dir) => handleCellNavigate(row.id, 'description', dir)}
                           isAdmin={isAdmin}
                           rowType={row.type}
                           column="description"
@@ -1493,6 +1918,7 @@ export default function SpreadsheetPage() {
                               onEdit={() => setEditingCell({ rowId: row.id, column: 'amount' })}
                               onSave={(v) => handleSaveCell(row, 'amount', v)}
                               onCancel={() => setEditingCell(null)}
+                              onNavigate={(dir) => handleCellNavigate(row.id, 'amount', dir)}
                               isAdmin={isAdmin}
                               rowType={row.type}
                               column="income"
@@ -1511,6 +1937,7 @@ export default function SpreadsheetPage() {
                             onEdit={() => setEditingCell({ rowId: row.id, column: 'amount' })}
                             onSave={(v) => handleSaveCell(row, 'amount', v)}
                             onCancel={() => setEditingCell(null)}
+                            onNavigate={(dir) => handleCellNavigate(row.id, 'amount', dir)}
                             isAdmin={isAdmin}
                             rowType={row.type}
                             column="outstanding"
@@ -1528,6 +1955,7 @@ export default function SpreadsheetPage() {
                             onEdit={() => setEditingCell({ rowId: row.id, column: 'amount' })}
                             onSave={(v) => handleSaveCell(row, 'amount', v)}
                             onCancel={() => setEditingCell(null)}
+                            onNavigate={(dir) => handleCellNavigate(row.id, 'amount', dir)}
                             isAdmin={isAdmin}
                             rowType={row.type}
                             column="expense"
@@ -1755,6 +2183,15 @@ export default function SpreadsheetPage() {
         }}
         toast={toast}
       />
+
+      <CSVImportDialog
+        open={showImport}
+        onOpenChange={setShowImport}
+        title={`Import ${importType === 'charge' ? 'Charges' : importType === 'expense' ? 'Expenses' : 'Payments'}`}
+        description={`Upload a CSV file to bulk import ${importType === 'charge' ? 'charges' : importType === 'expense' ? 'expenses' : 'payments'}.${importType === 'charge' ? ' Member names will be fuzzy-matched to existing members.' : importType === 'payment' ? ' Payer names will be matched to existing members.' : ''}`}
+        fields={importFieldsByType[importType]}
+        onImport={handleImportRecords}
+      />
     </div>
   );
 }
@@ -1882,9 +2319,10 @@ function AllocatePaymentsDialog({
 
         {/* Payment search */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
           <Input
             placeholder="Search payments..."
+            aria-label="Search payments"
             value={paymentSearch}
             onChange={(e) => setPaymentSearch(e.target.value)}
             className="pl-9 h-9"

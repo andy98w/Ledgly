@@ -9,8 +9,7 @@ export function FadeIn({
 }) {
   return (
     <div
-      className={`animate-in-up ${className || ''}`}
-      style={delay ? { animationDelay: `${delay}s` } : undefined}
+      className={className || undefined}
     >
       {children}
     </div>
@@ -25,7 +24,7 @@ export function StaggerChildren({
   className?: string;
 }) {
   return (
-    <div className={`stagger-container ${className || ''}`}>
+    <div className={className || undefined}>
       {children}
     </div>
   );
@@ -39,7 +38,7 @@ export function StaggerItem({
   className?: string;
 }) {
   return (
-    <div className={`stagger-item ${className || ''}`}>
+    <div className={className || undefined}>
       {children}
     </div>
   );

@@ -136,12 +136,12 @@ export function ChargeCreateDialog({
             <h3 className="text-sm font-medium">Charge Details</h3>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label>Category</Label>
+                <Label htmlFor="charge-category">Category</Label>
                 <Select
                   value={formData.category}
                   onValueChange={(v) => setFormData({ ...formData, category: v as ChargeCategory })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="charge-category">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -154,8 +154,9 @@ export function ChargeCreateDialog({
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Title</Label>
+                <Label htmlFor="charge-title">Title</Label>
                 <Input
+                  id="charge-title"
                   placeholder="e.g., Spring 2025 Dues"
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
@@ -164,8 +165,9 @@ export function ChargeCreateDialog({
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label>Amount ($)</Label>
+                <Label htmlFor="charge-amount">Amount ($)</Label>
                 <Input
+                  id="charge-amount"
                   type="number"
                   step="0.01"
                   min="0"
@@ -193,9 +195,10 @@ export function ChargeCreateDialog({
               </span>
             </h3>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
               <Input
                 placeholder="Search members..."
+                aria-label="Search members"
                 value={memberSearch}
                 onChange={(e) => setMemberSearch(e.target.value)}
                 className="pl-9"
@@ -259,6 +262,8 @@ export function ChargeCreateDialog({
                 <button
                   type="button"
                   onClick={toggleSelectAll}
+                  aria-pressed={selectAll}
+                  aria-label={selectAll ? 'Deselect all members' : 'Select all members'}
                   className={cn(
                     'flex items-center gap-3 p-3 rounded-xl border text-left transition-all w-full',
                     selectAll
@@ -288,6 +293,8 @@ export function ChargeCreateDialog({
                       key={member.id}
                       type="button"
                       onClick={() => toggleMember(member.id)}
+                      aria-pressed={isSelected}
+                      aria-label={`${isSelected ? 'Deselect' : 'Select'} ${member.displayName}`}
                       className={cn(
                         'flex items-center gap-3 p-3 rounded-xl border text-left transition-all w-full',
                         isSelected

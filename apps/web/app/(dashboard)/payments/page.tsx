@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback, memo } from 'react';
 import Link from 'next/link';
-import { Plus, CreditCard, AlertCircle, TrendingUp, Wallet, Search, MoreHorizontal, Pencil, Trash2, Loader2, ChevronDown, Link2, Check, Users, Circle, CheckCircle2, X, UserPlus, Receipt } from 'lucide-react';
+import { Plus, CreditCard, AlertCircle, TrendingUp, Wallet, Search, MoreHorizontal, Pencil, Trash2, Loader2, ChevronDown, Link2, Check, Users, Circle, CheckCircle2, X, UserPlus, Receipt, MoreVertical, FileSpreadsheet, FileText } from 'lucide-react';
 import { useAutoAllocateToCharge, useRemoveAllocation, useBulkAutoAllocate } from '@/lib/queries/payments';
 import { cn } from '@/lib/utils';
 import { groupCharges } from '@/lib/utils/charge-grouping';
@@ -11,7 +11,7 @@ import { usePayments, useUpdatePayment, useDeletePayment, useRestorePayment, use
 import { useCharges, useCreateCharge, useBulkCreateCharges } from '@/lib/queries/charges';
 import { useMembers, useCreateMembers } from '@/lib/queries/members';
 import { CHARGE_CATEGORIES, CHARGE_CATEGORY_LABELS } from '@ledgly/shared';
-import { useAuthStore } from '@/lib/stores/auth';
+import { useAuthStore, useIsAdminOrTreasurer } from '@/lib/stores/auth';
 import { formatDate } from '@/lib/utils';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
@@ -103,7 +103,8 @@ const PaymentCard = memo(function PaymentCard({
                   onToggleSelect();
                 }}
                 className="mt-1 flex items-center justify-center transition-colors shrink-0"
-                title={isSelected ? "Deselect" : "Select"}
+                aria-label={isSelected ? "Deselect payment" : "Select payment"}
+                aria-pressed={isSelected}
               >
                 {isSelected ? (
                   <CheckCircle2 className="w-5 h-5 text-primary" />
@@ -160,7 +161,7 @@ const PaymentCard = memo(function PaymentCard({
               {isAdmin ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Payment actions">
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -268,9 +269,7 @@ export default function PaymentsPage() {
   const [selectedSimilarPayments, setSelectedSimilarPayments] = useState<Set<string>>(new Set());
 
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
-  const user = useAuthStore((s) => s.user);
-  const currentMembership = user?.memberships.find((m) => m.orgId === currentOrgId);
-  const isAdmin = currentMembership?.role === 'ADMIN' || currentMembership?.role === 'TREASURER';
+  const isAdmin = useIsAdminOrTreasurer();
   const { toast } = useToast();
   const { data, isLoading } = usePayments(currentOrgId);
 
@@ -1112,13 +1111,9 @@ export default function PaymentsPage() {
       <FadeIn>
         <PageHeader
           title="Payments"
-          helpText="View and manage payments. Allocate payments to charges or create new charges from unallocated payments. Use selection checkboxes for bulk actions."
+          helpText="View and manage payments. Allocate payments to charges or create new charges from unallocated payments."
           actions={
             <div className="flex items-center gap-2">
-              <ExportDropdown
-                onExportCSV={() => handleExportPayments('csv')}
-                onExportPDF={() => handleExportPayments('pdf')}
-              />
               {isAdmin && (
                 <Button asChild size="sm" className="hover:opacity-90 transition-opacity">
                   <Link href="/payments/new">
@@ -1127,88 +1122,87 @@ export default function PaymentsPage() {
                   </Link>
                 </Button>
               )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" className="h-9 w-9">
+                    <MoreVertical className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handleExportPayments('csv')} className="cursor-pointer">
+                    <FileSpreadsheet className="w-4 h-4 mr-2" />
+                    Export CSV
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExportPayments('pdf')} className="cursor-pointer">
+                    <FileText className="w-4 h-4 mr-2" />
+                    Export PDF
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           }
         />
       </FadeIn>
 
       {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <StatCard
-          title="Total Payments"
-          value={totalPayments}
-          description="Payments received"
-          icon={CreditCard}
-          delay={0}
-          color="amber"
-        />
-        <StatCard
-          title="Total Received"
-          value={totalAmount}
-          isMoney
-          description="All time received"
-          icon={TrendingUp}
-          delay={0.1}
-          color="emerald"
-        />
-        <StatCard
-          title="Unallocated"
-          value={totalUnallocated}
-          isMoney
-          description={totalUnallocated > 0 ? 'Needs attention' : 'All allocated'}
-          icon={Wallet}
-          delay={0.2}
-          color="rose"
-        />
-      </div>
+      {totalPayments > 0 && (
+        <div className="grid gap-4 md:grid-cols-3">
+          <StatCard
+            title="Total Payments"
+            value={totalPayments}
+            description="Payments received"
+            icon={CreditCard}
+            delay={0}
+            color="amber"
+          />
+          <StatCard
+            title="Total Received"
+            value={totalAmount}
+            isMoney
+            description="All time received"
+            icon={TrendingUp}
+            delay={0.1}
+            color="emerald"
+          />
+          <StatCard
+            title="Unallocated"
+            value={totalUnallocated}
+            isMoney
+            description={totalUnallocated > 0 ? 'Needs attention' : 'All allocated'}
+            icon={Wallet}
+            delay={0.2}
+            color="rose"
+          />
+        </div>
+      )}
 
-      {/* Filter */}
+      {/* Search + Filter */}
       <FadeIn delay={0.2}>
-        <div className="flex items-center justify-between gap-4">
-          <Select value={allocationFilter} onValueChange={(v) => setAllocationFilter(v as any)}>
-            <SelectTrigger className="w-[160px] h-9 bg-secondary/30 border-border/50">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Payments</SelectItem>
-              <SelectItem value="allocated">Allocated</SelectItem>
-              <SelectItem value="unallocated">Unallocated</SelectItem>
-            </SelectContent>
-          </Select>
-          <div className="relative w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <div className="space-y-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
             <Input
-              placeholder="Search payer, memo..."
+              placeholder="Search payments..."
+              aria-label="Search payments"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9 h-9 bg-secondary/30 border-border/50"
             />
           </div>
+          <div className="flex gap-2">
+            <Select value={allocationFilter} onValueChange={(v) => setAllocationFilter(v as any)}>
+              <SelectTrigger className="w-[140px] h-8 bg-secondary/30 border-border/50 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Payments</SelectItem>
+                <SelectItem value="allocated">Allocated</SelectItem>
+                <SelectItem value="unallocated">Unallocated</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </FadeIn>
-
-      {/* Pagination Controls - Top */}
-      {!isLoading && filteredPayments.length > 0 && (
-        <FadeIn delay={0.25}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Show</span>
-              <Select value={String(pageSize)} onValueChange={(v) => handlePageSizeChange(Number(v))}>
-                <SelectTrigger className="w-[70px] h-8 bg-secondary/30 border-border/50">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="20">20</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                  <SelectItem value="100">100</SelectItem>
-                </SelectContent>
-              </Select>
-              <span className="text-sm text-muted-foreground">per page</span>
-            </div>
-            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
-          </div>
-        </FadeIn>
-      )}
 
       {/* Payments List */}
       {isLoading ? (
@@ -1737,9 +1731,10 @@ export default function PaymentsPage() {
                         </h3>
                       </div>
                       <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
                         <Input
                           placeholder="Search members..."
+                          aria-label="Search members"
                           value={memberSearch}
                           onChange={(e) => setMemberSearch(e.target.value)}
                           className="pl-9 h-9"

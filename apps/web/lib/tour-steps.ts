@@ -36,15 +36,6 @@ export const tourSteps: TourStep[] = [
     page: '/inbox',
   },
   {
-    id: 'quick-actions',
-    target: '[data-tour="quick-actions"]',
-    title: 'Quick Actions',
-    description:
-      'Jump straight to the most common tasks: add members, create charges, or record payments.',
-    placement: 'top',
-    page: '/dashboard',
-  },
-  {
     id: 'members-list',
     target: '[data-tour="members-list"]',
     title: 'Members',

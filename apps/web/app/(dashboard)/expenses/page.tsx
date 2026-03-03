@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback, memo } from 'react';
 
-import { Plus, Receipt, TrendingDown, Trash2, MoreHorizontal, Loader2, Search, Pencil, Circle, CheckCircle2, Upload } from 'lucide-react';
+import { Plus, Receipt, TrendingDown, Trash2, MoreHorizontal, Loader2, Search, Pencil, Circle, CheckCircle2, Upload, MoreVertical, FileSpreadsheet, FileText } from 'lucide-react';
 import { useExpenses, useExpenseSummary, useDeleteExpense, useCreateExpense, useUpdateExpense, useRestoreExpense, useBulkDeleteExpenses } from '@/lib/queries/expenses';
 
 /** Strip "VENMO payment to " etc. prefixes from Gmail-imported expense titles */
@@ -10,7 +10,7 @@ function cleanExpenseTitle(title: string): string {
   const match = title.match(/^[A-Z]+ payment to (.+)$/);
   return match ? match[1] : title;
 }
-import { useAuthStore } from '@/lib/stores/auth';
+import { useAuthStore, useIsAdminOrTreasurer } from '@/lib/stores/auth';
 import { cn, formatDate, parseCents } from '@/lib/utils';
 import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_LABELS, type ExpenseCategory } from '@ledgly/shared';
 import { useToast } from '@/components/ui/use-toast';
@@ -102,7 +102,8 @@ const ExpenseCard = memo(function ExpenseCard({
                   onToggleSelect();
                 }}
                 className="mr-3 flex items-center justify-center transition-colors"
-                title={isSelected ? "Deselect" : "Select"}
+                aria-label={isSelected ? "Deselect expense" : "Select expense"}
+                aria-pressed={isSelected}
               >
                 {isSelected ? (
                   <CheckCircle2 className="w-5 h-5 text-primary" />
@@ -148,7 +149,7 @@ const ExpenseCard = memo(function ExpenseCard({
               {isAdmin ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Expense actions">
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -219,9 +220,7 @@ export default function ExpensesPage() {
   });
 
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
-  const user = useAuthStore((s) => s.user);
-  const currentMembership = user?.memberships.find((m) => m.orgId === currentOrgId);
-  const isAdmin = currentMembership?.role === 'ADMIN' || currentMembership?.role === 'TREASURER';
+  const isAdmin = useIsAdminOrTreasurer();
   const { toast } = useToast();
   const { data, isLoading } = useExpenses(currentOrgId, {
     category: categoryFilter !== 'all' ? categoryFilter : undefined,
@@ -596,16 +595,6 @@ export default function ExpensesPage() {
           helpText="Track organization spending by category. Expenses are automatically imported from outgoing Venmo/Zelle payments."
           actions={
             <div className="flex items-center gap-2">
-              <ExportDropdown
-                onExportCSV={() => handleExportExpenses('csv')}
-                onExportPDF={() => handleExportExpenses('pdf')}
-              />
-              {isAdmin && (
-                <Button variant="outline" size="sm" onClick={() => setShowImport(true)}>
-                  <Upload className="w-4 h-4 mr-1.5" />
-                  Import
-                </Button>
-              )}
               {isAdmin && (
                 <Button
                   size="sm"
@@ -616,104 +605,109 @@ export default function ExpensesPage() {
                   Add Expense
                 </Button>
               )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" className="h-9 w-9">
+                    <MoreVertical className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {isAdmin && (
+                    <DropdownMenuItem onClick={() => setShowImport(true)} className="cursor-pointer">
+                      <Upload className="w-4 h-4 mr-2" />
+                      Import CSV
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onClick={() => handleExportExpenses('csv')} className="cursor-pointer">
+                    <FileSpreadsheet className="w-4 h-4 mr-2" />
+                    Export CSV
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExportExpenses('pdf')} className="cursor-pointer">
+                    <FileText className="w-4 h-4 mr-2" />
+                    Export PDF
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           }
         />
       </FadeIn>
 
       {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <StatCard
-          title="Total Expenses"
-          value={summary?.totalCents || 0}
-          isMoney
-          description={`${summary?.count || 0} expenses`}
-          icon={TrendingDown}
-          delay={0}
-          color="rose"
-        />
-        <StatCard
-          title="Largest Category"
-          value={
-            summary?.byCategory
-              ? Object.entries(summary.byCategory).sort((a, b) => b[1] - a[1])[0]?.[1] || 0
-              : 0
-          }
-          isMoney
-          description={
-            summary?.byCategory
-              ? EXPENSE_CATEGORY_LABELS[
-                  Object.entries(summary.byCategory).sort((a, b) => b[1] - a[1])[0]?.[0] as ExpenseCategory
-                ] || 'None'
-              : 'None'
-          }
-          icon={Receipt}
-          delay={0.1}
-          color="amber"
-        />
-        <StatCard
-          title="This Month"
-          value={monthlySummary?.totalCents || 0}
-          isMoney
-          description="Current period"
-          icon={Receipt}
-          delay={0.2}
-          color="violet"
-        />
-      </div>
+      {(summary?.count || 0) > 0 && (
+        <div className="grid gap-4 md:grid-cols-3">
+          <StatCard
+            title="Total Expenses"
+            value={summary?.totalCents || 0}
+            isMoney
+            description={`${summary?.count || 0} expenses`}
+            icon={TrendingDown}
+            delay={0}
+            color="rose"
+          />
+          <StatCard
+            title="Largest Category"
+            value={
+              summary?.byCategory
+                ? Object.entries(summary.byCategory).sort((a, b) => b[1] - a[1])[0]?.[1] || 0
+                : 0
+            }
+            isMoney
+            description={
+              summary?.byCategory
+                ? EXPENSE_CATEGORY_LABELS[
+                    Object.entries(summary.byCategory).sort((a, b) => b[1] - a[1])[0]?.[0] as ExpenseCategory
+                  ] || 'None'
+                : 'None'
+            }
+            icon={Receipt}
+            delay={0.1}
+            color="amber"
+          />
+          <StatCard
+            title="This Month"
+            value={monthlySummary?.totalCents || 0}
+            isMoney
+            description="Current period"
+            icon={Receipt}
+            delay={0.2}
+            color="violet"
+          />
+        </div>
+      )}
 
-      {/* Filter and Search */}
+      {/* Search + Filter */}
       <FadeIn delay={0.2}>
-        <div className="flex items-center justify-between gap-4">
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="w-48 bg-secondary/30 border-border/50">
-              <SelectValue placeholder="Filter by category" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              <SelectItem value="EVENT">Event</SelectItem>
-              <SelectItem value="SUPPLIES">Supplies</SelectItem>
-              <SelectItem value="FOOD">Food & Drinks</SelectItem>
-              <SelectItem value="VENUE">Venue</SelectItem>
-              <SelectItem value="MARKETING">Marketing</SelectItem>
-              <SelectItem value="SERVICES">Services</SelectItem>
-              <SelectItem value="OTHER">Other</SelectItem>
-            </SelectContent>
-          </Select>
-          <div className="relative w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <div className="space-y-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
             <Input
               placeholder="Search expenses..."
+              aria-label="Search expenses"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9 h-9 bg-secondary/30 border-border/50"
             />
           </div>
+          <div className="flex gap-2">
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="w-[140px] h-8 bg-secondary/30 border-border/50 text-xs">
+                <SelectValue placeholder="All Categories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                <SelectItem value="EVENT">Event</SelectItem>
+                <SelectItem value="SUPPLIES">Supplies</SelectItem>
+                <SelectItem value="FOOD">Food & Drinks</SelectItem>
+                <SelectItem value="VENUE">Venue</SelectItem>
+                <SelectItem value="MARKETING">Marketing</SelectItem>
+                <SelectItem value="SERVICES">Services</SelectItem>
+                <SelectItem value="OTHER">Other</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </FadeIn>
-
-      {/* Pagination Controls - Top */}
-      {!isLoading && expenses.length > 0 && (
-        <FadeIn delay={0.25}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Show</span>
-              <Select value={String(pageSize)} onValueChange={(v) => handlePageSizeChange(Number(v))}>
-                <SelectTrigger className="w-[70px] h-8 bg-secondary/30 border-border/50">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="20">20</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                  <SelectItem value="100">100</SelectItem>
-                </SelectContent>
-              </Select>
-              <span className="text-sm text-muted-foreground">per page</span>
-            </div>
-            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
-          </div>
-        </FadeIn>
-      )}
 
       {/* Expenses List */}
       {isLoading ? (

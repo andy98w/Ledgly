@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, setAuthToken, setRefreshToken, clearAuthTokens, getRefreshToken } from '@/lib/api';
+import { api, clearLegacyTokens } from '@/lib/api';
 import { useAuthStore } from '@/lib/stores/auth';
 import type { AuthUser } from '@ledgly/shared';
 
@@ -20,8 +20,7 @@ function ensureCurrentOrg(user: AuthUser) {
 }
 
 function handleAuthResponse(data: AuthResponse) {
-  setAuthToken(data.accessToken);
-  setRefreshToken(data.refreshToken);
+  // Tokens are stored in httpOnly cookies by the server — no localStorage needed
   useAuthStore.getState().setUser(data.user);
   ensureCurrentOrg(data.user);
 }
@@ -78,12 +77,9 @@ export function useLogout() {
   const queryClient = useQueryClient();
 
   return () => {
-    // Best-effort server-side logout
-    const rt = getRefreshToken();
-    if (rt) {
-      api.post('/auth/logout', { refreshToken: rt }).catch(() => {});
-    }
-    clearAuthTokens();
+    // Server-side logout clears httpOnly cookies + revokes refresh token
+    api.post('/auth/logout', {}).catch(() => {});
+    clearLegacyTokens();
     logout();
     queryClient.clear();
   };

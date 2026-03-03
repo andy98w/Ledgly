@@ -57,11 +57,9 @@ export function StatCard({
   return (
     <div
       className={cn(
-        'relative overflow-hidden rounded-xl bg-card p-5 animate-in-up shadow-layered-sm',
-        'hover:shadow-layered-md transition-all duration-200',
+        'relative overflow-hidden rounded-xl bg-card p-5 shadow-layered-sm',
         className,
       )}
-      style={delay ? { animationDelay: `${delay}s` } : undefined}
     >
       <div className="relative">
         <div className="flex items-center justify-between mb-3">

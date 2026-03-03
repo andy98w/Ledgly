@@ -29,7 +29,7 @@ export default function MemberDetailPage() {
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.back()}>
+          <Button variant="ghost" size="icon" onClick={() => router.back()} aria-label="Go back">
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <Skeleton className="h-12 w-12 rounded-full" />
@@ -81,6 +81,7 @@ export default function MemberDetailPage() {
             size="icon"
             onClick={() => router.back()}
             className="rounded-xl hover:bg-secondary/50"
+            aria-label="Go back"
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>

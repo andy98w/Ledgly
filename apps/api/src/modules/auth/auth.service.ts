@@ -436,6 +436,21 @@ export class AuthService {
       return { message: 'If an account exists, a reset link has been sent' };
     }
 
+    // Per-email rate limit: max 3 reset tokens per hour
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const recentResets = await this.prisma.magicToken.count({
+      where: {
+        userId: user.id,
+        type: 'PASSWORD_RESET',
+        createdAt: { gte: oneHourAgo },
+      },
+    });
+
+    if (recentResets >= 3) {
+      // Silently skip to prevent enumeration
+      return { message: 'If an account exists, a reset link has been sent' };
+    }
+
     // Generate token
     const token = randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes

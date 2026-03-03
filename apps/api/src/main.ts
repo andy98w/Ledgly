@@ -1,12 +1,16 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
+import { validateEnv } from './env';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 async function bootstrap() {
+  const env = validateEnv();
+
   const app = await NestFactory.create(AppModule);
 
   app.enableCors({
-    origin: process.env.WEB_URL || 'http://localhost:3000',
+    origin: env.WEB_URL,
     credentials: true,
   });
 
@@ -18,10 +22,11 @@ async function bootstrap() {
     }),
   );
 
+  app.useGlobalFilters(new AllExceptionsFilter());
+
   app.setGlobalPrefix('api/v1');
 
-  const port = process.env.PORT || 3001;
-  await app.listen(port);
-  console.log(`API running on http://localhost:${port}`);
+  await app.listen(env.PORT);
+  console.log(`API running on http://localhost:${env.PORT}`);
 }
 bootstrap();

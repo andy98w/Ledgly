@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { ChargeCategory, ChargeStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { EmailService } from '../auth/email.service';
 
 interface CreateChargeDto {
   membershipIds: string[];
@@ -33,6 +34,7 @@ export class ChargesService {
   constructor(
     private prisma: PrismaService,
     private auditService: AuditService,
+    private emailService: EmailService,
   ) {}
 
   async findAll(orgId: string, filters: ChargeFilters = {}) {
@@ -585,5 +587,52 @@ export class ChargesService {
         { status: newStatus },
       );
     }
+  }
+
+  async sendReminders(
+    orgId: string,
+    chargeIds: string[],
+  ): Promise<{ sent: number; skipped: number }> {
+    const charges = await this.prisma.charge.findMany({
+      where: {
+        id: { in: chargeIds },
+        orgId,
+        status: { in: ['OPEN', 'PARTIALLY_PAID'] },
+      },
+      include: {
+        membership: {
+          select: {
+            user: { select: { email: true } },
+          },
+        },
+        org: { select: { name: true } },
+      },
+    });
+
+    let sent = 0;
+    let skipped = 0;
+
+    for (const charge of charges) {
+      const email = charge.membership?.user?.email;
+      if (!email) {
+        skipped++;
+        continue;
+      }
+
+      try {
+        await this.emailService.sendOverdueReminder(
+          email,
+          charge.title,
+          (charge.amountCents / 100).toFixed(2),
+          charge.org.name,
+          charge.dueDate ? charge.dueDate.toISOString().split('T')[0] : 'No due date',
+        );
+        sent++;
+      } catch {
+        skipped++;
+      }
+    }
+
+    return { sent, skipped };
   }
 }

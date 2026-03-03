@@ -13,7 +13,6 @@ ALTER TABLE public.gmail_connections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.email_imports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.expenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
-
--- Force RLS even for table owners (optional extra safety, uncomment if desired)
--- ALTER TABLE public.users FORCE ROW LEVEL SECURITY;
--- etc.
+ALTER TABLE public.refresh_tokens ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.auth_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;

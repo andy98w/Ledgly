@@ -286,6 +286,22 @@ export class PaymentsService {
     return payment;
   }
 
+  async bulkCreate(orgId: string, createdById: string, items: CreatePaymentDto[]) {
+    const results: any[] = [];
+    const errors: string[] = [];
+
+    for (let i = 0; i < items.length; i++) {
+      try {
+        const payment = await this.create(orgId, createdById, items[i]);
+        results.push(payment);
+      } catch (error: any) {
+        errors.push(`Row ${i + 1}: ${error.message || 'Failed'}`);
+      }
+    }
+
+    return { created: results, createdCount: results.length, errorCount: errors.length, errors };
+  }
+
   async allocate(orgId: string, paymentId: string, createdById: string, dto: AllocatePaymentDto) {
     const chargeIds = dto.allocations.map((a) => a.chargeId);
 

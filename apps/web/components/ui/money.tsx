@@ -78,7 +78,7 @@ export function MoneyDisplay({
 }: MoneyDisplayProps) {
   return (
     <div
-      className={cn('space-y-1 animate-in-up', className)}
+      className={cn('space-y-1', className)}
     >
       <p className="text-sm text-muted-foreground">{label}</p>
       <Money cents={cents} size="lg" />

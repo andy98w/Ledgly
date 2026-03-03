@@ -18,6 +18,7 @@ export function Pagination({ page, totalPages, onPageChange, className }: Pagina
         className="h-8 w-8"
         onClick={() => onPageChange(Math.max(1, page - 1))}
         disabled={page <= 1}
+        aria-label="Previous page"
       >
         <ChevronLeft className="h-4 w-4" />
       </Button>
@@ -30,6 +31,7 @@ export function Pagination({ page, totalPages, onPageChange, className }: Pagina
         className="h-8 w-8"
         onClick={() => onPageChange(Math.min(totalPages, page + 1))}
         disabled={page >= totalPages}
+        aria-label="Next page"
       >
         <ChevronRight className="h-4 w-4" />
       </Button>

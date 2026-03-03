@@ -12,6 +12,8 @@ import { ExpensesModule } from '../modules/expenses/expenses.module';
 import { ExpensesService } from '../modules/expenses/expenses.service';
 import { MembersModule } from '../modules/members/members.module';
 import { MembersService } from '../modules/members/members.service';
+import { OrganizationsModule } from '../modules/organizations/organizations.module';
+import { OrganizationsService } from '../modules/organizations/organizations.service';
 import { EmailService } from '../modules/auth/email.service';
 
 export interface TestContext {
@@ -22,7 +24,9 @@ export interface TestContext {
   paymentsService: PaymentsService;
   expensesService: ExpensesService;
   membersService: MembersService;
+  organizationsService: OrganizationsService;
   orgId: string;
+  userId: string;
   membershipId: string;
 }
 
@@ -36,6 +40,7 @@ export async function createTestContext(): Promise<TestContext> {
       PaymentsModule,
       ExpensesModule,
       MembersModule,
+      OrganizationsModule,
     ],
   })
     .overrideProvider(EmailService)
@@ -75,7 +80,9 @@ export async function createTestContext(): Promise<TestContext> {
     paymentsService: module.get(PaymentsService),
     expensesService: module.get(ExpensesService),
     membersService: module.get(MembersService),
+    organizationsService: module.get(OrganizationsService),
     orgId: org.id,
+    userId: user.id,
     membershipId: membership.id,
   };
 }

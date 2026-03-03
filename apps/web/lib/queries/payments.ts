@@ -62,6 +62,34 @@ export function useCreatePayment() {
   });
 }
 
+export function useBulkCreatePayments() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      orgId,
+      payments,
+    }: {
+      orgId: string;
+      payments: Array<{
+        amountCents: number;
+        paidAt: string;
+        rawPayerName?: string;
+        memo?: string;
+        membershipId?: string;
+      }>;
+    }) => api.post<{ createdCount: number; errorCount: number; errors: string[] }>(
+      `/organizations/${orgId}/payments/bulk`,
+      { payments },
+    ),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.payments.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all(variables.orgId) });
+    },
+  });
+}
+
 export function useAllocatePayment() {
   const queryClient = useQueryClient();
 

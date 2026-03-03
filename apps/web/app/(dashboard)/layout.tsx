@@ -72,6 +72,13 @@ export default function DashboardLayout({
     return null;
   }
 
+  // If user is a plain MEMBER in the current org, redirect to portal
+  const currentMembership = user.memberships.find((m) => m.orgId === currentOrgId);
+  if (currentMembership?.role === 'MEMBER') {
+    router.push('/portal');
+    return null;
+  }
+
   return (
     <div className="min-h-screen">
       {isMutating > 0 && (

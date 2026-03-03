@@ -81,6 +81,11 @@ export class MembersController {
     return this.membersService.bulkRemove(orgId, body.memberIds, actorId);
   }
 
+  @Get('me')
+  async findMe(@Param('orgId') orgId: string, @Req() req: any) {
+    return this.membersService.findByUserId(orgId, req.user.userId);
+  }
+
   @Get(':id')
   async findOne(@Param('orgId') orgId: string, @Param('id') id: string) {
     return this.membersService.findOne(orgId, id);
@@ -118,6 +123,13 @@ export class MembersController {
   async remove(@Param('orgId') orgId: string, @Param('id') id: string, @Req() req: any) {
     const actorId = req.membership?.id;
     return this.membersService.remove(orgId, id, actorId);
+  }
+
+  @Post(':id/approve')
+  @Roles('ADMIN')
+  async approve(@Param('orgId') orgId: string, @Param('id') id: string, @Req() req: any) {
+    const actorId = req.membership?.id;
+    return this.membersService.approve(orgId, id, actorId);
   }
 
   @Post(':id/restore')

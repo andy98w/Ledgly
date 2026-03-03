@@ -17,8 +17,29 @@ interface OrganizationDetails extends Organization {
   autoApprovePayments: boolean;
   autoApproveExpenses: boolean;
   enabledPaymentSources: string[];
+  joinCode: string | null;
+  joinCodeEnabled: boolean;
+  joinRequiresApproval: boolean;
   memberCount: number;
   chargeCount: number;
+}
+
+interface JoinCodeSettings {
+  joinCode: string | null;
+  joinCodeEnabled: boolean;
+  joinRequiresApproval: boolean;
+}
+
+interface ResolvedJoinCode {
+  orgId: string;
+  orgName: string;
+}
+
+interface JoinResult {
+  membershipId: string;
+  orgId: string;
+  orgName: string;
+  status: string;
 }
 
 export function useOrganizations() {
@@ -90,6 +111,62 @@ export function useDeleteOrganization() {
       } else {
         setCurrentOrgId(null);
       }
+    },
+  });
+}
+
+export function useGenerateJoinCode(orgId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => api.post<JoinCodeSettings>(`/organizations/${orgId}/join-code`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['organizations', orgId] });
+    },
+  });
+}
+
+export function useDisableJoinCode(orgId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => api.delete(`/organizations/${orgId}/join-code`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['organizations', orgId] });
+    },
+  });
+}
+
+export function useUpdateJoinCodeSettings(orgId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: { enabled?: boolean; requiresApproval?: boolean }) =>
+      api.patch<JoinCodeSettings>(`/organizations/${orgId}/join-code`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['organizations', orgId] });
+    },
+  });
+}
+
+export function useResolveJoinCode(code: string | null) {
+  return useQuery({
+    queryKey: ['join-code', code],
+    queryFn: () => api.get<ResolvedJoinCode>(`/organizations/resolve-code/${code}`),
+    enabled: !!code && code.length === 6,
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useJoinOrganization() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (code: string) => api.post<JoinResult>('/organizations/join', { code }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['organizations'] });
+      queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
     },
   });
 }

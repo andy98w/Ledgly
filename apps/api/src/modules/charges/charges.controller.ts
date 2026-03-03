@@ -168,4 +168,10 @@ export class ChargesController {
     const actorId = req.membership.id;
     return this.chargesService.restore(orgId, id, actorId);
   }
+
+  @Post('remind')
+  @Roles('ADMIN', 'TREASURER')
+  async sendReminders(@Param('orgId') orgId: string, @Body() body: { chargeIds: string[] }) {
+    return this.chargesService.sendReminders(orgId, body.chargeIds);
+  }
 }

@@ -22,6 +22,7 @@ export function NotificationBell({ onClick, collapsed }: NotificationBellProps) 
         'relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors',
         collapsed && 'justify-center px-0',
       )}
+      aria-label={count > 0 ? `Notifications (${count} unread)` : 'Notifications'}
     >
       <div className="relative">
         <Bell className="h-5 w-5" />

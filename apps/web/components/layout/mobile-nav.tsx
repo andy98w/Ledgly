@@ -14,15 +14,15 @@ import {
 
 const primaryItems = [
   { href: '/dashboard', label: 'Home', icon: LayoutDashboard },
+  { href: '/spreadsheet', label: 'Spreadsheet', icon: Table2 },
   { href: '/members', label: 'Members', icon: Users },
   { href: '/charges', label: 'Charges', icon: Receipt },
-  { href: '/payments', label: 'Payments', icon: CreditCard },
 ];
 
 const moreItems = [
+  { href: '/payments', label: 'Payments', icon: CreditCard },
   { href: '/expenses', label: 'Expenses', icon: TrendingDown },
   { href: '/inbox', label: 'Inbox', icon: Inbox },
-  { href: '/spreadsheet', label: 'Spreadsheet', icon: Table2 },
   { href: '/audit', label: 'Audit Log', icon: History },
 ];
 
@@ -63,6 +63,7 @@ export function MobileNav() {
                 'relative flex flex-col items-center justify-center flex-1 h-full touch-target transition-colors',
                 isMoreActive ? 'text-primary' : 'text-muted-foreground',
               )}
+              aria-label="More navigation options"
             >
               <MoreHorizontal className={cn('h-5 w-5 transition-transform duration-150', isMoreActive && 'scale-110')} />
               <span className="text-xs mt-1">More</span>

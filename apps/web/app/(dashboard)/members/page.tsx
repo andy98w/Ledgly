@@ -3,10 +3,10 @@
 import { useState, useMemo, useEffect, useCallback, memo } from 'react';
 import Link from 'next/link';
 
-import { Plus, Search, Users, AlertCircle, MoreHorizontal, Pencil, Trash2, ArrowUp, ArrowDown, Circle, CheckCircle2, Mail, Clock, Upload } from 'lucide-react';
+import { Plus, Search, Users, AlertCircle, MoreHorizontal, Pencil, Trash2, ArrowUp, ArrowDown, Circle, CheckCircle2, Mail, Clock, Upload, MoreVertical, FileSpreadsheet, FileText } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
-import { useMembers, useCreateMembers, useUpdateMember, useDeleteMember, useRestoreMember, useResendInvitation, useBulkDeleteMembers } from '@/lib/queries/members';
-import { useAuthStore } from '@/lib/stores/auth';
+import { useMembers, useCreateMembers, useUpdateMember, useDeleteMember, useRestoreMember, useResendInvitation, useBulkDeleteMembers, useApproveMember } from '@/lib/queries/members';
+import { useAuthStore, useIsAdminOrTreasurer, useCurrentMembership } from '@/lib/stores/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -62,6 +62,7 @@ const MemberCard = memo(function MemberCard({
   onEdit,
   onDelete,
   onResendInvitation,
+  onApprove,
   isAdmin,
   isSelf,
   isSelected,
@@ -72,6 +73,7 @@ const MemberCard = memo(function MemberCard({
   onEdit: (member: MemberWithBalance) => void;
   onDelete: (member: MemberWithBalance) => void;
   onResendInvitation?: (member: MemberWithBalance) => void;
+  onApprove?: (member: MemberWithBalance) => void;
   isAdmin: boolean;
   isSelf?: boolean;
   isSelected?: boolean;
@@ -80,6 +82,7 @@ const MemberCard = memo(function MemberCard({
   const hasBalance = member.balanceCents > 0;
   const isOverdue = member.overdueCharges > 0;
   const isInvited = member.status === 'INVITED';
+  const isPending = member.status === 'PENDING';
   const isExpiredInvite = isInvited && member.inviteExpired;
 
   return (
@@ -93,7 +96,8 @@ const MemberCard = memo(function MemberCard({
                   onToggleSelect();
                 }}
                 className="mr-3 flex items-center justify-center transition-colors"
-                title={isSelected ? "Deselect" : "Select"}
+                aria-label={isSelected ? "Deselect member" : "Select member"}
+                aria-pressed={isSelected}
               >
                 {isSelected ? (
                   <CheckCircle2 className="w-5 h-5 text-primary" />
@@ -121,6 +125,11 @@ const MemberCard = memo(function MemberCard({
                       <AlertCircle className="w-3 h-3 mr-1" />
                       Invitation Expired
                     </Badge>
+                  ) : isPending ? (
+                    <Badge variant="warning" className="text-xs">
+                      <Clock className="w-3 h-3 mr-1" />
+                      Pending Approval
+                    </Badge>
                   ) : isInvited ? (
                     <Badge variant="warning" className="text-xs">
                       <Clock className="w-3 h-3 mr-1" />
@@ -141,7 +150,7 @@ const MemberCard = memo(function MemberCard({
               </div>
             </Link>
             <div className="flex items-center gap-4">
-              {!isInvited && (
+              {!isInvited && !isPending && (
                 <div className="text-right">
                   {hasBalance ? (
                     <div className="flex items-center gap-1 text-destructive">
@@ -156,10 +165,16 @@ const MemberCard = memo(function MemberCard({
                   </p>
                 </div>
               )}
+              {isPending && isAdmin && onApprove && (
+                <Button size="sm" variant="outline" onClick={(e) => { e.preventDefault(); onApprove(member); }}>
+                  <CheckCircle2 className="h-4 w-4 mr-1" />
+                  Approve
+                </Button>
+              )}
               {isAdmin && !isSelf ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Member actions">
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -170,7 +185,7 @@ const MemberCard = memo(function MemberCard({
                         Resend Invitation
                       </DropdownMenuItem>
                     )}
-                    {!isInvited && (
+                    {!isInvited && !isPending && (
                       <DropdownMenuItem onClick={() => onEdit(member)}>
                         <Pencil className="h-4 w-4 mr-2" />
                         Edit
@@ -501,14 +516,14 @@ export default function MembersPage() {
   const [showImport, setShowImport] = useState(false);
   const { toast } = useToast();
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
-  const user = useAuthStore((s) => s.user);
-  const currentMembership = user?.memberships.find((m) => m.orgId === currentOrgId);
-  const isAdmin = currentMembership?.role === 'ADMIN' || currentMembership?.role === 'TREASURER';
+  const isAdmin = useIsAdminOrTreasurer();
+  const currentMembership = useCurrentMembership();
   const { data, isLoading } = useMembers(currentOrgId, { search });
   const deleteMember = useDeleteMember();
   const restoreMember = useRestoreMember();
   const resendInvitation = useResendInvitation();
   const bulkDeleteMembers = useBulkDeleteMembers();
+  const approveMember = useApproveMember();
   const createMembersForImport = useCreateMembers();
 
   const handleImportMembers = async (records: Record<string, string>[]) => {
@@ -554,6 +569,21 @@ export default function MembersPage() {
     setPage(1);
     setSelectedRows(new Set());
   }, [search, sortBy, sortOrder, pageSize]);
+
+  const handleApprove = useCallback((member: MemberWithBalance) => {
+    if (!currentOrgId) return;
+    approveMember.mutate(
+      { orgId: currentOrgId, memberId: member.id },
+      {
+        onSuccess: () => toast({ title: `${member.displayName} approved` }),
+        onError: (error: any) => toast({
+          title: 'Error',
+          description: error.message || 'Failed to approve member',
+          variant: 'destructive',
+        }),
+      },
+    );
+  }, [currentOrgId, approveMember, toast]);
 
   const handleResendInvitation = useCallback((member: MemberWithBalance) => {
     if (!currentOrgId) return;
@@ -726,86 +756,51 @@ export default function MembersPage() {
       <FadeIn>
         <PageHeader
           title="Members"
-          helpText="Add and manage organization members. Members can have charges assigned to them and receive payment allocations. Use selection checkboxes to select multiple members for bulk actions."
+          helpText="Add and manage organization members. Members can have charges assigned to them and receive payment allocations."
           actions={
             <div className="flex items-center gap-2">
-              <ExportDropdown
-                onExportCSV={() => handleExportMembers('csv')}
-                onExportPDF={() => handleExportMembers('pdf')}
-              />
-              {isAdmin && (
-                <Button variant="outline" size="sm" onClick={() => setShowImport(true)}>
-                  <Upload className="w-4 h-4 mr-1.5" />
-                  Import
-                </Button>
-              )}
               {isAdmin && <AddMemberDialog />}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" className="h-9 w-9">
+                    <MoreVertical className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {isAdmin && (
+                    <DropdownMenuItem onClick={() => setShowImport(true)} className="cursor-pointer">
+                      <Upload className="w-4 h-4 mr-2" />
+                      Import CSV
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onClick={() => handleExportMembers('csv')} className="cursor-pointer">
+                    <FileSpreadsheet className="w-4 h-4 mr-2" />
+                    Export CSV
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExportMembers('pdf')} className="cursor-pointer">
+                    <FileText className="w-4 h-4 mr-2" />
+                    Export PDF
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           }
         />
       </FadeIn>
 
-      {/* Search and Filters */}
+      {/* Search */}
       <FadeIn delay={0.1}>
-        <div className="flex items-center justify-between gap-4">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search members..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-10 h-9 bg-secondary/30 border-border/50 focus:border-primary"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
-              <SelectTrigger className="w-32 h-8 bg-secondary/30 border-border/50">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="name">Name</SelectItem>
-                <SelectItem value="joinedAt">Date Joined</SelectItem>
-                <SelectItem value="balance">Balance</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-            >
-              {sortOrder === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
-            </Button>
-          </div>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          <Input
+            placeholder="Search members..."
+            aria-label="Search members"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-10 h-9 bg-secondary/30 border-border/50 focus:border-primary"
+          />
         </div>
       </FadeIn>
-
-      {/* Pagination Controls - Top */}
-      {sortedMembers.length > 0 && (
-        <FadeIn delay={0.15}>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">
-              {sortedMembers.length} members
-            </span>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">Per page:</span>
-                <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
-                  <SelectTrigger className="w-20 h-8 bg-secondary/30 border-border/50">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="20">20</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                    <SelectItem value="100">100</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
-            </div>
-          </div>
-        </FadeIn>
-      )}
 
       {/* Members List */}
       {isLoading ? (
@@ -832,7 +827,8 @@ export default function MembersPage() {
               <button
                 onClick={toggleSelectAll}
                 className="flex items-center gap-3 transition-colors"
-                title={isAllSelected ? "Deselect all" : "Select all"}
+                aria-label={isAllSelected ? "Deselect all members" : "Select all members"}
+                aria-pressed={isAllSelected}
               >
                 {isAllSelected ? (
                   <CheckCircle2 className="w-5 h-5 text-primary" />
@@ -849,7 +845,7 @@ export default function MembersPage() {
                   "w-7 h-7 flex items-center justify-center transition-all hover:text-destructive",
                   selectedRows.size === 0 && "invisible"
                 )}
-                title={`Remove ${selectedRows.size} selected`}
+                aria-label={`Remove ${selectedRows.size} selected members`}
               >
                 <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
               </button>
@@ -866,6 +862,7 @@ export default function MembersPage() {
                 onEdit={handleEdit}
                 onDelete={handleDelete}
                 onResendInvitation={handleResendInvitation}
+                onApprove={handleApprove}
                 isAdmin={isAdmin}
                 isSelf={member.id === currentMembership?.id}
                 isSelected={selectedRows.has(member.id)}

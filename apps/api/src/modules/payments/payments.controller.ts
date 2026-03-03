@@ -145,6 +145,17 @@ export class PaymentsController {
     return this.paymentsService.delete(orgId, id, actorId);
   }
 
+  @Post('bulk')
+  @Roles('ADMIN', 'TREASURER')
+  async bulkCreate(
+    @Param('orgId') orgId: string,
+    @Body() body: { payments: Array<{ amountCents: number; paidAt: string; rawPayerName?: string; memo?: string; membershipId?: string }> },
+    @Req() req: any,
+  ) {
+    const actorId = req.membership.id;
+    return this.paymentsService.bulkCreate(orgId, actorId, body.payments);
+  }
+
   @Post('bulk-delete')
   @Roles('ADMIN', 'TREASURER')
   async bulkDelete(@Param('orgId') orgId: string, @Body() body: { paymentIds: string[] }, @Req() req: any) {

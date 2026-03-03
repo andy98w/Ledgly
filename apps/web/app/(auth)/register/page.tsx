@@ -4,8 +4,11 @@ import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowRight, Loader2, Mail, AlertCircle, Eye, EyeOff, Check, X } from 'lucide-react';
+import { ArrowRight, Loader2, Mail, AlertCircle, Eye, EyeOff, Check, X, Users } from 'lucide-react';
 import { useRegister, useResolveInvite } from '@/lib/queries/auth';
+import { useJoinOrganization, useResolveJoinCode } from '@/lib/queries/organizations';
+import { useAuthStore } from '@/lib/stores/auth';
+import { getPostLoginRedirect } from '@/lib/utils/auth-redirect';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,12 +18,16 @@ function RegisterForm() {
   const router = useRouter();
   const { toast } = useToast();
   const register = useRegister();
+  const joinOrg = useJoinOrganization();
+  const setCurrentOrgId = useAuthStore((s) => s.setCurrentOrgId);
   const searchParams = useSearchParams();
 
   const inviteToken = searchParams.get('invite');
   const legacyEmail = searchParams.get('email') || '';
+  const joinCode = searchParams.get('joinCode');
 
   const { data: inviteData, isLoading: inviteLoading, error: inviteError } = useResolveInvite(inviteToken);
+  const { data: joinCodeData } = useResolveJoinCode(joinCode);
 
   const resolvedEmail = inviteData?.email || legacyEmail;
   const isInvite = !!inviteToken || !!legacyEmail;
@@ -67,11 +74,21 @@ function RegisterForm() {
         email: email.trim(),
         password,
       });
-      if (data.user.memberships.length > 0) {
-        router.push('/dashboard');
-      } else {
-        router.push('/onboarding');
+
+      // Auto-join if joinCode param present
+      if (joinCode) {
+        try {
+          const result = await joinOrg.mutateAsync(joinCode);
+          setCurrentOrgId(result.orgId);
+          toast({ title: result.status === 'PENDING' ? 'Join request sent!' : `Joined ${result.orgName}!` });
+          window.location.href = '/portal';
+          return;
+        } catch {
+          // Join failed — continue with normal redirect
+        }
       }
+
+      router.push(getPostLoginRedirect(data.user));
     } catch (error: any) {
       toast({
         title: 'Registration failed',
@@ -125,6 +142,15 @@ function RegisterForm() {
           <Mail className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" />
           <p className="text-sm text-foreground">
             You've been invited to join{inviteData?.orgName ? <> <strong>{inviteData.orgName}</strong></> : ' an organization'}. Create your account to get started.
+          </p>
+        </div>
+      )}
+
+      {joinCode && joinCodeData && !isInvite && (
+        <div className="mb-6 rounded-lg border border-primary/20 bg-primary/5 p-4 flex items-start gap-3">
+          <Users className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" />
+          <p className="text-sm text-foreground">
+            Create your account to join <strong>{joinCodeData.orgName}</strong>.
           </p>
         </div>
       )}

@@ -1,4 +1,6 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
+import { env } from './env';
+
+const API_URL = env.NEXT_PUBLIC_API_URL;
 
 class ApiError extends Error {
   constructor(
@@ -10,54 +12,31 @@ class ApiError extends Error {
   }
 }
 
-function getAuthToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('auth_token');
-}
-
-export function setAuthToken(token: string) {
-  localStorage.setItem('auth_token', token);
-}
-
-export function getRefreshToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('refresh_token');
-}
-
-export function setRefreshToken(token: string) {
-  localStorage.setItem('refresh_token', token);
-}
-
-export function clearAuthTokens() {
+/** Clear any leftover legacy tokens from localStorage */
+export function clearLegacyTokens() {
+  if (typeof window === 'undefined') return;
   localStorage.removeItem('auth_token');
   localStorage.removeItem('refresh_token');
 }
 
-
 // Deduplication: only one refresh in-flight at a time
-let refreshPromise: Promise<{ accessToken: string; refreshToken: string }> | null = null;
+let refreshPromise: Promise<void> | null = null;
 
-async function attemptTokenRefresh(): Promise<{ accessToken: string; refreshToken: string }> {
+async function attemptTokenRefresh(): Promise<void> {
   if (refreshPromise) return refreshPromise;
 
   refreshPromise = (async () => {
-    const rt = getRefreshToken();
-    if (!rt) throw new ApiError(401, 'No refresh token');
-
+    // Cookie-based refresh: the httpOnly cookie is sent automatically
     const response = await fetch(`${API_URL}/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken: rt }),
+      credentials: 'include',
+      body: JSON.stringify({}),
     });
 
     if (!response.ok) {
       throw new ApiError(response.status, 'Token refresh failed');
     }
-
-    const data = await response.json();
-    setAuthToken(data.accessToken);
-    setRefreshToken(data.refreshToken);
-    return data;
   })().finally(() => {
     refreshPromise = null;
   });
@@ -65,26 +44,38 @@ async function attemptTokenRefresh(): Promise<{ accessToken: string; refreshToke
   return refreshPromise;
 }
 
+const MAX_RATE_LIMIT_RETRIES = 3;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function request<T>(
   endpoint: string,
   options: RequestInit = {},
   _isRetry = false,
+  _rateLimitAttempt = 0,
 ): Promise<T> {
-  const token = getAuthToken();
-
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
     ...options.headers,
   };
 
-  if (token) {
-    (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
-  }
-
   const response = await fetch(`${API_URL}${endpoint}`, {
     ...options,
     headers,
+    credentials: 'include', // Send httpOnly cookies
   });
+
+  // 429 rate-limit: exponential backoff (1s, 2s, 4s), max 3 retries
+  if (response.status === 429 && _rateLimitAttempt < MAX_RATE_LIMIT_RETRIES) {
+    const retryAfter = response.headers.get('Retry-After');
+    const delayMs = retryAfter
+      ? parseInt(retryAfter, 10) * 1000
+      : 1000 * Math.pow(2, _rateLimitAttempt); // 1s, 2s, 4s
+    await sleep(delayMs);
+    return request<T>(endpoint, options, _isRetry, _rateLimitAttempt + 1);
+  }
 
   // 401 interceptor: attempt refresh once, then retry
   if (response.status === 401 && !_isRetry && !endpoint.startsWith('/auth/refresh')) {
@@ -93,7 +84,7 @@ async function request<T>(
       return request<T>(endpoint, options, true);
     } catch {
       // Refresh failed — force logout
-      clearAuthTokens();
+      clearLegacyTokens();
       if (typeof window !== 'undefined') {
         window.location.href = '/login';
       }
