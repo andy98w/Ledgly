@@ -433,14 +433,3 @@ ALTER TABLE "agent_sessions" ADD CONSTRAINT "agent_sessions_org_id_fkey" FOREIGN
 
 -- AddForeignKey
 ALTER TABLE "agent_sessions" ADD CONSTRAINT "agent_sessions_actor_id_fkey" FOREIGN KEY ("actor_id") REFERENCES "memberships"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
-┌─────────────────────────────────────────────────────────┐
-│  Update available 5.22.0 -> 7.4.2                       │
-│                                                         │
-│  This is a major update - please follow the guide at    │
-│  https://pris.ly/d/major-version-upgrade                │
-│                                                         │
-│  Run the following to update                            │
-│    npm i --save-dev prisma@latest                       │
-│    npm i @prisma/client@latest                          │
-└─────────────────────────────────────────────────────────┘

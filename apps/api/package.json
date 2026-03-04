@@ -5,7 +5,7 @@
   "scripts": {
     "build": "nest build",
     "dev": "nest start --watch",
-    "start": "prisma migrate deploy && node dist/main",
+    "start": "prisma migrate resolve --rolled-back 0_init && prisma migrate deploy && node dist/main",
     "start:dev": "nest start",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "db:generate": "prisma generate",
