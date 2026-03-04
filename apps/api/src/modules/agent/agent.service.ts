@@ -472,7 +472,7 @@ export class AgentService {
       case 'payments':
         return this.paymentsService.bulkCreate(orgId, actorId, rows);
       case 'expenses': {
-        const results = [];
+        const results: any[] = [];
         for (const row of rows) {
           results.push(await this.expensesService.create(orgId, actorId, row));
         }
@@ -480,7 +480,7 @@ export class AgentService {
       }
       case 'charges': {
         // For charge imports, each row needs membershipId(s)
-        const results = [];
+        const results: any[] = [];
         for (const row of rows) {
           const membershipIds = Array.isArray(row.membershipIds)
             ? row.membershipIds

@@ -263,7 +263,7 @@ export class MembersService {
   }
 
   async createMany(orgId: string, members: CreateMemberDto[], actorId?: string, actorName?: string) {
-    const created = [];
+    const created: any[] = [];
     const isPrivilegedRole = (role?: MembershipRole) => role === 'OWNER' || role === 'ADMIN' || role === 'TREASURER';
 
     // Get org name for invitation emails
