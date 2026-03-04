@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { IsString, IsNumber, IsOptional, IsArray, ValidateNested, IsInt, Min, Max } from 'class-validator';
+import { IsString, IsOptional, IsArray, ValidateNested, IsInt, Min, Max, ArrayMinSize, ArrayMaxSize } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PaymentsService } from './payments.service';
 import { Roles } from '../../common/decorators';
@@ -67,6 +67,53 @@ class AllocatePaymentDto {
   @ValidateNested({ each: true })
   @Type(() => AllocationItemDto)
   allocations: AllocationItemDto[];
+}
+
+class BulkCreatePaymentItemDto {
+  @IsInt()
+  @Min(1)
+  @Max(99_999_999)
+  amountCents: number;
+
+  @IsString()
+  paidAt: string;
+
+  @IsString()
+  @IsOptional()
+  rawPayerName?: string;
+
+  @IsString()
+  @IsOptional()
+  memo?: string;
+
+  @IsString()
+  @IsOptional()
+  membershipId?: string;
+}
+
+class BulkCreatePaymentDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(500)
+  @ValidateNested({ each: true })
+  @Type(() => BulkCreatePaymentItemDto)
+  payments: BulkCreatePaymentItemDto[];
+}
+
+class BulkPaymentIdsDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(500)
+  @IsString({ each: true })
+  paymentIds: string[];
+}
+
+class BulkAllocationIdsDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(500)
+  @IsString({ each: true })
+  allocationIds: string[];
 }
 
 class PaymentFiltersDto {
@@ -149,25 +196,25 @@ export class PaymentsController {
   @Roles('ADMIN', 'TREASURER')
   async bulkCreate(
     @Param('orgId') orgId: string,
-    @Body() body: { payments: Array<{ amountCents: number; paidAt: string; rawPayerName?: string; memo?: string; membershipId?: string }> },
+    @Body() dto: BulkCreatePaymentDto,
     @Req() req: any,
   ) {
     const actorId = req.membership.id;
-    return this.paymentsService.bulkCreate(orgId, actorId, body.payments);
+    return this.paymentsService.bulkCreate(orgId, actorId, dto.payments);
   }
 
   @Post('bulk-delete')
   @Roles('ADMIN', 'TREASURER')
-  async bulkDelete(@Param('orgId') orgId: string, @Body() body: { paymentIds: string[] }, @Req() req: any) {
+  async bulkDelete(@Param('orgId') orgId: string, @Body() dto: BulkPaymentIdsDto, @Req() req: any) {
     const actorId = req.membership.id;
-    return this.paymentsService.bulkDelete(orgId, body.paymentIds, actorId);
+    return this.paymentsService.bulkDelete(orgId, dto.paymentIds, actorId);
   }
 
   @Post('bulk-auto-allocate')
   @Roles('ADMIN', 'TREASURER')
-  async bulkAutoAllocate(@Param('orgId') orgId: string, @Body() body: { paymentIds: string[] }, @Req() req: any) {
+  async bulkAutoAllocate(@Param('orgId') orgId: string, @Body() dto: BulkPaymentIdsDto, @Req() req: any) {
     const actorId = req.membership.id;
-    return this.paymentsService.bulkAutoAllocate(orgId, body.paymentIds, actorId);
+    return this.paymentsService.bulkAutoAllocate(orgId, dto.paymentIds, actorId);
   }
 
   @Post(':id/restore')
@@ -188,11 +235,11 @@ export class PaymentsController {
   @Roles('ADMIN', 'TREASURER')
   async bulkRemoveAllocations(
     @Param('orgId') orgId: string,
-    @Body() body: { allocationIds: string[] },
+    @Body() dto: BulkAllocationIdsDto,
     @Req() req: any,
   ) {
     const actorId = req.membership.id;
-    return this.paymentsService.bulkRemoveAllocations(orgId, body.allocationIds, actorId);
+    return this.paymentsService.bulkRemoveAllocations(orgId, dto.allocationIds, actorId);
   }
 
   @Get('member/:membershipId/unallocated')

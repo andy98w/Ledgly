@@ -6,6 +6,7 @@ import { ArrowLeft, Receipt, CreditCard, TrendingUp, Wallet, User, AlertCircle, 
 import { useMember } from '@/lib/queries/members';
 import { useAuthStore } from '@/lib/stores/auth';
 import { formatDate } from '@/lib/utils';
+import { MEMBERSHIP_ROLE_LABELS } from '@ledgly/shared';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -96,7 +97,12 @@ export default function MemberDetailPage() {
                 >
                   {member.status}
                 </Badge>
-                <Badge variant="outline" className="text-xs">{member.role}</Badge>
+                <Badge
+                  variant={member.role === 'OWNER' || member.role === 'ADMIN' ? 'default' : 'outline'}
+                  className="text-xs"
+                >
+                  {MEMBERSHIP_ROLE_LABELS[member.role as keyof typeof MEMBERSHIP_ROLE_LABELS] || member.role}
+                </Badge>
               </div>
             </div>
           </div>

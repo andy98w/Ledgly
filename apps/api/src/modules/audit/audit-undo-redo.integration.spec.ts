@@ -1,4 +1,4 @@
-import { NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { NotFoundException, ConflictException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { createTestContext, cleanupTestContext, TestContext } from '../../test/test-helpers';
 
 jest.setTimeout(15_000);
@@ -8,6 +8,11 @@ describe('Audit Undo/Redo Edge Cases (integration)', () => {
 
   beforeAll(async () => {
     ctx = await createTestContext();
+    // Promote default membership to OWNER so it can remove admins
+    await ctx.prisma.membership.update({
+      where: { id: ctx.membershipId },
+      data: { role: 'OWNER' },
+    });
   }, 30_000);
 
   afterAll(async () => {
@@ -367,11 +372,10 @@ describe('Audit Undo/Redo Edge Cases (integration)', () => {
     await prisma.payment.delete({ where: { id: payment.id } });
   });
 
-  // ---------- Test 11: Last-admin guard prevents removing the only admin ----------
-  it('cannot remove the last admin in an org', async () => {
+  // ---------- Test 11: OWNER cannot be removed or demoted ----------
+  it('OWNER cannot be removed or demoted by a lower-rank member', async () => {
     const { membersService, prisma, orgId, membershipId } = ctx;
 
-    // The test context has only one admin (membershipId).
     // Create a non-admin member to act as the actor.
     const helperUser = await prisma.user.create({
       data: { email: `admin-guard-${Date.now()}@test.local`, name: 'Helper' },
@@ -380,20 +384,20 @@ describe('Audit Undo/Redo Edge Cases (integration)', () => {
       data: { orgId, userId: helperUser.id, role: 'MEMBER', status: 'ACTIVE', name: 'Helper' },
     });
 
-    // Attempt to remove the only admin — should throw BadRequestException
+    // Attempt to remove the OWNER — should throw (OWNER protection)
     await expect(
       membersService.remove(orgId, membershipId, helperMembership.id),
     ).rejects.toThrow(BadRequestException);
 
-    // Attempt to demote the only admin via update — should throw BadRequestException
+    // Attempt to demote the OWNER via update — should throw BadRequestException
     await expect(
       membersService.update(orgId, membershipId, { role: 'MEMBER' as any }, helperMembership.id),
     ).rejects.toThrow(BadRequestException);
 
-    // Verify admin is still ACTIVE and ADMIN
+    // Verify OWNER is still ACTIVE and OWNER
     const admin = await prisma.membership.findUnique({ where: { id: membershipId } });
     expect(admin?.status).toBe('ACTIVE');
-    expect(admin?.role).toBe('ADMIN');
+    expect(admin?.role).toBe('OWNER');
 
     // Cleanup
     await prisma.auditLog.deleteMany({ where: { orgId, entityId: helperMembership.id } });

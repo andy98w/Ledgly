@@ -373,7 +373,7 @@ export class ChargesService {
     const charge = await this.prisma.charge.findFirst({
       where: { id: chargeId, orgId },
       include: {
-        allocations: true,
+        allocations: { select: { id: true } },
       },
     });
 
@@ -609,29 +609,23 @@ export class ChargesService {
       },
     });
 
-    let sent = 0;
-    let skipped = 0;
-
-    for (const charge of charges) {
+    const emailTasks = charges.map((charge) => {
       const email = charge.membership?.user?.email;
-      if (!email) {
-        skipped++;
-        continue;
-      }
+      if (!email) return null;
+      return this.emailService.sendOverdueReminder(
+        email,
+        charge.title,
+        (charge.amountCents / 100).toFixed(2),
+        charge.org.name,
+        charge.dueDate ? charge.dueDate.toISOString().split('T')[0] : 'No due date',
+      );
+    });
 
-      try {
-        await this.emailService.sendOverdueReminder(
-          email,
-          charge.title,
-          (charge.amountCents / 100).toFixed(2),
-          charge.org.name,
-          charge.dueDate ? charge.dueDate.toISOString().split('T')[0] : 'No due date',
-        );
-        sent++;
-      } catch {
-        skipped++;
-      }
-    }
+    const noEmail = emailTasks.filter((t) => t === null).length;
+    const results = await Promise.allSettled(emailTasks.filter(Boolean) as Promise<any>[]);
+
+    const sent = results.filter((r) => r.status === 'fulfilled').length;
+    const skipped = noEmail + results.filter((r) => r.status === 'rejected').length;
 
     return { sent, skipped };
   }

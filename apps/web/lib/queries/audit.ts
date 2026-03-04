@@ -12,6 +12,7 @@ export interface AuditLogEntry {
   batchDescription?: string;
   undone?: boolean;
   undoneAt?: string;
+  source?: string | null;
   createdAt: string;
   actor: {
     id: string;
@@ -27,6 +28,7 @@ export interface BatchedAuditLogEntry {
   entityType: string;
   action: string;
   undone?: boolean;
+  source?: string | null;
   createdAt: string;
   actor: {
     id: string;
@@ -46,10 +48,11 @@ export interface AuditLogsResponse {
 
 export function useAuditLogs(
   orgId: string | null,
-  options: { entityType?: string; limit?: number; offset?: number } = {},
+  options: { entityType?: string; source?: string; limit?: number; offset?: number } = {},
 ) {
   const params = new URLSearchParams();
   if (options.entityType) params.set('entityType', options.entityType);
+  if (options.source) params.set('source', options.source);
   if (options.limit) params.set('limit', String(options.limit));
   if (options.offset) params.set('offset', String(options.offset));
 
@@ -62,7 +65,7 @@ export function useAuditLogs(
         `/organizations/${orgId}/audit${queryString ? `?${queryString}` : ''}`,
       ),
     enabled: !!orgId,
-    refetchOnMount: 'always',
+    staleTime: 30_000,
   });
 }
 

@@ -142,3 +142,17 @@ export function useResendInvitation() {
     },
   });
 }
+
+export function useTransferOwnership() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ orgId, memberId }: { orgId: string; memberId: string }) =>
+      api.post(`/organizations/${orgId}/members/${memberId}/transfer-ownership`),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.members.all(variables.orgId) });
+      // Also invalidate auth/me so the current user's role updates
+      queryClient.invalidateQueries({ queryKey: ['me'] });
+    },
+  });
+}

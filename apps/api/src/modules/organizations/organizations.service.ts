@@ -49,7 +49,7 @@ export class OrganizationsService {
         memberships: {
           create: {
             userId,
-            role: 'ADMIN',
+            role: 'OWNER',
             status: 'ACTIVE',
             name: user?.name || user?.email || null,
           },
@@ -194,7 +194,7 @@ export class OrganizationsService {
     const memberships = await this.prisma.membership.findMany({
       where: { userId, status: 'ACTIVE' },
       include: {
-        org: true,
+        org: { select: { id: true, name: true, timezone: true } },
       },
       orderBy: { joinedAt: 'desc' },
     });

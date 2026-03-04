@@ -14,6 +14,7 @@ import { HealthModule } from './modules/health/health.module';
 import { GmailModule } from './modules/gmail/gmail.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { AgentModule } from './modules/agent/agent.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     HealthModule,
     GmailModule,
     NotificationsModule,
+    AgentModule,
   ],
   providers: [
     {

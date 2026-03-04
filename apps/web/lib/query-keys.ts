@@ -36,8 +36,20 @@ export const queryKeys = {
     list: (orgId: string | null, options: Record<string, any>) =>
       ['organizations', orgId, 'audit', options] as const,
   },
+  agentSessions: {
+    all: (orgId: string | null) => ['organizations', orgId, 'agent-sessions'] as const,
+    list: (orgId: string | null) => ['organizations', orgId, 'agent-sessions', 'list'] as const,
+    detail: (orgId: string | null, sessionId: string | null) =>
+      ['organizations', orgId, 'agent-sessions', sessionId] as const,
+  },
   dashboard: {
     all: (orgId: string | null) => ['organizations', orgId, 'dashboard'] as const,
+  },
+  notifications: {
+    all: (orgId: string | null) => ['notifications', orgId] as const,
+    list: (orgId: string | null, filters: Record<string, any>) =>
+      ['notifications', orgId, filters] as const,
+    unreadCount: (orgId: string | null) => ['notifications', orgId, 'unread-count'] as const,
   },
   gmail: {
     all: (orgId: string | null) => ['organizations', orgId, 'gmail'] as const,

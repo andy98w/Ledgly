@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { MembershipRole, MembershipStatus } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -27,6 +27,14 @@ interface MemberFilters {
 
 @Injectable()
 export class MembersService {
+  private static readonly ROLE_RANK: Record<string, number> = {
+    OWNER: 3, ADMIN: 2, TREASURER: 1, MEMBER: 0,
+  };
+
+  private getRank(role: string): number {
+    return MembersService.ROLE_RANK[role] ?? 0;
+  }
+
   constructor(
     private prisma: PrismaService,
     private auditService: AuditService,
@@ -165,6 +173,7 @@ export class MembersService {
         },
         chargesAssigned: {
           where: { status: { not: 'VOID' } },
+          take: 100,
           include: {
             allocations: {
               select: { id: true, amountCents: true, createdAt: true },
@@ -182,6 +191,7 @@ export class MembersService {
     // Get payments for this member
     const payments = await this.prisma.payment.findMany({
       where: { orgId, membershipId, deletedAt: null },
+      take: 100,
       include: {
         allocations: {
           include: {
@@ -254,7 +264,7 @@ export class MembersService {
 
   async createMany(orgId: string, members: CreateMemberDto[], actorId?: string, actorName?: string) {
     const created = [];
-    const isPrivilegedRole = (role?: MembershipRole) => role === 'ADMIN' || role === 'TREASURER';
+    const isPrivilegedRole = (role?: MembershipRole) => role === 'OWNER' || role === 'ADMIN' || role === 'TREASURER';
 
     // Get org name for invitation emails
     const org = await this.prisma.organization.findUnique({
@@ -432,20 +442,6 @@ export class MembersService {
     return { success: true };
   }
 
-  private async assertNotLastAdmin(orgId: string, membershipId: string) {
-    const member = await this.prisma.membership.findFirst({
-      where: { id: membershipId, orgId },
-    });
-    if (member?.role !== 'ADMIN') return;
-
-    const adminCount = await this.prisma.membership.count({
-      where: { orgId, role: 'ADMIN', status: 'ACTIVE' },
-    });
-    if (adminCount <= 1) {
-      throw new BadRequestException('Cannot remove or demote the last admin. Promote another member first.');
-    }
-  }
-
   async update(orgId: string, membershipId: string, dto: UpdateMemberDto, actorId?: string) {
     const member = await this.prisma.membership.findFirst({
       where: { id: membershipId, orgId },
@@ -460,11 +456,24 @@ export class MembersService {
       throw new BadRequestException('You cannot change your own role');
     }
 
-    // Guard: prevent demoting or removing the last admin
-    const isDemoting = dto.role && dto.role !== 'ADMIN' && member.role === 'ADMIN';
-    const isLeaving = dto.status === 'LEFT' && member.status === 'ACTIVE' && member.role === 'ADMIN';
-    if (isDemoting || isLeaving) {
-      await this.assertNotLastAdmin(orgId, membershipId);
+    // Guard: cannot change OWNER's role (must use transfer)
+    if (dto.role && member.role === 'OWNER' && dto.role !== 'OWNER') {
+      throw new BadRequestException('Cannot change the owner\'s role. Use transfer ownership instead.');
+    }
+
+    // Guard: cannot promote anyone to OWNER via update
+    if (dto.role === 'OWNER') {
+      throw new BadRequestException('Cannot promote to owner. Use transfer ownership instead.');
+    }
+
+    // Guard: hierarchy enforcement — non-OWNER actors cannot change role of equal/higher-rank members
+    if (actorId && dto.role && actorId !== membershipId) {
+      const actor = await this.prisma.membership.findFirst({
+        where: { id: actorId, orgId },
+      });
+      if (actor && actor.role !== 'OWNER' && this.getRank(member.role) >= this.getRank(actor.role)) {
+        throw new ForbiddenException('You cannot change the role of a member with equal or higher rank');
+      }
     }
 
     const updated = await this.prisma.membership.update({
@@ -523,9 +532,19 @@ export class MembersService {
       throw new NotFoundException('Member not found');
     }
 
-    // Guard: prevent removing the last admin
-    if (member.role === 'ADMIN') {
-      await this.assertNotLastAdmin(orgId, membershipId);
+    // Guard: OWNER cannot be removed (must transfer first)
+    if (member.role === 'OWNER') {
+      throw new BadRequestException('Cannot remove the owner. Transfer ownership first.');
+    }
+
+    // Guard: actor cannot remove member with equal/higher rank
+    if (actorId) {
+      const actor = await this.prisma.membership.findFirst({
+        where: { id: actorId, orgId },
+      });
+      if (actor && actor.role !== 'OWNER' && this.getRank(member.role) >= this.getRank(actor.role)) {
+        throw new ForbiddenException('You cannot remove a member with equal or higher rank');
+      }
     }
 
     // Soft delete - mark as left
@@ -547,24 +566,28 @@ export class MembersService {
     return { success: true };
   }
 
-  async bulkRemove(orgId: string, memberIds: string[], actorId: string) {
-    if (memberIds.length === 0) return { success: true, deletedCount: 0 };
+  async bulkRemove(orgId: string, memberIds: string[], actorId: string, batch?: BatchContext) {
+    if (memberIds.length === 0) return { success: true, deletedCount: 0, skipped: [] };
 
-    const batch = memberIds.length > 1
+    const effectiveBatch = batch ?? (memberIds.length > 1
       ? this.auditService.createBatchContext(`Removed ${memberIds.length} members`)
-      : undefined;
+      : undefined);
+
+    const results = await Promise.allSettled(
+      memberIds.map((memberId) => this.remove(orgId, memberId, actorId, effectiveBatch)),
+    );
 
     let deletedCount = 0;
-    for (const memberId of memberIds) {
-      try {
-        await this.remove(orgId, memberId, actorId, batch);
+    const skipped: Array<{ id: string; reason: string }> = [];
+    results.forEach((result, i) => {
+      if (result.status === 'fulfilled') {
         deletedCount++;
-      } catch {
-        // Skip not-found or protected members
+      } else {
+        skipped.push({ id: memberIds[i], reason: result.reason?.message || 'Unknown error' });
       }
-    }
+    });
 
-    return { success: true, deletedCount };
+    return { success: true, deletedCount, skipped };
   }
 
   async approve(orgId: string, membershipId: string, actorId?: string) {
@@ -613,6 +636,48 @@ export class MembersService {
         restored: true,
       });
     }
+
+    return { success: true };
+  }
+
+  async transferOwnership(orgId: string, targetId: string, actorId: string) {
+    const actor = await this.prisma.membership.findFirst({
+      where: { id: actorId, orgId, status: 'ACTIVE' },
+    });
+
+    if (!actor || actor.role !== 'OWNER') {
+      throw new ForbiddenException('Only the owner can transfer ownership');
+    }
+
+    const target = await this.prisma.membership.findFirst({
+      where: { id: targetId, orgId, status: 'ACTIVE' },
+    });
+
+    if (!target) {
+      throw new NotFoundException('Target member not found or not active');
+    }
+
+    if (target.id === actor.id) {
+      throw new BadRequestException('You are already the owner');
+    }
+
+    // Transaction: actor → ADMIN, target → OWNER
+    await this.prisma.$transaction([
+      this.prisma.membership.update({
+        where: { id: actor.id },
+        data: { role: 'ADMIN' },
+      }),
+      this.prisma.membership.update({
+        where: { id: target.id },
+        data: { role: 'OWNER' },
+      }),
+    ]);
+
+    // Audit log
+    await this.auditService.logUpdate(orgId, actorId, 'MEMBER', targetId,
+      { role: target.role },
+      { role: 'OWNER', transferredFrom: actorId },
+    );
 
     return { success: true };
   }

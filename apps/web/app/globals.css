@@ -64,47 +64,47 @@
   }
 
   .dark {
-    /* Neutral Dark Theme */
-    --background: 0 0% 7%;
+    /* Cool-tinted Dark Theme — inspired by Linear/Vercel */
+    --background: 222 16% 7%;
     --foreground: 210 40% 98%;
 
-    --card: 0 0% 12%;
+    --card: 220 14% 11%;
     --card-foreground: 210 40% 98%;
 
-    --popover: 0 0% 12%;
+    --popover: 220 14% 11%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 217 91% 60%;
-    --primary-foreground: 0 0% 7%;
+    --primary: 217 92% 62%;
+    --primary-foreground: 222 16% 7%;
 
-    --secondary: 0 0% 17%;
+    --secondary: 220 12% 16%;
     --secondary-foreground: 210 40% 98%;
 
-    --muted: 0 0% 14%;
-    --muted-foreground: 0 0% 45%;
+    --muted: 220 10% 13%;
+    --muted-foreground: 218 10% 55%;
 
-    --accent: 0 0% 17%;
+    --accent: 220 12% 16%;
     --accent-foreground: 210 40% 98%;
 
     --destructive: 350 89% 60%;
     --destructive-foreground: 210 40% 98%;
 
-    --success: 160 84% 39%;
+    --success: 160 84% 42%;
     --success-foreground: 210 40% 98%;
 
-    --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 7%;
+    --warning: 38 92% 52%;
+    --warning-foreground: 222 16% 7%;
 
-    --border: 0 0% 20%;
-    --input: 0 0% 20%;
-    --ring: 217 91% 60%;
+    --border: 220 10% 22%;
+    --input: 220 10% 22%;
+    --ring: 217 92% 62%;
 
     /* Layered shadows — dark */
-    --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.1);
-    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.15), 0 1px 4px -1px rgb(0 0 0 / 0.2);
-    --shadow-md: 0 2px 4px -1px rgb(0 0 0 / 0.2), 0 4px 8px -2px rgb(0 0 0 / 0.25);
-    --shadow-lg: 0 4px 8px -2px rgb(0 0 0 / 0.25), 0 8px 16px -4px rgb(0 0 0 / 0.3);
-    --shadow-xl: 0 8px 16px -4px rgb(0 0 0 / 0.3), 0 16px 32px -8px rgb(0 0 0 / 0.35);
+    --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.15);
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.2), 0 1px 4px -1px rgb(0 0 0 / 0.25);
+    --shadow-md: 0 2px 4px -1px rgb(0 0 0 / 0.25), 0 4px 8px -2px rgb(0 0 0 / 0.3);
+    --shadow-lg: 0 4px 8px -2px rgb(0 0 0 / 0.3), 0 8px 16px -4px rgb(0 0 0 / 0.35);
+    --shadow-xl: 0 8px 16px -4px rgb(0 0 0 / 0.35), 0 16px 32px -8px rgb(0 0 0 / 0.4);
   }
 }
 

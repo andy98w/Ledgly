@@ -125,7 +125,7 @@ export class OrganizationsController {
 
   @Delete(':orgId')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN')
+  @Roles('OWNER')
   async delete(@Param('orgId') orgId: string) {
     return this.organizationsService.delete(orgId);
   }

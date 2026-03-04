@@ -30,14 +30,16 @@ export class AuditController {
   async getAuditLogs(
     @Param('orgId') orgId: string,
     @Query('entityType') entityType?: string,
+    @Query('source') source?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
     @Query('cursor') cursor?: string,
   ) {
     return this.auditService.findByOrg(orgId, {
       entityType,
-      limit: limit ? parseInt(limit, 10) : 50,
-      offset: offset ? parseInt(offset, 10) : 0,
+      source,
+      limit: Math.min(Math.max(limit ? parseInt(limit, 10) || 50 : 50, 1), 200),
+      offset: Math.max(offset ? parseInt(offset, 10) || 0 : 0, 0),
       cursor,
     });
   }

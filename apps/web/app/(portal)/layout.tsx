@@ -43,7 +43,7 @@ export default function PortalLayout({
   useEffect(() => {
     if (!user || !currentOrgId) return;
     const membership = user.memberships.find((m) => m.orgId === currentOrgId);
-    if (membership && (membership.role === 'ADMIN' || membership.role === 'TREASURER')) {
+    if (membership && (membership.role === 'OWNER' || membership.role === 'ADMIN' || membership.role === 'TREASURER')) {
       router.push('/dashboard');
     }
   }, [user, currentOrgId, router]);
@@ -70,7 +70,7 @@ export default function PortalLayout({
   }
 
   const currentMembership = user.memberships.find((m) => m.orgId === currentOrgId);
-  if (currentMembership && (currentMembership.role === 'ADMIN' || currentMembership.role === 'TREASURER')) {
+  if (currentMembership && (currentMembership.role === 'OWNER' || currentMembership.role === 'ADMIN' || currentMembership.role === 'TREASURER')) {
     return null;
   }
 
@@ -117,7 +117,7 @@ export default function PortalLayout({
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{m.orgName}</p>
-                        <p className="text-xs text-muted-foreground">{m.role}</p>
+                        <p className="text-xs text-muted-foreground">{m.role === 'OWNER' ? 'Owner' : m.role === 'ADMIN' ? 'Admin' : m.role === 'TREASURER' ? 'Treasurer' : 'Member'}</p>
                       </div>
                       {m.orgId === currentOrgId && (
                         <Check className="h-4 w-4 text-primary" />

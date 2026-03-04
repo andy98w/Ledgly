@@ -32,7 +32,10 @@ export class RolesGuard implements CanActivate {
     // Skip DB query if membership was already resolved by a prior guard
     const existing = request.membership;
     if (existing && existing.orgId === orgId && existing.userId === user.userId && existing.status === 'ACTIVE') {
-      return requiredRoles.includes(existing.role);
+      const effectiveRoles: MembershipRole[] = existing.role === 'OWNER'
+        ? ['OWNER', 'ADMIN']
+        : [existing.role];
+      return requiredRoles.some(r => effectiveRoles.includes(r));
     }
 
     const membership = await this.prisma.membership.findFirst({
@@ -50,6 +53,10 @@ export class RolesGuard implements CanActivate {
     // Attach membership to request for use in controllers
     request.membership = membership;
 
-    return requiredRoles.includes(membership.role);
+    // OWNER implicitly has ADMIN privileges
+    const effectiveRoles: MembershipRole[] = membership.role === 'OWNER'
+      ? ['OWNER', 'ADMIN']
+      : [membership.role];
+    return requiredRoles.some(r => effectiveRoles.includes(r));
   }
 }

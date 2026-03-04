@@ -1,0 +1,203 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { api } from '@/lib/api';
+import { queryKeys } from '@/lib/query-keys';
+import { env } from '../env';
+
+const API_URL = env.NEXT_PUBLIC_API_URL;
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface ProposedAction {
+  id: string;
+  toolName: string;
+  args: Record<string, any>;
+  description: string;
+}
+
+export interface ActionResult {
+  toolName: string;
+  success: boolean;
+  message: string;
+  details?: any;
+  skipped?: Array<{ id: string; reason: string }>;
+}
+
+interface SSEEvent {
+  type: 'text' | 'tool_calls' | 'done' | 'error';
+  content?: string;
+  actions?: ProposedAction[];
+  message?: string;
+}
+
+// ── Session types ───────────────────────────────────────────
+
+export interface AgentSession {
+  id: string;
+  title: string;
+  messages: any;
+  createdAt: string;
+  updatedAt: string;
+  actor?: { id: string; name: string };
+}
+
+export interface AgentSessionSummary {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  actor?: { id: string; name: string };
+}
+
+export async function streamAgentChat(
+  orgId: string,
+  messages: ChatMessage[],
+  csvContent: string | undefined,
+  onTextChunk: (text: string) => void,
+  onToolCalls: (actions: ProposedAction[]) => void,
+  onDone: () => void,
+  onError: (error: string) => void,
+): Promise<void> {
+  const response = await fetch(`${API_URL}/organizations/${orgId}/agent/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ messages, csvContent }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ message: 'Request failed' }));
+    onError(err.message || `Error ${response.status}`);
+    return;
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) {
+    onError('No response stream');
+    return;
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const jsonStr = line.slice(6).trim();
+        if (!jsonStr) continue;
+
+        try {
+          const event: SSEEvent = JSON.parse(jsonStr);
+          switch (event.type) {
+            case 'text':
+              if (event.content) onTextChunk(event.content);
+              break;
+            case 'tool_calls':
+              if (event.actions) onToolCalls(event.actions);
+              break;
+            case 'done':
+              onDone();
+              return;
+            case 'error':
+              onError(event.message || 'Unknown error');
+              return;
+          }
+        } catch {
+          // Skip malformed JSON lines
+        }
+      }
+    }
+    onDone();
+  } catch (err: any) {
+    onError(err.message || 'Stream interrupted');
+  }
+}
+
+export async function confirmAgentActions(
+  orgId: string,
+  actions: Array<{ toolName: string; args: Record<string, any> }>,
+): Promise<ActionResult[]> {
+  const response = await fetch(`${API_URL}/organizations/${orgId}/agent/confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ actions }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ message: 'Confirm failed' }));
+    throw new Error(err.message);
+  }
+
+  return response.json();
+}
+
+// ── Session hooks ──────────────────────────────────────────
+
+export function useAgentSessions(orgId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.agentSessions.list(orgId),
+    queryFn: () =>
+      api.get<AgentSessionSummary[]>(`/organizations/${orgId}/agent/sessions`),
+    enabled: !!orgId,
+  });
+}
+
+export function useAgentSession(orgId: string | null, sessionId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.agentSessions.detail(orgId, sessionId),
+    queryFn: () =>
+      api.get<AgentSession>(`/organizations/${orgId}/agent/sessions/${sessionId}`),
+    enabled: !!orgId && !!sessionId,
+  });
+}
+
+export function useCreateAgentSession() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orgId }: { orgId: string }) =>
+      api.post<AgentSession>(`/organizations/${orgId}/agent/sessions`),
+    onSuccess: (_, { orgId }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.agentSessions.all(orgId) });
+    },
+  });
+}
+
+export function useUpdateAgentSession() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      orgId,
+      sessionId,
+      data,
+    }: {
+      orgId: string;
+      sessionId: string;
+      data: { messages?: any; title?: string };
+    }) => api.patch<AgentSession>(`/organizations/${orgId}/agent/sessions/${sessionId}`, data),
+    onSuccess: (_, { orgId }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.agentSessions.all(orgId) });
+    },
+  });
+}
+
+export function useDeleteAgentSession() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orgId, sessionId }: { orgId: string; sessionId: string }) =>
+      api.delete<{ success: boolean }>(`/organizations/${orgId}/agent/sessions/${sessionId}`),
+    onSuccess: (_, { orgId }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.agentSessions.all(orgId) });
+    },
+  });
+}

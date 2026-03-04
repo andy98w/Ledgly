@@ -1,12 +1,16 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useIsMutating } from '@tanstack/react-query';
 import { Sidebar } from '@/components/layout/sidebar';
 import { MobileNav } from '@/components/layout/mobile-nav';
 import { Header } from '@/components/layout/header';
-import { TourOverlay } from '@/components/tour/tour-overlay';
+import dynamic from 'next/dynamic';
+
+const TourOverlay = dynamic(() => import('@/components/tour/tour-overlay').then((m) => m.TourOverlay), {
+  ssr: false,
+});
 import { CommandPalette } from '@/components/command-palette';
 import { KeyboardShortcutsDialog } from '@/components/keyboard-shortcuts-dialog';
 import { useMe } from '@/lib/queries/auth';
@@ -22,6 +26,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { data: user, isLoading, error } = useMe();
   const setCurrentOrgId = useAuthStore((s) => s.setCurrentOrgId);
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
@@ -89,7 +94,11 @@ export default function DashboardLayout({
       <Sidebar />
       <Header />
       <main className={`pb-20 md:pb-0 transition-all duration-300 ${isCollapsed ? 'md:pl-[68px]' : 'md:pl-64'}`}>
-        <div className="container max-w-6xl py-8 px-4 md:px-8">{children}</div>
+        {pathname === '/agent' ? (
+          <div className="h-screen pt-6 px-2 md:px-4">{children}</div>
+        ) : (
+          <div className="container max-w-6xl py-8 px-4 md:px-8">{children}</div>
+        )}
       </main>
       <MobileNav />
       <TourOverlay />

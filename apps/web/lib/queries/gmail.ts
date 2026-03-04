@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { env } from '@/lib/env';
 import { queryKeys } from '@/lib/query-keys';
 
 export interface GmailStatus {
@@ -200,7 +201,7 @@ export function useDisconnectGmail() {
 }
 
 export function getGmailConnectUrl(orgId: string, returnTo?: string): string {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
+  const baseUrl = env.NEXT_PUBLIC_API_URL;
   const url = `${baseUrl}/gmail/connect/${orgId}`;
   if (returnTo) {
     return `${url}?returnTo=${encodeURIComponent(returnTo)}`;

@@ -52,7 +52,7 @@ export class AuthService {
     });
 
     // Send email
-    const webUrl = this.configService.get<string>('WEB_URL', 'http://localhost:3000');
+    const webUrl = this.configService.get<string>('WEB_URL');
     const magicLink = `${webUrl}/verify?token=${token}`;
 
     await this.emailService.sendMagicLink(normalizedEmail, magicLink);
@@ -464,7 +464,7 @@ export class AuthService {
       },
     });
 
-    const webUrl = this.configService.get<string>('WEB_URL', 'http://localhost:3000');
+    const webUrl = this.configService.get<string>('WEB_URL');
     const resetLink = `${webUrl}/reset-password?token=${token}`;
 
     await this.emailService.sendPasswordResetEmail(normalizedEmail, resetLink);

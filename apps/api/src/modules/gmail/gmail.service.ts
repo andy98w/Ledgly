@@ -157,7 +157,7 @@ export class GmailService {
     });
     await this.auditService.logCreate(orgId, adminMembership?.id, 'GMAIL_CONNECTION', connection.id, {
       email,
-    }).catch(() => {});
+    }).catch((err) => this.logger.warn(`Audit log failed: ${err.message}`));
 
     // Auto-sync after connecting (fire-and-forget so redirect isn't blocked)
     this.syncEmails(orgId).catch((err) => {
@@ -186,7 +186,7 @@ export class GmailService {
     if (connection) {
       await this.auditService.logDelete(orgId, actorId, 'GMAIL_CONNECTION', connection.id, {
         email: connection.email,
-      }).catch(() => {});
+      }).catch((err) => this.logger.warn(`Audit log failed: ${err.message}`));
     }
   }
 
@@ -271,7 +271,7 @@ export class GmailService {
       await this.prisma.auditLog.updateMany({
         where: { orgId, batchId: syncBatch.batchId },
         data: { batchDescription: `Gmail auto-import: ${autoConfirmed} item${autoConfirmed !== 1 ? 's' : ''}` },
-      }).catch(() => {});
+      }).catch((err) => this.logger.warn(`Audit log failed: ${err.message}`));
     }
 
     return { imported, skipped, autoConfirmed, needsReview };
@@ -557,7 +557,7 @@ export class GmailService {
       amountCents: expense.amountCents,
       title: expense.title,
       source: 'gmail_auto_import',
-    }, syncBatch).catch(() => {});
+    }, syncBatch).catch((err) => this.logger.warn(`Audit log failed: ${err.message}`));
 
     this.logger.log(
       `Auto-created expense of ${parsed.amount} cents to ${parsed.payerName} from ${parsed.source}`,
@@ -769,7 +769,7 @@ export class GmailService {
           paidAt: emailDate,
           rawPayerName: parsed.payerName,
           source: 'gmail_auto_import',
-        }, syncBatch).catch(() => {});
+        }, syncBatch).catch((err) => this.logger.warn(`Audit log failed: ${err.message}`));
       }
 
       this.logger.log(
@@ -1047,7 +1047,7 @@ export class GmailService {
         paidAt: payment.paidAt,
         rawPayerName: payment.rawPayerName,
         source: 'inbox_confirm',
-      }).catch(() => {});
+      }).catch((err) => this.logger.warn(`Audit log failed: ${err.message}`));
 
       return payment;
     } catch (error) {
@@ -1155,7 +1155,7 @@ export class GmailService {
       title: emailImport.parsedPayerName || 'Unknown',
       source: 'inbox_confirm',
       linked: !!options.linkToExpenseId,
-    }).catch(() => {});
+    }).catch((err) => this.logger.warn(`Audit log failed: ${err.message}`));
 
     return { expenseId };
   }

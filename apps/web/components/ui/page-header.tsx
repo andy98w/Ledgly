@@ -28,7 +28,7 @@ export function PageHeader({ title, helpText, actions }: PageHeaderProps) {
                   <Info className="w-4 h-4" />
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="right" className="max-w-xs">
+              <TooltipContent side="bottom" align="start" className="max-w-xs">
                 <p className="text-sm">{helpText}</p>
               </TooltipContent>
             </Tooltip>

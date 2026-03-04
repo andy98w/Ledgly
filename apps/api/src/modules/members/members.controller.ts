@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { IsString, IsEmail, IsOptional, IsEnum, IsArray, ValidateNested } from 'class-validator';
+import { IsString, IsEmail, IsOptional, IsEnum, IsArray, ValidateNested, ArrayMinSize, ArrayMaxSize } from 'class-validator';
 import { Type } from 'class-transformer';
 import { MembershipRole, MembershipStatus } from '@prisma/client';
 import { MembersService } from './members.service';
@@ -41,6 +41,14 @@ class UpdateMemberDto {
   status?: MembershipStatus;
 }
 
+class BulkMemberIdsDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(500)
+  @IsString({ each: true })
+  memberIds: string[];
+}
+
 class MemberFiltersDto {
   @IsOptional()
   status?: MembershipStatus;
@@ -76,9 +84,9 @@ export class MembersController {
 
   @Post('bulk-delete')
   @Roles('ADMIN')
-  async bulkDelete(@Param('orgId') orgId: string, @Body() body: { memberIds: string[] }, @Req() req: any) {
+  async bulkDelete(@Param('orgId') orgId: string, @Body() dto: BulkMemberIdsDto, @Req() req: any) {
     const actorId = req.membership.id;
-    return this.membersService.bulkRemove(orgId, body.memberIds, actorId);
+    return this.membersService.bulkRemove(orgId, dto.memberIds, actorId);
   }
 
   @Get('me')
@@ -137,5 +145,12 @@ export class MembersController {
   async restore(@Param('orgId') orgId: string, @Param('id') id: string, @Req() req: any) {
     const actorId = req.membership?.id;
     return this.membersService.restore(orgId, id, actorId);
+  }
+
+  @Post(':id/transfer-ownership')
+  @Roles('ADMIN')
+  async transferOwnership(@Param('orgId') orgId: string, @Param('id') id: string, @Req() req: any) {
+    const actorId = req.membership?.id;
+    return this.membersService.transferOwnership(orgId, id, actorId);
   }
 }

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { queryKeys } from '@/lib/query-keys';
 
 interface Notification {
   id: string;
@@ -22,25 +23,25 @@ export function useNotifications(orgId: string | null, options: { limit?: number
   const { limit = 20 } = options;
 
   return useQuery({
-    queryKey: ['notifications', orgId, { limit }],
+    queryKey: queryKeys.notifications.list(orgId, { limit }),
     queryFn: () =>
       api.get<NotificationsResponse>(
         `/organizations/${orgId}/notifications?limit=${limit}`,
       ),
     enabled: !!orgId,
-    refetchInterval: 30000,
+    refetchInterval: 60_000,
   });
 }
 
 export function useUnreadCount(orgId: string | null) {
   return useQuery({
-    queryKey: ['notifications', orgId, 'unread-count'],
+    queryKey: queryKeys.notifications.unreadCount(orgId),
     queryFn: () =>
       api.get<{ count: number }>(
         `/organizations/${orgId}/notifications/unread-count`,
       ),
     enabled: !!orgId,
-    refetchInterval: 30000,
+    refetchInterval: 60_000,
   });
 }
 
@@ -51,7 +52,7 @@ export function useMarkAsRead() {
     mutationFn: ({ orgId, notificationId }: { orgId: string; notificationId: string }) =>
       api.patch(`/organizations/${orgId}/notifications/${notificationId}/read`),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['notifications', variables.orgId] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all(variables.orgId) });
     },
   });
 }
@@ -65,7 +66,7 @@ export function useMarkAllAsRead() {
         `/organizations/${orgId}/notifications/read-all`,
       ),
     onSuccess: (_, orgId) => {
-      queryClient.invalidateQueries({ queryKey: ['notifications', orgId] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all(orgId) });
     },
   });
 }

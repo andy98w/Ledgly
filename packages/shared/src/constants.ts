@@ -1,4 +1,4 @@
-export const MEMBERSHIP_ROLES = ['ADMIN', 'TREASURER', 'MEMBER'] as const;
+export const MEMBERSHIP_ROLES = ['OWNER', 'ADMIN', 'TREASURER', 'MEMBER'] as const;
 export type MembershipRole = (typeof MEMBERSHIP_ROLES)[number];
 
 export const MEMBERSHIP_STATUSES = ['ACTIVE', 'INACTIVE', 'LEFT', 'INVITED', 'PENDING'] as const;
@@ -29,6 +29,7 @@ export const CHARGE_STATUS_LABELS: Record<ChargeStatus, string> = {
 };
 
 export const MEMBERSHIP_ROLE_LABELS: Record<MembershipRole, string> = {
+  OWNER: 'Owner',
   ADMIN: 'Admin',
   TREASURER: 'Treasurer',
   MEMBER: 'Member',

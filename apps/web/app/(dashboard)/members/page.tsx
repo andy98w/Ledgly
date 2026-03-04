@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { Plus, Search, Users, AlertCircle, MoreHorizontal, Pencil, Trash2, ArrowUp, ArrowDown, Circle, CheckCircle2, Mail, Clock, Upload, MoreVertical, FileSpreadsheet, FileText } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import { useMembers, useCreateMembers, useUpdateMember, useDeleteMember, useRestoreMember, useResendInvitation, useBulkDeleteMembers, useApproveMember } from '@/lib/queries/members';
-import { useAuthStore, useIsAdminOrTreasurer, useCurrentMembership } from '@/lib/stores/auth';
+import { useAuthStore, useIsAdminOrTreasurer, useIsOwner, useCurrentMembership } from '@/lib/stores/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -56,6 +56,8 @@ const MEMBER_IMPORT_FIELDS: ImportField[] = [
   { key: 'role', label: 'Role', required: false, aliases: ['member role', 'type'] },
 ];
 
+const ROLE_RANK: Record<string, number> = { OWNER: 3, ADMIN: 2, TREASURER: 1, MEMBER: 0 };
+
 const MemberCard = memo(function MemberCard({
   member,
   index,
@@ -64,6 +66,7 @@ const MemberCard = memo(function MemberCard({
   onResendInvitation,
   onApprove,
   isAdmin,
+  actorRole,
   isSelf,
   isSelected,
   onToggleSelect,
@@ -75,6 +78,7 @@ const MemberCard = memo(function MemberCard({
   onResendInvitation?: (member: MemberWithBalance) => void;
   onApprove?: (member: MemberWithBalance) => void;
   isAdmin: boolean;
+  actorRole?: string;
   isSelf?: boolean;
   isSelected?: boolean;
   onToggleSelect?: () => void;
@@ -84,6 +88,10 @@ const MemberCard = memo(function MemberCard({
   const isInvited = member.status === 'INVITED';
   const isPending = member.status === 'PENDING';
   const isExpiredInvite = isInvited && member.inviteExpired;
+  // Actor can manage this member if they outrank them (or are OWNER)
+  const canManage = isAdmin && !isSelf && (
+    actorRole === 'OWNER' || (ROLE_RANK[actorRole ?? ''] ?? 0) > (ROLE_RANK[member.role] ?? 0)
+  );
 
   return (
     <MotionCard className="cursor-pointer">
@@ -115,10 +123,10 @@ const MemberCard = memo(function MemberCard({
                 </p>
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
                   <Badge
-                    variant={member.role === 'ADMIN' ? 'default' : member.role === 'TREASURER' ? 'secondary' : 'outline'}
+                    variant={member.role === 'OWNER' ? 'default' : member.role === 'ADMIN' ? 'default' : member.role === 'TREASURER' ? 'secondary' : 'outline'}
                     className="text-xs"
                   >
-                    {member.role === 'ADMIN' ? 'Admin' : member.role === 'TREASURER' ? 'Treasurer' : 'Member'}
+                    {member.role === 'OWNER' ? 'Owner' : member.role === 'ADMIN' ? 'Admin' : member.role === 'TREASURER' ? 'Treasurer' : 'Member'}
                   </Badge>
                   {isExpiredInvite ? (
                     <Badge variant="destructive" className="text-xs">
@@ -171,7 +179,7 @@ const MemberCard = memo(function MemberCard({
                   Approve
                 </Button>
               )}
-              {isAdmin && !isSelf ? (
+              {canManage ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Member actions">
@@ -243,7 +251,11 @@ function EditMemberDialog({
   const [role, setRole] = useState(member?.role || 'MEMBER');
   const { toast } = useToast();
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
+  const currentMembership = useCurrentMembership();
   const updateMember = useUpdateMember();
+  const actorRank = ROLE_RANK[currentMembership?.role ?? ''] ?? 0;
+  const targetRank = ROLE_RANK[member?.role ?? ''] ?? 0;
+  const canEditRole = currentMembership?.role === 'OWNER' || actorRank > targetRank;
 
   // Reset form when member changes
   useEffect(() => {
@@ -331,7 +343,7 @@ function EditMemberDialog({
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-role" className="text-sm font-medium">Role</Label>
-              <Select value={role} onValueChange={(v) => setRole(v as 'ADMIN' | 'TREASURER' | 'MEMBER')}>
+              <Select value={role} onValueChange={(v) => setRole(v as 'ADMIN' | 'TREASURER' | 'MEMBER')} disabled={!canEditRole}>
                 <SelectTrigger className="h-11 bg-secondary/50 border-border/50">
                   <SelectValue />
                 </SelectTrigger>
@@ -517,6 +529,7 @@ export default function MembersPage() {
   const { toast } = useToast();
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
   const isAdmin = useIsAdminOrTreasurer();
+  const isOwner = useIsOwner();
   const currentMembership = useCurrentMembership();
   const { data, isLoading } = useMembers(currentOrgId, { search });
   const deleteMember = useDeleteMember();
@@ -533,7 +546,7 @@ export default function MembersPage() {
       .map((r) => ({
         name: r.name.trim(),
         email: r.email?.trim() || undefined,
-        role: r.role?.trim()?.toUpperCase() === 'ADMIN' ? 'ADMIN' : 'MEMBER',
+        role: (() => { const upper = r.role?.trim()?.toUpperCase(); return upper === 'ADMIN' || upper === 'OWNER' ? 'ADMIN' : upper === 'TREASURER' ? 'TREASURER' : 'MEMBER'; })(),
       }));
     if (members.length === 0) throw new Error('No valid members found');
     const result = await createMembersForImport.mutateAsync({ orgId: currentOrgId, members });
@@ -864,6 +877,7 @@ export default function MembersPage() {
                 onResendInvitation={handleResendInvitation}
                 onApprove={handleApprove}
                 isAdmin={isAdmin}
+                actorRole={currentMembership?.role}
                 isSelf={member.id === currentMembership?.id}
                 isSelected={selectedRows.has(member.id)}
                 onToggleSelect={() => toggleRowSelection(member.id)}

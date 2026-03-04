@@ -3,11 +3,12 @@
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { Moon, Sun, Monitor, User, Building2, Shield, Loader2, Camera, Plus, AlertTriangle, Mail, GraduationCap, KeyRound, Eye, EyeOff, Link2, Copy, Check, RefreshCw } from 'lucide-react';
-import { useAuthStore } from '@/lib/stores/auth';
+import { Moon, Sun, Monitor, User, Building2, Shield, Loader2, Camera, Plus, AlertTriangle, Mail, GraduationCap, KeyRound, Eye, EyeOff, Link2, Copy, Check, RefreshCw, ArrowRightLeft } from 'lucide-react';
+import { useAuthStore, useIsOwner } from '@/lib/stores/auth';
 import { useTutorialStore } from '@/lib/stores/tutorial';
 import { useUpdateProfile, useChangePassword } from '@/lib/queries/auth';
 import { useCreateOrganization, useDeleteOrganization, useOrganization, useUpdateOrganization, useGenerateJoinCode, useDisableJoinCode, useUpdateJoinCodeSettings } from '@/lib/queries/organizations';
+import { useMembers, useTransferOwnership } from '@/lib/queries/members';
 import { uploadAvatar } from '@/lib/supabase';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
@@ -15,6 +16,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { AvatarGradient } from '@/components/ui/avatar-gradient';
 import { MotionCard, MotionCardContent, MotionCardHeader, MotionCardTitle } from '@/components/ui/motion-card';
@@ -67,12 +75,39 @@ export default function SettingsPage() {
   const [showNewPw, setShowNewPw] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
+  const [showTransferDialog, setShowTransferDialog] = useState(false);
+  const [transferTargetId, setTransferTargetId] = useState<string | null>(null);
 
   const generateJoinCode = useGenerateJoinCode(currentOrgId ?? null);
   const disableJoinCode = useDisableJoinCode(currentOrgId ?? null);
   const updateJoinCodeSettings = useUpdateJoinCodeSettings(currentOrgId ?? null);
+  const isOwner = useIsOwner();
+  const transferOwnership = useTransferOwnership();
+  const { data: membersData } = useMembers(isOwner ? currentOrgId : null);
+  const isAdminRole = currentOrg?.role === 'OWNER' || currentOrg?.role === 'ADMIN';
 
   const hasChanges = name !== (user?.name || '');
+
+  const handleTransferOwnership = () => {
+    if (!currentOrgId || !transferTargetId) return;
+    transferOwnership.mutate(
+      { orgId: currentOrgId, memberId: transferTargetId },
+      {
+        onSuccess: () => {
+          toast({ title: 'Ownership transferred' });
+          setShowTransferDialog(false);
+          setTransferTargetId(null);
+        },
+        onError: (error: any) => {
+          toast({
+            title: 'Error',
+            description: error.message || 'Failed to transfer ownership',
+            variant: 'destructive',
+          });
+        },
+      },
+    );
+  };
 
   const handleCreateOrg = () => {
     if (!newOrgName.trim()) {
@@ -436,7 +471,12 @@ export default function SettingsPage() {
                     <div>
                       <p className="font-medium">{currentOrg.orgName}</p>
                       <div className="flex items-center gap-2 mt-1">
-                        {currentOrg.role === 'ADMIN' ? (
+                        {currentOrg.role === 'OWNER' ? (
+                          <Badge variant="outline" className="text-xs border-primary/50 text-primary">
+                            <Shield className="h-3 w-3 mr-1" />
+                            Owner
+                          </Badge>
+                        ) : currentOrg.role === 'ADMIN' ? (
                           <Badge variant="outline" className="text-xs border-primary/50 text-primary">
                             <Shield className="h-3 w-3 mr-1" />
                             Admin
@@ -481,8 +521,8 @@ export default function SettingsPage() {
         </MotionCard>
       </FadeIn>
 
-      {/* Join Code Section — admin only */}
-      {currentOrg?.role === 'ADMIN' && (
+      {/* Join Code Section — admin/owner only */}
+      {isAdminRole && (
         <FadeIn delay={0.35}>
           <MotionCard hover={false}>
             <MotionCardHeader>
@@ -632,8 +672,8 @@ export default function SettingsPage() {
         </FadeIn>
       )}
 
-      {/* Gmail Sync Section — admin only */}
-      {currentOrg?.role === 'ADMIN' && (
+      {/* Gmail Sync Section — admin/owner only */}
+      {isAdminRole && (
         <FadeIn delay={0.45}>
           <MotionCard hover={false}>
             <MotionCardHeader>
@@ -681,8 +721,37 @@ export default function SettingsPage() {
         </FadeIn>
       )}
 
-      {/* Danger Zone — admin only */}
-      {currentOrg?.role === 'ADMIN' && (
+      {/* Transfer Ownership — owner only */}
+      {isOwner && (
+        <FadeIn delay={0.5}>
+          <MotionCard hover={false}>
+            <MotionCardHeader>
+              <MotionCardTitle className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <ArrowRightLeft className="h-4 w-4 text-primary" />
+                </div>
+                Transfer Ownership
+              </MotionCardTitle>
+            </MotionCardHeader>
+            <MotionCardContent>
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">Transfer to another member</p>
+                  <p className="text-xs text-muted-foreground">
+                    The new owner will have full control. You will become an Admin.
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => setShowTransferDialog(true)}>
+                  Transfer
+                </Button>
+              </div>
+            </MotionCardContent>
+          </MotionCard>
+        </FadeIn>
+      )}
+
+      {/* Danger Zone — owner only */}
+      {isOwner && (
         <FadeIn delay={0.5}>
           <MotionCard hover={false} className="border-destructive/30">
             <MotionCardHeader>
@@ -698,7 +767,7 @@ export default function SettingsPage() {
                 <div className="space-y-1">
                   <p className="text-sm font-medium">Delete Organization</p>
                   <p className="text-xs text-muted-foreground">
-                    Permanently delete {currentOrg.orgName} and all its data
+                    Permanently delete {currentOrg?.orgName} and all its data
                   </p>
                 </div>
                 <Button
@@ -845,6 +914,66 @@ export default function SettingsPage() {
                 </>
               ) : (
                 user?.hasPassword ? 'Change Password' : 'Set Password'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Transfer Ownership Dialog */}
+      <Dialog open={showTransferDialog} onOpenChange={(open) => {
+        setShowTransferDialog(open);
+        if (!open) setTransferTargetId(null);
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Transfer Ownership</DialogTitle>
+            <DialogDescription>
+              Select a member to transfer ownership to. You will become an Admin.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <div className="space-y-2">
+              <Label>Select new owner</Label>
+              <Select value={transferTargetId ?? ''} onValueChange={setTransferTargetId}>
+                <SelectTrigger className="h-11 bg-secondary/30 border-border/50">
+                  <SelectValue placeholder="Choose a member..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {(membersData?.data ?? [])
+                    .filter((m) => m.status === 'ACTIVE' && m.role !== 'OWNER')
+                    .map((m) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        {m.displayName} ({m.role})
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/30">
+              <p className="text-sm text-destructive font-medium">
+                This action cannot be easily undone
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                The new owner will need to transfer ownership back to you if you want it returned.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowTransferDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleTransferOwnership}
+              disabled={transferOwnership.isPending || !transferTargetId}
+            >
+              {transferOwnership.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Transferring...
+                </>
+              ) : (
+                'Transfer Ownership'
               )}
             </Button>
           </DialogFooter>

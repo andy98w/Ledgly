@@ -22,8 +22,10 @@ import {
   Loader2,
   PanelLeftClose,
   PanelLeft,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { MEMBERSHIP_ROLE_LABELS } from '@ledgly/shared';
 import { useAuthStore } from '@/lib/stores/auth';
 import { useSidebarStore } from '@/lib/stores/sidebar';
 import { useLogout } from '@/lib/queries/auth';
@@ -59,6 +61,7 @@ const navItems: Array<{
 }> = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/spreadsheet', label: 'Spreadsheet', icon: Table2 },
+  { href: '/agent', label: 'LedgelyAI', icon: Sparkles },
   { href: '/members', label: 'Members', icon: Users },
   { href: '/charges', label: 'Charges', icon: Receipt },
   { href: '/expenses', label: 'Expenses', icon: TrendingDown },
@@ -176,7 +179,7 @@ export function Sidebar() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{currentOrg.orgName}</p>
-                      <p className="text-xs text-muted-foreground">{currentOrg.role}</p>
+                      <p className="text-xs text-muted-foreground">{MEMBERSHIP_ROLE_LABELS[currentOrg.role as keyof typeof MEMBERSHIP_ROLE_LABELS] || currentOrg.role}</p>
                     </div>
                     <ChevronDown className="h-4 w-4 text-muted-foreground" />
                   </button>
@@ -194,7 +197,7 @@ export function Sidebar() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{org.orgName}</p>
-                      <p className="text-xs text-muted-foreground">{org.role}</p>
+                      <p className="text-xs text-muted-foreground">{MEMBERSHIP_ROLE_LABELS[org.role as keyof typeof MEMBERSHIP_ROLE_LABELS] || org.role}</p>
                     </div>
                     {org.orgId === currentOrgId && (
                       <Check className="h-4 w-4 text-primary" />

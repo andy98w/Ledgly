@@ -20,16 +20,6 @@ export function formatDate(date: Date | string): string {
   }).format(new Date(date));
 }
 
-export function formatDateTime(date: Date | string): string {
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(date));
-}
-
 export function formatRelativeDate(date: Date | string): string {
   const now = new Date();
   const d = new Date(date);

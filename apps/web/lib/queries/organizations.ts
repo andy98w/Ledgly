@@ -77,7 +77,7 @@ export function useDashboard(orgId: string | null) {
     queryKey: ['organizations', orgId, 'dashboard'],
     queryFn: () => api.get<DashboardStats>(`/organizations/${orgId}/dashboard`),
     enabled: !!orgId,
-    refetchInterval: 30000,
+    refetchInterval: 60_000,
   });
 }
 

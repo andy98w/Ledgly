@@ -508,16 +508,11 @@ export class PaymentsService {
       ? this.auditService.createBatchContext(`Deleted ${paymentIds.length} payments`)
       : undefined;
 
-    let deletedCount = 0;
-    for (const paymentId of paymentIds) {
-      try {
-        await this.delete(orgId, paymentId, actorId, batch);
-        deletedCount++;
-      } catch {
-        // Skip not-found payments
-      }
-    }
+    const results = await Promise.allSettled(
+      paymentIds.map((paymentId) => this.delete(orgId, paymentId, actorId, batch)),
+    );
 
+    const deletedCount = results.filter((r) => r.status === 'fulfilled').length;
     return { success: true, deletedCount };
   }
 
@@ -666,16 +661,11 @@ export class PaymentsService {
       ? this.auditService.createBatchContext(`Removed ${allocationIds.length} allocations`)
       : undefined;
 
-    let removedCount = 0;
-    for (const allocationId of allocationIds) {
-      try {
-        await this.removeAllocation(orgId, allocationId, actorId, batch);
-        removedCount++;
-      } catch {
-        // Skip not-found allocations
-      }
-    }
+    const results = await Promise.allSettled(
+      allocationIds.map((allocationId) => this.removeAllocation(orgId, allocationId, actorId, batch)),
+    );
 
+    const removedCount = results.filter((r) => r.status === 'fulfilled').length;
     return { success: true, removedCount };
   }
 

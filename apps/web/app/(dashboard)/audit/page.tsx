@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { History, Receipt, CreditCard, Users, TrendingDown, Building2, Link2, Filter, Undo2, Redo2, Loader2, ChevronDown, ChevronRight, Search } from 'lucide-react';
+import { History, Receipt, CreditCard, Users, TrendingDown, Building2, Link2, Filter, Undo2, Redo2, Loader2, ChevronDown, ChevronRight, Search, Sparkles } from 'lucide-react';
 import { useAuditLogs, useUndoAuditLog, useUndoBatch, useRedoAuditLog, useRedoBatch, type AuditLogEntry, type BatchedAuditLogEntry, type AuditLogItem } from '@/lib/queries/audit';
 import { useAuthStore, useIsAdminOrTreasurer } from '@/lib/stores/auth';
 import { formatRelativeDate } from '@/lib/utils';
@@ -306,6 +306,12 @@ function AuditLogCard({
                 <Badge variant="outline" className={cn('text-xs', actionColors[displayAction] || actionColors[log.action])}>
                   {displayAction}
                 </Badge>
+                {log.source === 'AI_AGENT' && (
+                  <Badge variant="outline" className="text-xs bg-violet-500/10 text-violet-500 border-violet-500/30 gap-1">
+                    <Sparkles className="h-3 w-3" />
+                    AI
+                  </Badge>
+                )}
                 {(log.diffJson?.new?.source === 'gmail_auto_import' || log.diffJson?.new?.source === 'auto_confirm') && (
                   <Badge variant="outline" className="text-xs bg-cyan-500/10 text-cyan-500 border-cyan-500/30">
                     Auto-Import
@@ -395,6 +401,12 @@ function BatchAuditLogCard({
                 <Badge variant="secondary" className="text-xs">
                   {batch.itemCount} {(entityTypeLabels[batch.entityType] || batch.entityType).toLowerCase()}{batch.itemCount !== 1 ? 's' : ''}
                 </Badge>
+                {batch.source === 'AI_AGENT' && (
+                  <Badge variant="outline" className="text-xs bg-violet-500/10 text-violet-500 border-violet-500/30 gap-1">
+                    <Sparkles className="h-3 w-3" />
+                    AI
+                  </Badge>
+                )}
                 {batch.batchDescription?.includes('auto-import') && (
                   <Badge variant="outline" className="text-xs bg-cyan-500/10 text-cyan-500 border-cyan-500/30">
                     Auto-Import
@@ -543,6 +555,7 @@ function AuditLogSkeleton() {
 
 export default function AuditLogPage() {
   const [entityTypeFilter, setEntityTypeFilter] = useState<string>('all');
+  const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -553,6 +566,7 @@ export default function AuditLogPage() {
 
   const { data, isLoading } = useAuditLogs(currentOrgId, {
     entityType: entityTypeFilter !== 'all' ? entityTypeFilter : undefined,
+    source: sourceFilter !== 'all' ? sourceFilter : undefined,
     limit: 100,
   });
 
@@ -581,6 +595,11 @@ export default function AuditLogPage() {
   // Reset page when filter changes
   const handleFilterChange = (value: string) => {
     setEntityTypeFilter(value);
+    setPage(1);
+  };
+
+  const handleSourceFilterChange = (value: string) => {
+    setSourceFilter(value);
     setPage(1);
   };
 
@@ -686,6 +705,16 @@ export default function AuditLogPage() {
                 <SelectItem value="MEMBER">Members</SelectItem>
                 <SelectItem value="ORGANIZATION">Organization</SelectItem>
                 <SelectItem value="ALLOCATION">Allocations</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={sourceFilter} onValueChange={handleSourceFilterChange}>
+              <SelectTrigger className="w-[130px] h-8 bg-secondary/30 border-border/50 text-xs">
+                <SelectValue placeholder="All Sources" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Sources</SelectItem>
+                <SelectItem value="AI_AGENT">AI Agent</SelectItem>
+                <SelectItem value="MANUAL">Manual</SelectItem>
               </SelectContent>
             </Select>
           </div>

@@ -1,36 +1,40 @@
 import { createClient } from '@supabase/supabase-js';
+import { env } from '@/lib/env';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL ?? '';
+const supabaseAnonKey = env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = supabaseUrl && supabaseAnonKey
+  ? createClient(supabaseUrl, supabaseAnonKey)
+  : null;
 
 /**
  * Resize an image file to a max dimension and return a data URL.
  * Falls back to Supabase storage if available.
  */
 export async function uploadAvatar(file: File, userId: string): Promise<string> {
-  // First try Supabase storage
-  try {
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${userId}-${Date.now()}.${fileExt}`;
+  // First try Supabase storage (if configured)
+  if (supabase) {
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${userId}-${Date.now()}.${fileExt}`;
 
-    const { error: uploadError } = await supabase.storage
-      .from('profile_pictures')
-      .upload(fileName, file, {
-        cacheControl: '3600',
-        upsert: true,
-      });
+      const { error: uploadError } = await supabase.storage
+        .from('profile_pictures')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: true,
+        });
 
-    if (!uploadError) {
-      const { data } = supabase.storage.from('profile_pictures').getPublicUrl(fileName);
-      return data.publicUrl;
+      if (!uploadError) {
+        const { data } = supabase.storage.from('profile_pictures').getPublicUrl(fileName);
+        return data.publicUrl;
+      }
+
+      console.warn('Supabase storage upload failed, using data URL fallback:', uploadError.message);
+    } catch {
+      console.warn('Supabase storage unavailable, using data URL fallback');
     }
-
-    // If Supabase storage fails, fall back to data URL
-    console.warn('Supabase storage upload failed, using data URL fallback:', uploadError.message);
-  } catch {
-    console.warn('Supabase storage unavailable, using data URL fallback');
   }
 
   // Fallback: resize image and convert to data URL

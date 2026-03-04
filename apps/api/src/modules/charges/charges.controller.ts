@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { IsString, IsArray, IsEnum, IsNumber, IsOptional, IsInt, Min, Max, ValidateNested, ArrayMinSize } from 'class-validator';
+import { IsString, IsArray, IsEnum, IsOptional, IsInt, Min, Max, ValidateNested, ArrayMinSize, ArrayMaxSize } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ChargeCategory, ChargeStatus } from '@prisma/client';
 import { ChargesService } from './charges.service';
@@ -71,9 +71,18 @@ class BulkCreateChargeItemDto {
 class BulkCreateChargeDto {
   @IsArray()
   @ArrayMinSize(1)
+  @ArrayMaxSize(500)
   @ValidateNested({ each: true })
   @Type(() => BulkCreateChargeItemDto)
   charges: BulkCreateChargeItemDto[];
+}
+
+class BulkChargeIdsDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(500)
+  @IsString({ each: true })
+  chargeIds: string[];
 }
 
 class ChargeFiltersDto {
@@ -157,9 +166,9 @@ export class ChargesController {
 
   @Post('bulk-void')
   @Roles('ADMIN', 'TREASURER')
-  async bulkVoid(@Param('orgId') orgId: string, @Body() body: { chargeIds: string[] }, @Req() req: any) {
+  async bulkVoid(@Param('orgId') orgId: string, @Body() dto: BulkChargeIdsDto, @Req() req: any) {
     const actorId = req.membership.id;
-    return this.chargesService.bulkVoid(orgId, body.chargeIds, actorId);
+    return this.chargesService.bulkVoid(orgId, dto.chargeIds, actorId);
   }
 
   @Post(':id/restore')
@@ -171,7 +180,7 @@ export class ChargesController {
 
   @Post('remind')
   @Roles('ADMIN', 'TREASURER')
-  async sendReminders(@Param('orgId') orgId: string, @Body() body: { chargeIds: string[] }) {
-    return this.chargesService.sendReminders(orgId, body.chargeIds);
+  async sendReminders(@Param('orgId') orgId: string, @Body() dto: BulkChargeIdsDto) {
+    return this.chargesService.sendReminders(orgId, dto.chargeIds);
   }
 }

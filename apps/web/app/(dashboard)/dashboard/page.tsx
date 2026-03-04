@@ -16,8 +16,16 @@ import { PageHeader } from '@/components/ui/page-header';
 import { Alert } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { EmptyState } from '@/components/ui/empty-state';
-import { RevenueChart } from '@/components/charts/revenue-chart';
-import { ExpenseChart } from '@/components/charts/expense-chart';
+import dynamic from 'next/dynamic';
+
+const RevenueChart = dynamic(() => import('@/components/charts/revenue-chart').then((m) => m.RevenueChart), {
+  ssr: false,
+  loading: () => <Skeleton className="h-[300px] w-full rounded-xl" />,
+});
+const ExpenseChart = dynamic(() => import('@/components/charts/expense-chart').then((m) => m.ExpenseChart), {
+  ssr: false,
+  loading: () => <Skeleton className="h-[300px] w-full rounded-xl" />,
+});
 
 function StatCardSkeleton() {
   return (

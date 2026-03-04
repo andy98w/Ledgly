@@ -11,11 +11,13 @@ export interface CreateAuditLogDto {
   diffJson?: Record<string, any>;
   batchId?: string;
   batchDescription?: string;
+  source?: string;
 }
 
 export interface BatchContext {
   batchId: string;
   batchDescription: string;
+  source?: string;
 }
 
 @Injectable()
@@ -33,6 +35,7 @@ export class AuditService {
         diffJson: data.diffJson,
         batchId: data.batchId,
         batchDescription: data.batchDescription,
+        source: data.source,
       },
     });
   }
@@ -44,10 +47,11 @@ export class AuditService {
   }
 
   // Create a batch context for grouping multiple audit logs
-  createBatchContext(description: string): BatchContext {
+  createBatchContext(description: string, source?: string): BatchContext {
     return {
       batchId: randomBytes(8).toString('hex'),
       batchDescription: description,
+      source,
     };
   }
 
@@ -55,17 +59,20 @@ export class AuditService {
     orgId: string,
     options: {
       entityType?: string;
+      source?: string;
       limit?: number;
       offset?: number;
       cursor?: string;
       groupByBatch?: boolean;
     } = {},
   ) {
-    const { entityType, limit = 50, offset = 0, cursor, groupByBatch = true } = options;
+    const { entityType, source, limit = 50, offset = 0, cursor, groupByBatch = true } = options;
 
     const whereClause = {
       orgId,
       ...(entityType && { entityType }),
+      ...(source === 'AI_AGENT' && { source: 'AI_AGENT' }),
+      ...(source === 'MANUAL' && { source: null }),
     };
 
     const includeOpts = {
@@ -96,7 +103,7 @@ export class AuditService {
       const formattedData = data.map((log) => ({
         id: log.id, entityType: log.entityType, entityId: log.entityId, action: log.action,
         diffJson: log.diffJson, batchId: log.batchId, batchDescription: log.batchDescription,
-        undone: log.undone, undoneAt: log.undoneAt, createdAt: log.createdAt,
+        undone: log.undone, undoneAt: log.undoneAt, source: log.source, createdAt: log.createdAt,
         actor: log.actor ? { id: log.actor.id, name: log.actor.name || log.actor.user?.name || log.actor.user?.email || 'Unknown' } : null,
       }));
 
@@ -131,6 +138,7 @@ export class AuditService {
       batchDescription: log.batchDescription,
       undone: log.undone,
       undoneAt: log.undoneAt,
+      source: log.source,
       createdAt: log.createdAt,
       actor: log.actor ? {
         id: log.actor.id,
@@ -163,6 +171,7 @@ export class AuditService {
         entityType: logs[0]?.entityType || 'BATCH',
         action: logs[0]?.action || 'BATCH',
         undone: logs.every(l => l.undone),
+        source: logs[0]?.source,
         createdAt: logs[0]?.createdAt,
         actor: logs[0]?.actor,
         items: logs,

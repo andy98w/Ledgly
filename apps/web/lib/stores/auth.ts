@@ -40,10 +40,16 @@ export function useCurrentRole() {
   return membership?.role ?? null;
 }
 
-/** Convenience: true if role is ADMIN or TREASURER */
+/** Convenience: true if role is OWNER, ADMIN, or TREASURER */
 export function useIsAdminOrTreasurer() {
   const role = useCurrentRole();
-  return role === 'ADMIN' || role === 'TREASURER';
+  return role === 'OWNER' || role === 'ADMIN' || role === 'TREASURER';
+}
+
+/** Convenience: true if role is OWNER */
+export function useIsOwner() {
+  const role = useCurrentRole();
+  return role === 'OWNER';
 }
 
 /** Returns the user's membership in the current org */

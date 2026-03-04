@@ -16,7 +16,7 @@ export class EmailService {
 
   async sendAdminInvitation(email: string, orgName: string, inviterName: string, inviteToken?: string): Promise<void> {
     const from = this.configService.get<string>('EMAIL_FROM', 'Ledgly <noreply@ledgly.app>');
-    const webUrl = this.configService.get<string>('WEB_URL', 'http://localhost:3000');
+    const webUrl = this.configService.get<string>('WEB_URL');
     const registerUrl = inviteToken
       ? `${webUrl}/register?invite=${inviteToken}`
       : `${webUrl}/register?email=${encodeURIComponent(email)}`;

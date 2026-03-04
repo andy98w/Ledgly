@@ -76,7 +76,7 @@ function VerifyContent() {
               key={m.id}
               onClick={() => {
                 setCurrentOrgId(m.orgId);
-                const dest = (m.role === 'ADMIN' || m.role === 'TREASURER') ? '/dashboard' : '/portal';
+                const dest = (m.role === 'OWNER' || m.role === 'ADMIN' || m.role === 'TREASURER') ? '/dashboard' : '/portal';
                 router.push(dest);
               }}
               className="w-full flex items-center justify-between p-4 rounded-xl border border-border/50 bg-secondary/30 hover:bg-secondary/60 hover:border-border transition-all group"
@@ -87,9 +87,9 @@ function VerifyContent() {
                 </div>
                 <div>
                   <p className="font-medium">{m.orgName}</p>
-                  <Badge variant={m.role === 'ADMIN' ? 'outline' : 'secondary'} className="text-xs mt-1">
-                    {m.role === 'ADMIN' && <Shield className="h-3 w-3 mr-1" />}
-                    {m.role}
+                  <Badge variant={m.role === 'OWNER' || m.role === 'ADMIN' ? 'outline' : 'secondary'} className="text-xs mt-1">
+                    {(m.role === 'OWNER' || m.role === 'ADMIN') && <Shield className="h-3 w-3 mr-1" />}
+                    {m.role === 'OWNER' ? 'Owner' : m.role === 'ADMIN' ? 'Admin' : m.role === 'TREASURER' ? 'Treasurer' : 'Member'}
                   </Badge>
                 </div>
               </div>

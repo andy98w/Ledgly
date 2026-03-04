@@ -9,10 +9,13 @@ import {
   Res,
   Req,
   UseGuards,
+  ForbiddenException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
 import { IsString, IsOptional } from 'class-validator';
+import { PrismaService } from '../../prisma/prisma.service';
 import { Roles } from '../../common/decorators';
 import { RolesGuard } from '../../common/guards';
 import { GmailService } from './gmail.service';
@@ -32,30 +35,45 @@ class ConfirmExpenseImportDto {
   createNew?: boolean;
 }
 
-// Public routes for OAuth flow (no auth required - browser redirects)
+// OAuth flow routes — connect requires auth, callback must be public (Google redirect)
 @Controller('gmail')
 export class GmailPublicController {
-  constructor(private readonly gmailService: GmailService) {}
+  constructor(
+    private readonly gmailService: GmailService,
+    private readonly prisma: PrismaService,
+    private readonly configService: ConfigService,
+  ) {}
 
-  // Initiates OAuth flow - redirects to Google
+  // Initiates OAuth flow — requires JWT auth + org membership
   @Get('connect/:orgId')
+  @UseGuards(AuthGuard('jwt'))
   async connect(
     @Param('orgId') orgId: string,
     @Query('returnTo') returnTo: string | undefined,
+    @Req() req: any,
     @Res() res: Response,
   ) {
+    // Verify user is an active admin/owner of this org
+    const membership = await this.prisma.membership.findFirst({
+      where: { orgId, userId: req.user.id, status: 'ACTIVE', role: { in: ['OWNER', 'ADMIN'] } },
+      select: { id: true },
+    });
+    if (!membership) {
+      throw new ForbiddenException('Only org admins can connect Gmail');
+    }
+
     const authUrl = this.gmailService.getAuthUrl({ orgId, returnTo: returnTo || null });
     res.redirect(authUrl);
   }
 
-  // OAuth callback from Google
+  // OAuth callback from Google (must be public — Google redirects here)
   @Get('callback')
   async callback(
     @Query('code') code: string,
     @Query('state') stateParam: string,
     @Res() res: Response,
   ) {
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = this.configService.get<string>('WEB_URL');
 
     try {
       const { orgId, returnTo } = this.gmailService.parseAndVerifyState(stateParam);
