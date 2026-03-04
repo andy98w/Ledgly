@@ -351,8 +351,13 @@ export default function LandingPage() {
 
         {/* Footer */}
         <footer className="w-full border-t border-border/50 py-8 px-6 mt-auto">
-          <div className="max-w-6xl mx-auto text-center text-sm text-muted-foreground">
-            Ledgly &copy; {new Date().getFullYear()}
+          <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
+            <span>Ledgly &copy; {new Date().getFullYear()}</span>
+            <div className="flex items-center gap-6">
+              <Link href="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</Link>
+              <Link href="/terms" className="hover:text-foreground transition-colors">Terms of Service</Link>
+              <a href="mailto:awseer09@gmail.com" className="hover:text-foreground transition-colors">Contact</a>
+            </div>
           </div>
         </footer>
       </section>
