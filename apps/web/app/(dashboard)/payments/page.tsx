@@ -137,7 +137,7 @@ const PaymentCard = memo(function PaymentCard({
                 {payment.memo && (
                   <>
                     <span className="opacity-30">•</span>
-                    <span className="truncate max-w-[200px]">"{payment.memo}"</span>
+                    <span className="truncate max-w-[40vw] sm:max-w-[200px]">"{payment.memo}"</span>
                   </>
                 )}
               </div>
@@ -1191,7 +1191,7 @@ export default function PaymentsPage() {
           </div>
           <div className="flex gap-2">
             <Select value={allocationFilter} onValueChange={(v) => setAllocationFilter(v as any)}>
-              <SelectTrigger className="w-[140px] h-8 bg-secondary/30 border-border/50 text-xs">
+              <SelectTrigger className="w-[120px] sm:w-[140px] h-8 bg-secondary/30 border-border/50 text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

@@ -395,6 +395,146 @@ describe('AgentService integration', () => {
     expect(deleted?.deletedAt).toBeTruthy();
   });
 
+  // ─── confirm: allocate_payment ──────────────────────────────
+
+  it('confirm: allocate_payment allocates payment to charges', async () => {
+    // Create a member, charge, and payment
+    const members = await membersService.findAll(orgId, { search: 'Agent Test Alice' });
+    const aliceId = members.data[0]?.id;
+    expect(aliceId).toBeTruthy();
+
+    const charges = await chargesService.create(orgId, membershipId, {
+      membershipIds: [aliceId],
+      category: 'DUES' as any,
+      title: 'Allocate Test Charge',
+      amountCents: 3000,
+    });
+    const chargeId = charges[0].id;
+
+    const paymentResult = await paymentsService.bulkCreate(orgId, membershipId, [
+      { amountCents: 3000, paidAt: '2026-03-01', rawPayerName: 'Agent Test Alice' },
+    ]);
+    const paymentId = paymentResult.created[0].id;
+
+    const results = await agentService.confirm(orgId, membershipId, [
+      {
+        toolName: 'allocate_payment',
+        args: {
+          paymentId,
+          allocations: [{ chargeId, amountCents: 3000 }],
+        },
+      },
+    ]);
+
+    expect(results).toHaveLength(1);
+    expect(results[0].success).toBe(true);
+
+    // Verify the charge is now paid
+    const updatedCharge = await prisma.charge.findUnique({ where: { id: chargeId } });
+    expect(updatedCharge?.status).toBe('PAID');
+  });
+
+  // ─── confirm: auto_allocate_payment ────────────────────────
+
+  it('confirm: auto_allocate_payment auto-allocates payment', async () => {
+    // Create a charge and payment for auto-allocation
+    const members = await membersService.findAll(orgId, { search: 'Agent Test Alice' });
+    const aliceId = members.data[0]?.id;
+    expect(aliceId).toBeTruthy();
+
+    const charges = await chargesService.create(orgId, membershipId, {
+      membershipIds: [aliceId],
+      category: 'DUES' as any,
+      title: 'Auto Allocate Test',
+      amountCents: 2000,
+    });
+
+    const paymentResult = await paymentsService.bulkCreate(orgId, membershipId, [
+      { amountCents: 2000, paidAt: '2026-03-01', rawPayerName: 'Agent Test Alice' },
+    ]);
+    const paymentId = paymentResult.created[0].id;
+
+    const results = await agentService.confirm(orgId, membershipId, [
+      {
+        toolName: 'auto_allocate_payment',
+        args: { paymentId },
+      },
+    ]);
+
+    expect(results).toHaveLength(1);
+    expect(results[0].success).toBe(true);
+  });
+
+  // ─── confirm: create_multi_charge ──────────────────────────
+
+  it('confirm: create_multi_charge creates parent with children', async () => {
+    const members = await membersService.findAll(orgId, { search: 'Agent Test' });
+    const memberIds = members.data.slice(0, 2).map((m: any) => m.id);
+    expect(memberIds.length).toBeGreaterThanOrEqual(2);
+
+    const results = await agentService.confirm(orgId, membershipId, [
+      {
+        toolName: 'create_multi_charge',
+        args: {
+          membershipIds: memberIds,
+          category: 'EVENT',
+          title: 'Multi Charge Test',
+          amountCents: 2500,
+        },
+      },
+    ]);
+
+    expect(results).toHaveLength(1);
+    expect(results[0].success).toBe(true);
+
+    // Verify parent charge exists
+    const parentCharge = await prisma.charge.findFirst({
+      where: { orgId, title: 'Multi Charge Test', parentId: null, membershipId: null },
+    });
+    expect(parentCharge).toBeTruthy();
+
+    // Verify children
+    const children = await prisma.charge.findMany({
+      where: { parentId: parentCharge!.id },
+    });
+    expect(children.length).toBe(memberIds.length);
+  });
+
+  // ─── confirm: create_multi_expense ─────────────────────────
+
+  it('confirm: create_multi_expense creates parent with line items', async () => {
+    const results = await agentService.confirm(orgId, membershipId, [
+      {
+        toolName: 'create_multi_expense',
+        args: {
+          category: 'FOOD',
+          title: 'Multi Expense Test',
+          date: '2026-03-05',
+          children: [
+            { title: 'Cups', amountCents: 1500 },
+            { title: 'Plates', amountCents: 2000 },
+          ],
+        },
+      },
+    ]);
+
+    expect(results).toHaveLength(1);
+    expect(results[0].success).toBe(true);
+
+    // Verify parent expense
+    const parentExpense = await prisma.expense.findFirst({
+      where: { orgId, title: 'Multi Expense Test', parentId: null },
+    });
+    expect(parentExpense).toBeTruthy();
+    expect(parentExpense!.amountCents).toBe(3500); // 1500 + 2000
+
+    // Verify children
+    const children = await prisma.expense.findMany({
+      where: { parentId: parentExpense!.id },
+    });
+    expect(children.length).toBe(2);
+  });
+
   // ─── confirm: multiple actions in one batch ────────────────
 
   it('confirm: executes multiple actions and returns per-action results', async () => {

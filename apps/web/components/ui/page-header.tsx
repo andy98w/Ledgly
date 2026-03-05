@@ -17,7 +17,7 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, helpText, actions }: PageHeaderProps) {
   return (
-    <div className="flex items-center justify-between">
+    <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">
           <h1 className="text-xl font-bold tracking-tight">{title}</h1>

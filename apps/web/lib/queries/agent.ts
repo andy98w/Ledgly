@@ -218,8 +218,18 @@ const TOOL_QUERY_MAP: Record<string, (orgId: string) => readonly (readonly unkno
     queryKeys.members.all(orgId),
   ],
   create_expense: (orgId) => [queryKeys.expenses.all(orgId)],
+  create_multi_charge: (orgId) => [queryKeys.charges.all(orgId), queryKeys.members.all(orgId)],
+  create_multi_expense: (orgId) => [queryKeys.expenses.all(orgId)],
   update_expense: (orgId) => [queryKeys.expenses.all(orgId)],
   delete_expenses: (orgId) => [queryKeys.expenses.all(orgId)],
+  import_csv: (orgId) => [
+    queryKeys.members.all(orgId),
+    queryKeys.charges.all(orgId),
+    queryKeys.payments.all(orgId),
+    queryKeys.expenses.all(orgId),
+  ],
+  allocate_payment: (orgId) => [queryKeys.payments.all(orgId), queryKeys.charges.all(orgId), queryKeys.members.all(orgId)],
+  auto_allocate_payment: (orgId) => [queryKeys.payments.all(orgId), queryKeys.charges.all(orgId), queryKeys.members.all(orgId)],
 };
 
 export function useConfirmAgentActions() {

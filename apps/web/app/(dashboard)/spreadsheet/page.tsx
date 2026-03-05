@@ -1490,7 +1490,7 @@ export default function SpreadsheetPage() {
           </div>
           <div className="flex gap-2">
             <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-[150px] h-8 bg-secondary/30 border-border/50 text-xs">
+              <SelectTrigger className="w-[120px] sm:w-[150px] h-8 bg-secondary/30 border-border/50 text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

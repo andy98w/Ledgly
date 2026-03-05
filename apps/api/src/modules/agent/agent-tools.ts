@@ -419,6 +419,48 @@ export const agentTools: AgentTool[] = [
   {
     requiresConfirmation: true,
     definition: {
+      name: 'allocate_payment',
+      description:
+        'Allocate a payment to one or more charges. The payment must have unallocated funds.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          paymentId: { type: 'string', description: 'The payment ID to allocate from' },
+          allocations: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                chargeId: { type: 'string', description: 'The charge ID to allocate to' },
+                amountCents: { type: 'number', description: 'Amount to allocate in cents' },
+              },
+              required: ['chargeId', 'amountCents'],
+            },
+            description: 'Array of charge allocations',
+          },
+        },
+        required: ['paymentId', 'allocations'],
+      },
+    },
+  },
+  {
+    requiresConfirmation: true,
+    definition: {
+      name: 'auto_allocate_payment',
+      description:
+        'Automatically allocate a payment to matching charges based on payer name and amount. Use this when the user wants to apply a payment without specifying exact charges.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          paymentId: { type: 'string', description: 'The payment ID to auto-allocate' },
+        },
+        required: ['paymentId'],
+      },
+    },
+  },
+  {
+    requiresConfirmation: true,
+    definition: {
       name: 'import_csv',
       description:
         'Import data from parsed CSV rows. Use when user provides CSV data or a CSV file.',

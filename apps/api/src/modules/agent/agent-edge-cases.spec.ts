@@ -515,6 +515,73 @@ describe('AgentService edge cases', () => {
     expect(results[0].message).toContain('200');
   });
 
+  // ─── allocate_payment edge cases ─────────────────────────
+
+  it('rejects allocate_payment without paymentId', async () => {
+    const results = await agentService.confirm(orgId, adminMembershipId, [
+      { toolName: 'allocate_payment', args: { allocations: [{ chargeId: 'c1', amountCents: 100 }] } },
+    ]);
+
+    expect(results[0].success).toBe(false);
+    expect(results[0].message).toContain('paymentId is required');
+  });
+
+  it('rejects allocate_payment with non-string paymentId', async () => {
+    const results = await agentService.confirm(orgId, adminMembershipId, [
+      { toolName: 'allocate_payment', args: { paymentId: 123, allocations: [{ chargeId: 'c1', amountCents: 100 }] } },
+    ]);
+
+    expect(results[0].success).toBe(false);
+    expect(results[0].message).toContain('paymentId is required');
+  });
+
+  it('rejects allocate_payment with empty allocations', async () => {
+    const results = await agentService.confirm(orgId, adminMembershipId, [
+      { toolName: 'allocate_payment', args: { paymentId: 'pay-1', allocations: [] } },
+    ]);
+
+    expect(results[0].success).toBe(false);
+    expect(results[0].message).toContain('empty');
+  });
+
+  it('rejects allocate_payment allocation missing chargeId', async () => {
+    const results = await agentService.confirm(orgId, adminMembershipId, [
+      { toolName: 'allocate_payment', args: { paymentId: 'pay-1', allocations: [{ amountCents: 100 }] } },
+    ]);
+
+    expect(results[0].success).toBe(false);
+    expect(results[0].message).toContain('chargeId');
+  });
+
+  it('rejects allocate_payment allocation with non-positive amountCents', async () => {
+    const results = await agentService.confirm(orgId, adminMembershipId, [
+      { toolName: 'allocate_payment', args: { paymentId: 'pay-1', allocations: [{ chargeId: 'c1', amountCents: 0 }] } },
+    ]);
+
+    expect(results[0].success).toBe(false);
+    expect(results[0].message).toContain('positive');
+  });
+
+  // ─── auto_allocate_payment edge cases ──────────────────
+
+  it('rejects auto_allocate_payment without paymentId', async () => {
+    const results = await agentService.confirm(orgId, adminMembershipId, [
+      { toolName: 'auto_allocate_payment', args: {} },
+    ]);
+
+    expect(results[0].success).toBe(false);
+    expect(results[0].message).toContain('paymentId is required');
+  });
+
+  it('rejects auto_allocate_payment with non-string paymentId', async () => {
+    const results = await agentService.confirm(orgId, adminMembershipId, [
+      { toolName: 'auto_allocate_payment', args: { paymentId: 456 } },
+    ]);
+
+    expect(results[0].success).toBe(false);
+    expect(results[0].message).toContain('paymentId is required');
+  });
+
   // ─── Batch size limits ────────────────────────────────────
 
   it('rejects adding more than 200 members at once', async () => {

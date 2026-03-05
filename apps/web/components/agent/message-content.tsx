@@ -302,6 +302,123 @@ function ChargeActionEditor({
   );
 }
 
+/** Editable inline editor for a create_multi_expense action */
+function ExpenseActionEditor({
+  action,
+  onChange,
+}: {
+  action: ProposedAction;
+  onChange: (updated: ProposedAction) => void;
+}) {
+  const children: Array<{ title: string; amountCents: number; vendor?: string }> = action.args.children || [];
+
+  const updateParentTitle = (title: string) => {
+    onChange({ ...action, args: { ...action.args, title } });
+  };
+
+  const updateChild = (idx: number, field: string, value: any) => {
+    const updated = [...children];
+    updated[idx] = { ...updated[idx], [field]: value };
+    onChange({ ...action, args: { ...action.args, children: updated } });
+  };
+
+  const updateChildAmount = (idx: number, raw: string) => {
+    const cleaned = raw.replace(/[^0-9.]/g, '');
+    const cents = Math.round(parseFloat(cleaned || '0') * 100);
+    if (!isNaN(cents)) updateChild(idx, 'amountCents', cents);
+  };
+
+  const removeChild = (idx: number) => {
+    const updated = children.filter((_, i) => i !== idx);
+    onChange({ ...action, args: { ...action.args, children: updated } });
+  };
+
+  const totalCents = children.reduce((sum, c) => sum + (c.amountCents || 0), 0);
+
+  return (
+    <div className="space-y-2">
+      <span className="font-medium text-sm">{action.description}</span>
+
+      <div className="rounded-lg border border-border/60 bg-secondary/20 p-3 space-y-2">
+        {/* Parent title */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground w-12 shrink-0">Title</span>
+          <input
+            type="text"
+            value={action.args.title || ''}
+            onChange={(e) => updateParentTitle(e.target.value)}
+            className="font-medium text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors w-full py-0.5"
+          />
+        </div>
+
+        {/* Metadata row */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {action.args.category && (
+            <span className="text-xs px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
+              {action.args.category}
+            </span>
+          )}
+          {action.args.date && (
+            <span className="text-xs px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
+              {new Date(action.args.date).toLocaleDateString()}
+            </span>
+          )}
+          {action.args.vendor && (
+            <span className="text-xs px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
+              {action.args.vendor}
+            </span>
+          )}
+        </div>
+
+        {/* Line items */}
+        <div className="space-y-1.5">
+          <span className="text-xs text-muted-foreground">
+            {children.length} line item{children.length !== 1 ? 's' : ''}
+          </span>
+          {children.length === 0 ? (
+            <p className="text-xs text-destructive">No line items — add at least one to confirm.</p>
+          ) : (
+            <div className="space-y-1">
+              {children.map((child, idx) => (
+                <div key={idx} className="flex items-center gap-2 pl-2">
+                  <input
+                    type="text"
+                    value={child.title}
+                    onChange={(e) => updateChild(idx, 'title', e.target.value)}
+                    className="flex-1 text-xs bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5"
+                  />
+                  <span className="text-muted-foreground text-xs">$</span>
+                  <input
+                    type="text"
+                    value={(child.amountCents / 100).toFixed(2)}
+                    onChange={(e) => updateChildAmount(idx, e.target.value)}
+                    className="w-20 text-xs bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors tabular-nums py-0.5"
+                  />
+                  {children.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeChild(idx)}
+                      className="text-muted-foreground hover:text-destructive transition-colors"
+                    >
+                      <XIcon className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Total */}
+        <div className="flex items-center gap-2 pt-1 border-t border-border/40">
+          <span className="text-xs text-muted-foreground w-12 shrink-0">Total</span>
+          <span className="text-sm font-medium tabular-nums">{formatCents(totalCents)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ConfirmationCard({
   actions,
   status,
@@ -327,7 +444,7 @@ export function ConfirmationCard({
   }, [actions]);
 
   // Resolve member names for charge actions
-  const hasCharges = actions.some((a) => a.toolName === 'create_charges');
+  const hasCharges = actions.some((a) => a.toolName === 'create_charges' || a.toolName === 'create_multi_charge');
   const { data: membersData } = useMembers(hasCharges ? (orgId ?? null) : null, { limit: 200 });
   const memberNameMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -349,7 +466,10 @@ export function ConfirmationCard({
 
   // Disable confirm if any charge action has 0 members
   const hasEmptyCharge = editableActions.some(
-    (a) => a.toolName === 'create_charges' && (!a.args.membershipIds || a.args.membershipIds.length === 0),
+    (a) => (a.toolName === 'create_charges' || a.toolName === 'create_multi_charge') && (!a.args.membershipIds || a.args.membershipIds.length === 0),
+  );
+  const hasEmptyExpense = editableActions.some(
+    (a) => a.toolName === 'create_multi_expense' && (!a.args.children || a.args.children.length === 0),
   );
 
   // Use editableActions for display when pending, original actions otherwise
@@ -362,10 +482,15 @@ export function ConfirmationCard({
           <div key={action.id} className="flex items-start gap-2 text-sm">
             <span className="text-primary font-medium shrink-0">+</span>
             <div className="flex-1 min-w-0">
-              {action.toolName === 'create_charges' && status === 'pending' ? (
+              {(action.toolName === 'create_charges' || action.toolName === 'create_multi_charge') && status === 'pending' ? (
                 <ChargeActionEditor
                   action={action}
                   memberNameMap={memberNameMap}
+                  onChange={(updated) => updateAction(index, updated)}
+                />
+              ) : action.toolName === 'create_multi_expense' && status === 'pending' ? (
+                <ExpenseActionEditor
+                  action={action}
                   onChange={(updated) => updateAction(index, updated)}
                 />
               ) : (
@@ -411,7 +536,7 @@ export function ConfirmationCard({
 
       {status === 'pending' && (
         <div className="flex items-center gap-2 pt-1">
-          <Button size="sm" onClick={() => onConfirm(editableActions)} disabled={hasEmptyCharge} className="gap-1.5">
+          <Button size="sm" onClick={() => onConfirm(editableActions)} disabled={hasEmptyCharge || hasEmptyExpense} className="gap-1.5">
             <Check className="h-3.5 w-3.5" />
             Confirm
           </Button>

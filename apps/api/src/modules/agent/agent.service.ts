@@ -415,6 +415,14 @@ export class AgentService {
       case 'delete_expenses':
         return this.expensesService.bulkDelete(orgId, args.expenseIds, actorId);
 
+      case 'allocate_payment':
+        return this.paymentsService.allocate(orgId, args.paymentId, actorId, {
+          allocations: args.allocations,
+        });
+
+      case 'auto_allocate_payment':
+        return this.paymentsService.autoAllocatePayment(orgId, args.paymentId, actorId);
+
       case 'import_csv':
         return this.executeImport(orgId, actorId, args.type, args.rows);
 
@@ -547,6 +555,24 @@ export class AgentService {
           throw new Error(`Cannot delete more than ${AgentService.MAX_BATCH_SIZE} expenses at once`);
         break;
 
+      case 'allocate_payment':
+        if (!args.paymentId || typeof args.paymentId !== 'string')
+          throw new Error('paymentId is required');
+        if (!Array.isArray(args.allocations) || args.allocations.length === 0)
+          throw new Error('allocations array is required and cannot be empty');
+        for (const a of args.allocations) {
+          if (!a.chargeId || typeof a.chargeId !== 'string')
+            throw new Error('Each allocation must have a chargeId');
+          if (typeof a.amountCents !== 'number' || a.amountCents <= 0)
+            throw new Error('Each allocation must have a positive amountCents');
+        }
+        break;
+
+      case 'auto_allocate_payment':
+        if (!args.paymentId || typeof args.paymentId !== 'string')
+          throw new Error('paymentId is required');
+        break;
+
       case 'import_csv':
         if (!args.type || !['members', 'charges', 'payments', 'expenses'].includes(args.type))
           throw new Error('type must be one of: members, charges, payments, expenses');
@@ -652,6 +678,10 @@ export class AgentService {
         return `Remove ${args.memberIds?.length || 0} member(s)`;
       case 'delete_expenses':
         return `Delete ${args.expenseIds?.length || 0} expense(s)`;
+      case 'allocate_payment':
+        return `Allocate payment to ${args.allocations?.length || 0} charge(s)`;
+      case 'auto_allocate_payment':
+        return `Auto-allocate payment to matching charges`;
       case 'import_csv':
         return `Import ${args.rows?.length || 0} ${args.type} row(s) from CSV`;
       default:
@@ -740,7 +770,7 @@ export class AgentService {
 - Add, edit, or remove members
 - Create or void charges (single or grouped for multiple members)
 - Create or delete expenses (single or multi-line-item)
-- Record payments
+- Record payments and allocate them to charges
 - Import CSV data (members, charges, payments, or expenses)
 - Look up members, charges, payments, expenses, and balances
 
@@ -765,6 +795,7 @@ These rules are absolute — violating any of them is a bug:
 - When editing an item, look it up first to get its ID — silently. If nothing matches, say it doesn't exist and offer to create it.
 - When charging "all members" or "everyone", look up active members first, then create a grouped charge. Always group charges for 2+ members.
 - When a user provides multiple expense line items (e.g., "cups $15, plates $20"), create a grouped expense with those line items.
+- When a user asks to apply or allocate a payment to charges, use auto-allocation for automatic matching or manual allocation for specific charge targeting.
 - Users may paste wizard templates with bullet lists. Ignore placeholder text (e.g., "[name]", "YYYY-MM-DD"). Use defaults for optional blank fields. Process ALL entries in a single action.
 
 ${orgContext}${csvInstruction}`;

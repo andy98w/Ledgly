@@ -672,7 +672,7 @@ export default function ChargesPage() {
               </SelectContent>
             </Select>
             <Select value={categoryFilter || 'all'} onValueChange={(v) => setCategoryFilter(v === 'all' ? '' : v)}>
-              <SelectTrigger className="w-[140px] h-8 bg-secondary/30 border-border/50 text-xs">
+              <SelectTrigger className="w-[120px] sm:w-[140px] h-8 bg-secondary/30 border-border/50 text-xs">
                 <SelectValue placeholder="All Categories" />
               </SelectTrigger>
               <SelectContent>

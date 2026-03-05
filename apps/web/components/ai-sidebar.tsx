@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { usePathname } from 'next/navigation';
-import { Send, X, Loader2, Sparkles, RotateCcw, Wand2 } from 'lucide-react';
+import { Send, X, Loader2, Sparkles, RotateCcw, Wand2, Paperclip } from 'lucide-react';
 import { useAuthStore, useIsAdminOrTreasurer } from '@/lib/stores/auth';
 import { useAISidebarStore } from '@/lib/stores/ai-sidebar';
 import { cn } from '@/lib/utils';
@@ -26,7 +26,6 @@ import {
   useCreateAgentSession,
   useAgentSession,
   useUpdateAgentSession,
-  useDeleteAgentSession,
   useConfirmAgentActions,
   type ChatMessage,
   type ProposedAction,
@@ -66,14 +65,16 @@ export function AISidebar() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [wizardAction, setWizardAction] = useState<WizardActionId | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [csvFile, setCsvFile] = useState<{ name: string; content: string; rowCount: number } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const isMutatingRef = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const createSession = useCreateAgentSession();
   const updateSession = useUpdateAgentSession();
-  const deleteSession = useDeleteAgentSession();
   const confirmActions = useConfirmAgentActions();
 
   // Load persisted session ID
@@ -126,16 +127,47 @@ export function AISidebar() {
     [currentOrgId, updateSession],
   );
 
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !file.name.endsWith('.csv')) return;
+    const text = await file.text();
+    const rowCount = text.trim().split('\n').length - 1;
+    setCsvFile({ name: file.name, content: text, rowCount: Math.max(rowCount, 0) });
+    e.target.value = '';
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => setIsDragging(false);
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file || !file.name.endsWith('.csv')) return;
+    const text = await file.text();
+    const rowCount = text.trim().split('\n').length - 1;
+    setCsvFile({ name: file.name, content: text, rowCount: Math.max(rowCount, 0) });
+  };
+
   const handleSend = useCallback(async () => {
-    if (!input.trim() || isStreaming || !currentOrgId) return;
+    if ((!input.trim() && !csvFile) || isStreaming || !currentOrgId) return;
     isMutatingRef.current = true;
+
+    const userContent = csvFile
+      ? `${input.trim() || 'Please import this CSV data.'}\n\n[Attached: ${csvFile.name}]`
+      : input.trim();
 
     const now = new Date().toISOString();
     const userMessage: DisplayMessage = {
       id: crypto.randomUUID(),
       role: 'user',
-      content: input.trim(),
+      content: userContent,
       createdAt: now,
+      csvFileName: csvFile?.name,
     };
     const assistantMessage: DisplayMessage = {
       id: crypto.randomUUID(),
@@ -167,8 +199,11 @@ export function AISidebar() {
       ...messages
         .filter((m) => m.content)
         .map((m) => ({ role: m.role, content: m.content })),
-      { role: 'user' as const, content: stripWizardHints(input.trim()) },
+      { role: 'user' as const, content: stripWizardHints(input.trim()) || 'Please import this CSV data.' },
     ];
+
+    const csvContent = csvFile?.content;
+    setCsvFile(null);
 
     let finalMessages = newMessages;
 
@@ -176,7 +211,7 @@ export function AISidebar() {
       await streamAgentChat(
         currentOrgId,
         chatHistory,
-        undefined,
+        csvContent,
         (text) => {
           setMessages((prev) => {
             const updated = [...prev];
@@ -226,7 +261,7 @@ export function AISidebar() {
       isMutatingRef.current = false;
       setIsStreaming(false);
     }
-  }, [input, isStreaming, currentOrgId, messages, sessionId, createSession, saveMessages]);
+  }, [input, csvFile, isStreaming, currentOrgId, messages, sessionId, createSession, saveMessages]);
 
   const handleConfirm = async (messageId: string, modifiedActions?: ProposedAction[]) => {
     if (!currentOrgId) return;
@@ -283,10 +318,9 @@ export function AISidebar() {
 
   const handleReset = () => {
     if (!currentOrgId) return;
-    if (sessionId) {
-      deleteSession.mutate({ orgId: currentOrgId, sessionId });
-      localStorage.removeItem(getStorageKey(currentOrgId));
-    }
+    // Don't delete the session — just clear local state so it stays visible
+    // in the agent page's session list
+    localStorage.removeItem(getStorageKey(currentOrgId));
     setSessionId(null);
     setMessages([]);
     setInput('');
@@ -340,7 +374,21 @@ export function AISidebar() {
         </div>
 
         {/* Messages */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+        <div
+          ref={scrollRef}
+          className="flex-1 overflow-y-auto px-4 py-3 space-y-3 relative"
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          {isDragging && (
+            <div className="absolute inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center rounded-xl border-2 border-dashed border-primary">
+              <div className="text-center">
+                <Paperclip className="h-6 w-6 text-primary mx-auto mb-2" />
+                <p className="text-sm font-medium">Drop CSV file here</p>
+              </div>
+            </div>
+          )}
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-center">
               <div className="p-3 rounded-xl bg-primary/10 mb-3">
@@ -461,7 +509,40 @@ export function AISidebar() {
             </div>
           )}
 
+          {csvFile && (
+            <div className="flex items-center gap-2 px-3 pt-2">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/10 text-primary text-xs">
+                <Paperclip className="h-3 w-3" />
+                {csvFile.name} ({csvFile.rowCount} rows)
+                <button
+                  onClick={() => setCsvFile(null)}
+                  className="ml-0.5 hover:text-primary/70 transition-colors"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            </div>
+          )}
+
           <div className="flex items-end gap-2 px-3 py-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv"
+              className="hidden"
+              onChange={handleFileSelect}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="shrink-0 h-9 w-9 text-muted-foreground hover:text-foreground"
+              disabled={isStreaming}
+              onClick={() => fileInputRef.current?.click()}
+              title="Attach CSV"
+            >
+              <Paperclip className="h-4 w-4" />
+            </Button>
             <Button
               type="button"
               variant="ghost"
@@ -487,7 +568,7 @@ export function AISidebar() {
             />
             <Button
               onClick={handleSend}
-              disabled={!input.trim() || isStreaming}
+              disabled={(!input.trim() && !csvFile) || isStreaming}
               size="icon"
               className="shrink-0 h-9 w-9"
             >
@@ -532,7 +613,20 @@ export function AISidebar() {
           </div>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+          <div
+            className="flex-1 overflow-y-auto px-4 py-3 space-y-3 relative"
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            {isDragging && (
+              <div className="absolute inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center rounded-xl border-2 border-dashed border-primary">
+                <div className="text-center">
+                  <Paperclip className="h-6 w-6 text-primary mx-auto mb-2" />
+                  <p className="text-sm font-medium">Drop CSV file here</p>
+                </div>
+              </div>
+            )}
             {messages.length === 0 && (
               <div className="flex flex-col items-center justify-center h-full text-center">
                 <div className="p-3 rounded-xl bg-primary/10 mb-3">
@@ -645,7 +739,32 @@ export function AISidebar() {
                 )}
               </div>
             )}
+            {csvFile && (
+              <div className="flex items-center gap-2 px-3 pt-2">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/10 text-primary text-xs">
+                  <Paperclip className="h-3 w-3" />
+                  {csvFile.name} ({csvFile.rowCount} rows)
+                  <button
+                    onClick={() => setCsvFile(null)}
+                    className="ml-0.5 hover:text-primary/70 transition-colors"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              </div>
+            )}
             <div className="flex items-end gap-2 px-3 py-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="shrink-0 h-9 w-9 text-muted-foreground hover:text-foreground"
+                disabled={isStreaming}
+                onClick={() => fileInputRef.current?.click()}
+                title="Attach CSV"
+              >
+                <Paperclip className="h-4 w-4" />
+              </Button>
               <Button
                 type="button"
                 variant="ghost"
@@ -668,7 +787,7 @@ export function AISidebar() {
               />
               <Button
                 onClick={handleSend}
-                disabled={!input.trim() || isStreaming}
+                disabled={(!input.trim() && !csvFile) || isStreaming}
                 size="icon"
                 className="shrink-0 h-9 w-9"
               >

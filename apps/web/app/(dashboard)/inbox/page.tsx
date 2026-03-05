@@ -1511,7 +1511,7 @@ export default function InboxPage() {
                               {item.parsedMemo && (
                                 <>
                                   <span className="opacity-30">•</span>
-                                  <span className="truncate max-w-[200px]">"{item.parsedMemo}"</span>
+                                  <span className="truncate max-w-[40vw] sm:max-w-[200px]">"{item.parsedMemo}"</span>
                                 </>
                               )}
                               {item.derivedCategory && (

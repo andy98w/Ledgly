@@ -2,8 +2,8 @@ import { agentTools, toolDefinitions, toolMap } from './agent-tools';
 
 describe('Agent tool definitions', () => {
   it('exports correct number of tools', () => {
-    expect(agentTools.length).toBe(18);
-    expect(toolDefinitions.length).toBe(18);
+    expect(agentTools.length).toBe(20);
+    expect(toolDefinitions.length).toBe(20);
   });
 
   it('every tool has a unique name', () => {
@@ -39,7 +39,8 @@ describe('Agent tool definitions', () => {
       'add_members', 'create_charges', 'create_expense',
       'create_multi_charge', 'create_multi_expense',
       'record_payments', 'void_charges', 'remove_members',
-      'delete_expenses', 'import_csv',
+      'delete_expenses', 'allocate_payment', 'auto_allocate_payment',
+      'import_csv',
     ];
     for (const name of writeNames) {
       const tool = toolMap.get(name);
@@ -85,6 +86,18 @@ describe('Agent tool definitions', () => {
   it('delete_expenses requires expenseIds', () => {
     const tool = toolDefinitions.find((t) => t.name === 'delete_expenses')!;
     expect(tool.input_schema.required).toContain('expenseIds');
+  });
+
+  it('allocate_payment requires paymentId and allocations', () => {
+    const tool = toolDefinitions.find((t) => t.name === 'allocate_payment')!;
+    expect(tool.input_schema.required).toEqual(
+      expect.arrayContaining(['paymentId', 'allocations']),
+    );
+  });
+
+  it('auto_allocate_payment requires paymentId', () => {
+    const tool = toolDefinitions.find((t) => t.name === 'auto_allocate_payment')!;
+    expect(tool.input_schema.required).toContain('paymentId');
   });
 
   it('list_expenses has no required fields', () => {
