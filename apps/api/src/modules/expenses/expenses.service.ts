@@ -42,6 +42,7 @@ interface ExpenseFilters {
   category?: string;
   startDate?: string;
   endDate?: string;
+  search?: string;
   page?: number;
   limit?: number;
 }
@@ -54,12 +55,20 @@ export class ExpensesService {
   ) {}
 
   async findAll(orgId: string, filters: ExpenseFilters = {}) {
-    const { category, startDate, endDate, page = 1, limit = 50 } = filters;
+    const { category, startDate, endDate, search, page = 1, limit = 50 } = filters;
 
     const where: any = { orgId, deletedAt: null, parentId: null };
 
     if (category) {
       where.category = category;
+    }
+
+    if (search) {
+      where.OR = [
+        { title: { contains: search, mode: 'insensitive' } },
+        { vendor: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+      ];
     }
 
     if (startDate || endDate) {

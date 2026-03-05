@@ -297,6 +297,7 @@ export class AgentService {
       case 'list_expenses': {
         const result = await this.expensesService.findAll(orgId, {
           category: args.category,
+          search: args.search,
           limit: 200,
         });
         return result.data.map((e: any) => ({
