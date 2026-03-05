@@ -222,6 +222,19 @@ const TOOL_QUERY_MAP: Record<string, (orgId: string) => readonly (readonly unkno
   create_multi_expense: (orgId) => [queryKeys.expenses.all(orgId)],
   update_expense: (orgId) => [queryKeys.expenses.all(orgId)],
   delete_expenses: (orgId) => [queryKeys.expenses.all(orgId)],
+  restore_charges: (orgId) => [queryKeys.charges.all(orgId), queryKeys.members.all(orgId)],
+  restore_expenses: (orgId) => [queryKeys.expenses.all(orgId)],
+  restore_members: (orgId) => [queryKeys.members.all(orgId)],
+  delete_payments: (orgId) => [
+    queryKeys.payments.all(orgId),
+    queryKeys.charges.all(orgId),
+    queryKeys.members.all(orgId),
+  ],
+  restore_payments: (orgId) => [
+    queryKeys.payments.all(orgId),
+    queryKeys.charges.all(orgId),
+    queryKeys.members.all(orgId),
+  ],
   import_csv: (orgId) => [
     queryKeys.members.all(orgId),
     queryKeys.charges.all(orgId),

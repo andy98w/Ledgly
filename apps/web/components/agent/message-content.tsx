@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, useEffect } from 'react';
-import { Check, X, XCircle, Loader2, AlertCircle, XIcon, Plus } from 'lucide-react';
+import { Check, X, XCircle, Loader2, AlertCircle, XIcon, Plus, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { cn, formatCents } from '@/lib/utils';
@@ -382,6 +382,14 @@ function ExpenseActionEditor({
   );
 }
 
+/** Tools that can be undone via a reverse tool */
+const UNDOABLE_TOOLS = new Set([
+  'create_charges', 'create_multi_charge', 'create_expense', 'create_multi_expense',
+  'add_members', 'record_payments',
+  'void_charges', 'delete_expenses', 'remove_members', 'delete_payments',
+  'restore_charges', 'restore_expenses', 'restore_members', 'restore_payments',
+]);
+
 const EXPENSE_CATEGORIES = ['EVENT', 'SUPPLIES', 'FOOD', 'VENUE', 'MARKETING', 'SERVICES', 'OTHER'] as const;
 const CHARGE_CATEGORIES = ['DUES', 'EVENT', 'FINE', 'MERCH', 'OTHER'] as const;
 const MEMBER_ROLES = ['MEMBER', 'ADMIN', 'TREASURER'] as const;
@@ -708,6 +716,7 @@ export function ConfirmationCard({
   results,
   onConfirm,
   onCancel,
+  onUndo,
   orgId,
 }: {
   actions: ProposedAction[];
@@ -715,6 +724,7 @@ export function ConfirmationCard({
   results?: ActionResult[];
   onConfirm: (modifiedActions: ProposedAction[]) => void;
   onCancel: () => void;
+  onUndo?: () => void;
   orgId?: string | null;
 }) {
   const allSucceeded = results?.every((r) => r.success);
@@ -765,13 +775,13 @@ export function ConfirmationCard({
           <div key={action.id} className="flex items-start gap-2 text-sm">
             <span className={cn(
               'font-medium shrink-0',
-              action.toolName.startsWith('delete') || action.toolName.startsWith('remove') || action.toolName.startsWith('void')
+              (action.toolName.startsWith('delete') || action.toolName.startsWith('remove') || action.toolName.startsWith('void'))
                 ? 'text-destructive'
                 : action.toolName.startsWith('update')
                   ? 'text-amber-500'
                   : 'text-primary',
             )}>
-              {action.toolName.startsWith('delete') || action.toolName.startsWith('remove') || action.toolName.startsWith('void')
+              {(action.toolName.startsWith('delete') || action.toolName.startsWith('remove') || action.toolName.startsWith('void'))
                 ? '−'
                 : action.toolName.startsWith('update')
                   ? '~'
@@ -890,9 +900,17 @@ export function ConfirmationCard({
       {status === 'confirmed' && (
         <div className="space-y-1.5">
           {allSucceeded && !hasSkipped ? (
-            <div className="flex items-center gap-2 text-sm text-emerald-600">
-              <Check className="h-4 w-4" />
-              Done! Actions completed successfully.
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm text-emerald-600">
+                <Check className="h-4 w-4" />
+                Done!
+              </div>
+              {onUndo && actions.every((a) => UNDOABLE_TOOLS.has(a.toolName)) && (
+                <Button size="sm" variant="ghost" onClick={onUndo} className="h-6 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground">
+                  <Undo2 className="h-3 w-3" />
+                  Undo
+                </Button>
+              )}
             </div>
           ) : allSucceeded && hasSkipped ? (
             <div className="space-y-1">

@@ -471,6 +471,45 @@ export class AgentService {
       case 'delete_expenses':
         return this.expensesService.bulkDelete(orgId, args.expenseIds, actorId);
 
+      case 'restore_charges': {
+        let count = 0;
+        for (const id of args.chargeIds) {
+          await this.chargesService.restore(orgId, id, actorId);
+          count++;
+        }
+        return { success: true, restoredCount: count };
+      }
+
+      case 'restore_expenses': {
+        let count = 0;
+        for (const id of args.expenseIds) {
+          await this.expensesService.restore(orgId, id, actorId);
+          count++;
+        }
+        return { success: true, restoredCount: count };
+      }
+
+      case 'restore_members': {
+        let count = 0;
+        for (const id of args.memberIds) {
+          await this.membersService.restore(orgId, id, actorId);
+          count++;
+        }
+        return { success: true, restoredCount: count };
+      }
+
+      case 'delete_payments':
+        return this.paymentsService.bulkDelete(orgId, args.paymentIds, actorId);
+
+      case 'restore_payments': {
+        let count = 0;
+        for (const id of args.paymentIds) {
+          await this.paymentsService.restore(orgId, id, actorId);
+          count++;
+        }
+        return { success: true, restoredCount: count };
+      }
+
       case 'allocate_payment':
         return this.paymentsService.allocate(orgId, args.paymentId, actorId, {
           allocations: args.allocations,
@@ -609,6 +648,41 @@ export class AgentService {
           throw new Error('expenseIds array is required and cannot be empty');
         if (args.expenseIds.length > AgentService.MAX_BATCH_SIZE)
           throw new Error(`Cannot delete more than ${AgentService.MAX_BATCH_SIZE} expenses at once`);
+        break;
+
+      case 'restore_charges':
+        if (!Array.isArray(args.chargeIds) || args.chargeIds.length === 0)
+          throw new Error('chargeIds array is required and cannot be empty');
+        if (args.chargeIds.length > AgentService.MAX_BATCH_SIZE)
+          throw new Error(`Cannot restore more than ${AgentService.MAX_BATCH_SIZE} charges at once`);
+        break;
+
+      case 'restore_expenses':
+        if (!Array.isArray(args.expenseIds) || args.expenseIds.length === 0)
+          throw new Error('expenseIds array is required and cannot be empty');
+        if (args.expenseIds.length > AgentService.MAX_BATCH_SIZE)
+          throw new Error(`Cannot restore more than ${AgentService.MAX_BATCH_SIZE} expenses at once`);
+        break;
+
+      case 'restore_members':
+        if (!Array.isArray(args.memberIds) || args.memberIds.length === 0)
+          throw new Error('memberIds array is required and cannot be empty');
+        if (args.memberIds.length > AgentService.MAX_BATCH_SIZE)
+          throw new Error(`Cannot restore more than ${AgentService.MAX_BATCH_SIZE} members at once`);
+        break;
+
+      case 'delete_payments':
+        if (!Array.isArray(args.paymentIds) || args.paymentIds.length === 0)
+          throw new Error('paymentIds array is required and cannot be empty');
+        if (args.paymentIds.length > AgentService.MAX_BATCH_SIZE)
+          throw new Error(`Cannot delete more than ${AgentService.MAX_BATCH_SIZE} payments at once`);
+        break;
+
+      case 'restore_payments':
+        if (!Array.isArray(args.paymentIds) || args.paymentIds.length === 0)
+          throw new Error('paymentIds array is required and cannot be empty');
+        if (args.paymentIds.length > AgentService.MAX_BATCH_SIZE)
+          throw new Error(`Cannot restore more than ${AgentService.MAX_BATCH_SIZE} payments at once`);
         break;
 
       case 'allocate_payment':
@@ -807,6 +881,71 @@ export class AgentService {
         }));
         return `Delete ${expenses.length} expense(s)`;
       }
+      case 'restore_charges': {
+        const charges = await this.prisma.charge.findMany({
+          where: { id: { in: args.chargeIds || [] }, orgId },
+          select: { title: true, amountCents: true, dueDate: true, membership: { select: { name: true, user: { select: { name: true } } } } },
+        });
+        args._items = charges.map((c) => ({
+          title: c.title,
+          amountCents: c.amountCents,
+          dueDate: c.dueDate,
+          memberName: c.membership?.name || c.membership?.user?.name,
+        }));
+        return `Restore ${charges.length} charge(s)`;
+      }
+      case 'restore_expenses': {
+        const expenses = await this.prisma.expense.findMany({
+          where: { id: { in: args.expenseIds || [] }, orgId },
+          select: { title: true, amountCents: true, vendor: true, date: true, category: true },
+        });
+        args._items = expenses.map((e) => ({
+          title: e.title,
+          amountCents: e.amountCents,
+          vendor: e.vendor !== e.title ? e.vendor : null,
+          date: e.date,
+          category: e.category,
+        }));
+        return `Restore ${expenses.length} expense(s)`;
+      }
+      case 'restore_members': {
+        const members = await this.prisma.membership.findMany({
+          where: { id: { in: args.memberIds || [] }, orgId },
+          select: { name: true, role: true, user: { select: { name: true, email: true } } },
+        });
+        args._items = members.map((m) => ({
+          name: m.name || m.user?.name || 'Unknown',
+          email: m.user?.email,
+          role: m.role,
+        }));
+        return `Restore ${members.length} member(s)`;
+      }
+      case 'delete_payments': {
+        const payments = await this.prisma.payment.findMany({
+          where: { id: { in: args.paymentIds || [] }, orgId },
+          select: { amountCents: true, rawPayerName: true, paidAt: true, memo: true },
+        });
+        args._items = payments.map((p) => ({
+          amountCents: p.amountCents,
+          rawPayerName: p.rawPayerName,
+          paidAt: p.paidAt,
+          memo: p.memo,
+        }));
+        return `Delete ${payments.length} payment(s)`;
+      }
+      case 'restore_payments': {
+        const payments = await this.prisma.payment.findMany({
+          where: { id: { in: args.paymentIds || [] }, orgId },
+          select: { amountCents: true, rawPayerName: true, paidAt: true, memo: true },
+        });
+        args._items = payments.map((p) => ({
+          amountCents: p.amountCents,
+          rawPayerName: p.rawPayerName,
+          paidAt: p.paidAt,
+          memo: p.memo,
+        }));
+        return `Restore ${payments.length} payment(s)`;
+      }
       case 'allocate_payment':
         return `Allocate payment to ${args.allocations?.length || 0} charge(s)`;
       case 'auto_allocate_payment':
@@ -929,6 +1068,7 @@ These rules are absolute — violating any of them is a bug:
 ## Behavior rules
 - When editing an item, look it up first to get its ID — silently. If nothing matches, say it doesn't exist and offer to create it.
 - When charging "all members" or "everyone", look up active members first, then create a grouped charge. Always group charges for 2+ members.
+- When the user asks to "apply" or "extend" an existing single charge to all/more members, void the original charge first, then create a new multi-charge with all the desired members. Do NOT create a duplicate — replace the original.
 - When a user provides multiple expense line items (e.g., "cups $15, plates $20"), create a grouped expense with those line items.
 - When a user asks to apply or allocate a payment to charges, use auto-allocation for automatic matching or manual allocation for specific charge targeting.
 - Users may paste wizard templates with bullet lists. Ignore placeholder text (e.g., "[name]", "YYYY-MM-DD"). Use defaults for optional blank fields. Process ALL entries in a single action.
@@ -937,6 +1077,20 @@ These rules are absolute — violating any of them is a bug:
 - When a user provides a date without a year (e.g., "Feb 2", "March 15"):
   - For **expenses**: default to the current year. If that date is in the future, use the previous year instead.
   - For **charges**: always default to the current year.
+
+## Undo support
+When the user says "undo", "undo that", "undo last action", or similar:
+1. Look at the most recent confirmed action results in the chat history (the [Actions confirmed. Results: ...] lines) to find the IDs.
+2. Call the appropriate reverse tool using those IDs:
+   - create_charges / create_multi_charge → void_charges (pass the created charge IDs)
+   - create_expense / create_multi_expense → delete_expenses (pass the created expense IDs)
+   - add_members → remove_members (pass the added member IDs)
+   - record_payments → delete_payments (pass the recorded payment IDs)
+   - void_charges → restore_charges (pass the voided charge IDs)
+   - delete_expenses → restore_expenses (pass the deleted expense IDs)
+   - remove_members → restore_members (pass the removed member IDs)
+   - delete_payments → restore_payments (pass the deleted payment IDs)
+3. If there are no previous confirmed actions, tell the user there's nothing to undo.
 
 ## Cross-entity suggestions
 - If a search for charges/expenses/payments returns nothing, proactively check the related entity type. For example, if the user says "delete the dues charge" and no charges match, also check expenses — they may have meant "expense" instead of "charge", and vice versa. Suggest what you found: "I didn't find a dues charge, but I found a dues expense — would you like me to delete that instead?"

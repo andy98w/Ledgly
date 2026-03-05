@@ -431,6 +431,96 @@ export const agentTools: AgentTool[] = [
   {
     requiresConfirmation: true,
     definition: {
+      name: 'restore_charges',
+      description: 'Restore (un-void) one or more previously voided charges by their IDs.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          chargeIds: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Array of charge IDs to restore',
+          },
+        },
+        required: ['chargeIds'],
+      },
+    },
+  },
+  {
+    requiresConfirmation: true,
+    definition: {
+      name: 'restore_expenses',
+      description: 'Restore one or more previously deleted expenses by their IDs.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          expenseIds: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Array of expense IDs to restore',
+          },
+        },
+        required: ['expenseIds'],
+      },
+    },
+  },
+  {
+    requiresConfirmation: true,
+    definition: {
+      name: 'restore_members',
+      description: 'Restore one or more previously removed members by their membership IDs.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          memberIds: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Array of membership IDs to restore',
+          },
+        },
+        required: ['memberIds'],
+      },
+    },
+  },
+  {
+    requiresConfirmation: true,
+    definition: {
+      name: 'delete_payments',
+      description: 'Delete one or more payments by their IDs.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          paymentIds: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Array of payment IDs to delete',
+          },
+        },
+        required: ['paymentIds'],
+      },
+    },
+  },
+  {
+    requiresConfirmation: true,
+    definition: {
+      name: 'restore_payments',
+      description: 'Restore one or more previously deleted payments by their IDs.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          paymentIds: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Array of payment IDs to restore',
+          },
+        },
+        required: ['paymentIds'],
+      },
+    },
+  },
+  {
+    requiresConfirmation: true,
+    definition: {
       name: 'allocate_payment',
       description:
         'Allocate a payment to one or more charges. The payment must have unallocated funds.',

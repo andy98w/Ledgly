@@ -178,13 +178,14 @@ export default function AgentPage() {
     }
   };
 
-  const handleSend = useCallback(async () => {
-    if ((!input.trim() && !csvFile) || isStreaming || !currentOrgId) return;
+  const handleSend = useCallback(async (overrideMessage?: string) => {
+    const messageText = overrideMessage || input.trim();
+    if ((!messageText && !csvFile) || isStreaming || !currentOrgId) return;
     isMutatingRef.current = true;
 
     const userContent = csvFile
-      ? `${input.trim() || 'Please import this CSV data.'}\n\n[Attached: ${csvFile.name}]`
-      : input.trim();
+      ? `${messageText || 'Please import this CSV data.'}\n\n[Attached: ${csvFile.name}]`
+      : messageText;
 
     const now = new Date().toISOString();
     const userMessage: DisplayMessage = {
@@ -229,17 +230,67 @@ export default function AgentPage() {
         .map((m) => {
           if (m.role === 'assistant' && m.actions && m.actions.length > 0) {
             const status = m.actionStatus;
-            const suffix =
-              status === 'confirmed'
-                ? '\n\n[Actions were confirmed and executed successfully.]'
-                : status === 'cancelled'
-                  ? '\n\n[User cancelled the proposed actions.]'
-                  : '\n\n[Proposed actions were not confirmed — user moved on.]';
+            let suffix: string;
+            if (status === 'confirmed') {
+              suffix = '\n\n[Actions confirmed.';
+              if (m.actionResults?.length) {
+                const parts: string[] = [];
+                for (const r of m.actionResults) {
+                  if (!r.success || !r.details) continue;
+                  const d = r.details;
+                  if (r.toolName === 'create_charges' || r.toolName === 'create_multi_charge') {
+                    const ids = Array.isArray(d) ? d.map((c: any) => c.id) : d.children?.map((c: any) => c.id) || [];
+                    if (ids.length) parts.push(`created charges [${ids.join(', ')}]`);
+                  } else if (r.toolName === 'create_expense') {
+                    if (d.id) parts.push(`created expense [${d.id}]`);
+                  } else if (r.toolName === 'create_multi_expense') {
+                    const ids = [d.id, ...(d.children?.map((c: any) => c.id) || [])].filter(Boolean);
+                    if (ids.length) parts.push(`created expenses [${ids.join(', ')}]`);
+                  } else if (r.toolName === 'add_members') {
+                    const ids = Array.isArray(d) ? d.map((m: any) => m.id) : [];
+                    if (ids.length) parts.push(`added members [${ids.join(', ')}]`);
+                  } else if (r.toolName === 'record_payments') {
+                    const ids = d.created?.map((p: any) => p.id) || (Array.isArray(d) ? d.map((p: any) => p.id) : []);
+                    if (ids.length) parts.push(`recorded payments [${ids.join(', ')}]`);
+                  } else if (r.toolName === 'void_charges') {
+                    const ids = m.actions!.find((a) => a.toolName === 'void_charges')?.args?.chargeIds || [];
+                    if (ids.length) parts.push(`voided charges [${ids.join(', ')}]`);
+                  } else if (r.toolName === 'delete_expenses') {
+                    const ids = m.actions!.find((a) => a.toolName === 'delete_expenses')?.args?.expenseIds || [];
+                    if (ids.length) parts.push(`deleted expenses [${ids.join(', ')}]`);
+                  } else if (r.toolName === 'remove_members') {
+                    const ids = m.actions!.find((a) => a.toolName === 'remove_members')?.args?.memberIds || [];
+                    if (ids.length) parts.push(`removed members [${ids.join(', ')}]`);
+                  } else if (r.toolName === 'delete_payments') {
+                    const ids = m.actions!.find((a) => a.toolName === 'delete_payments')?.args?.paymentIds || [];
+                    if (ids.length) parts.push(`deleted payments [${ids.join(', ')}]`);
+                  } else if (r.toolName === 'restore_charges') {
+                    const ids = m.actions!.find((a) => a.toolName === 'restore_charges')?.args?.chargeIds || [];
+                    if (ids.length) parts.push(`restored charges [${ids.join(', ')}]`);
+                  } else if (r.toolName === 'restore_expenses') {
+                    const ids = m.actions!.find((a) => a.toolName === 'restore_expenses')?.args?.expenseIds || [];
+                    if (ids.length) parts.push(`restored expenses [${ids.join(', ')}]`);
+                  } else if (r.toolName === 'restore_members') {
+                    const ids = m.actions!.find((a) => a.toolName === 'restore_members')?.args?.memberIds || [];
+                    if (ids.length) parts.push(`restored members [${ids.join(', ')}]`);
+                  } else if (r.toolName === 'restore_payments') {
+                    const ids = m.actions!.find((a) => a.toolName === 'restore_payments')?.args?.paymentIds || [];
+                    if (ids.length) parts.push(`restored payments [${ids.join(', ')}]`);
+                  }
+                }
+                if (parts.length) suffix += ` Results: ${parts.join(', ')}.`;
+              }
+              suffix += ']';
+            } else if (status === 'cancelled') {
+              suffix = '\n\n[User cancelled the proposed actions.]';
+            } else {
+              suffix = '\n\n[Proposed actions were not confirmed — user moved on.]';
+            }
             return { role: m.role, content: (m.content || '') + suffix };
           }
           return { role: m.role, content: m.content };
         }),
-      { role: 'user' as const, content: stripWizardHints(input.trim()) || 'Please import this CSV data.' },
+      { role: 'user' as const, content: stripWizardHints(messageText) || 'Please import this CSV data.' },
     ];
 
     const csvContent = csvFile?.content;
@@ -527,6 +578,7 @@ export default function AgentPage() {
                         results={msg.actionResults}
                         onConfirm={(modified) => handleConfirm(msg.id, modified)}
                         onCancel={() => handleCancel(msg.id)}
+                        onUndo={() => handleSend('undo that')}
                         orgId={currentOrgId}
                       />
                     )}
@@ -636,7 +688,7 @@ export default function AgentPage() {
               />
 
               <Button
-                onClick={handleSend}
+                onClick={() => handleSend()}
                 disabled={(!input.trim() && !csvFile) || isStreaming}
                 size="icon"
                 className="shrink-0 h-10 w-10"
