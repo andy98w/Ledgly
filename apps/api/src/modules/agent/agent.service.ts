@@ -750,26 +750,42 @@ export class AgentService {
       case 'void_charges': {
         const charges = await this.prisma.charge.findMany({
           where: { id: { in: args.chargeIds || [] }, orgId },
-          select: { title: true, amountCents: true },
+          select: { title: true, amountCents: true, dueDate: true, membership: { select: { name: true, user: { select: { name: true } } } } },
         });
-        const names = charges.map((c) => `"${c.title}" ($${(c.amountCents / 100).toFixed(2)})`);
-        return `Void ${names.length} charge(s): ${names.slice(0, 3).join(', ')}${names.length > 3 ? '...' : ''}`;
+        args._items = charges.map((c) => ({
+          title: c.title,
+          amountCents: c.amountCents,
+          dueDate: c.dueDate,
+          memberName: c.membership?.name || c.membership?.user?.name,
+        }));
+        return `Void ${charges.length} charge(s)`;
       }
       case 'remove_members': {
         const members = await this.prisma.membership.findMany({
           where: { id: { in: args.memberIds || [] }, orgId },
-          select: { name: true, user: { select: { name: true } } },
+          select: { name: true, role: true, user: { select: { name: true, email: true } } },
         });
-        const names = members.map((m) => m.name || m.user?.name || 'Unknown');
-        return `Remove ${names.length} member(s): ${names.slice(0, 3).join(', ')}${names.length > 3 ? '...' : ''}`;
+        args._items = members.map((m) => ({
+          name: m.name || m.user?.name || 'Unknown',
+          email: m.user?.email,
+          role: m.role,
+        }));
+        return `Remove ${members.length} member(s)`;
       }
       case 'delete_expenses': {
         const expenses = await this.prisma.expense.findMany({
           where: { id: { in: args.expenseIds || [] }, orgId },
-          select: { title: true, amountCents: true, vendor: true },
+          select: { title: true, description: true, amountCents: true, vendor: true, date: true, category: true },
         });
-        const names = expenses.map((e) => `"${e.title}"${e.vendor ? ` (${e.vendor})` : ''} $${(e.amountCents / 100).toFixed(2)}`);
-        return `Delete ${names.length} expense(s): ${names.slice(0, 3).join(', ')}${names.length > 3 ? '...' : ''}`;
+        args._items = expenses.map((e) => ({
+          title: e.title,
+          description: e.description,
+          amountCents: e.amountCents,
+          vendor: e.vendor !== e.title ? e.vendor : null,
+          date: e.date,
+          category: e.category,
+        }));
+        return `Delete ${expenses.length} expense(s)`;
       }
       case 'allocate_payment':
         return `Allocate payment to ${args.allocations?.length || 0} charge(s)`;

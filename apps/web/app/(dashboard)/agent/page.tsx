@@ -225,8 +225,20 @@ export default function AgentPage() {
     // Build chat history for API (only text content, not display metadata)
     const chatHistory: ChatMessage[] = [
       ...messages
-        .filter((m) => m.content)
-        .map((m) => ({ role: m.role, content: m.content })),
+        .filter((m) => m.content || (m.role === 'assistant' && m.actions?.length))
+        .map((m) => {
+          if (m.role === 'assistant' && m.actions && m.actions.length > 0) {
+            const status = m.actionStatus;
+            const suffix =
+              status === 'confirmed'
+                ? '\n\n[Actions were confirmed and executed successfully.]'
+                : status === 'cancelled'
+                  ? '\n\n[User cancelled the proposed actions.]'
+                  : '\n\n[Proposed actions were not confirmed — user moved on.]';
+            return { role: m.role, content: (m.content || '') + suffix };
+          }
+          return { role: m.role, content: m.content };
+        }),
       { role: 'user' as const, content: stripWizardHints(input.trim()) || 'Please import this CSV data.' },
     ];
 

@@ -550,7 +550,7 @@ export function ConfirmationCard({
                   {(action.toolName === 'update_member' || action.toolName === 'update_charge' || action.toolName === 'update_expense') && action.args._old && (
                     <ul className="mt-1 space-y-1 text-sm">
                       {Object.entries(action.args)
-                        .filter(([k]) => !k.endsWith('Id') && k !== '_old')
+                        .filter(([k]) => !k.endsWith('Id') && k !== '_old' && k !== '_items')
                         .map(([k, v]) => {
                           const oldVal = action.args._old[k];
                           const fmt = (val: any) => k === 'amountCents' ? formatCents(val as number) : k === 'date' || k === 'dueDate' ? new Date(val).toLocaleDateString() : String(val);
@@ -565,6 +565,33 @@ export function ConfirmationCard({
                             </li>
                           );
                         })}
+                    </ul>
+                  )}
+                  {action.args._items && action.args._items.length > 0 && (
+                    <ul className="mt-1.5 space-y-1.5">
+                      {action.args._items.slice(0, 10).map((item: any, i: number) => (
+                        <li key={i} className="rounded-md border border-border/40 bg-secondary/20 px-2.5 py-1.5 text-sm">
+                          <div className="font-medium">{item.title || item.name || 'Untitled'}</div>
+                          {item.description && (
+                            <div className="text-xs text-muted-foreground mt-0.5">{item.description}</div>
+                          )}
+                          <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground flex-wrap">
+                            {item.amountCents != null && <span>{formatCents(item.amountCents)}</span>}
+                            {item.memberName && <span>· {item.memberName}</span>}
+                            {item.vendor && <span>· {item.vendor}</span>}
+                            {item.date && <span>· {new Date(item.date).toLocaleDateString()}</span>}
+                            {item.dueDate && <span>· Due {new Date(item.dueDate).toLocaleDateString()}</span>}
+                            {item.category && <span>· {item.category}</span>}
+                            {item.email && <span>{item.email}</span>}
+                            {item.role && item.role !== 'MEMBER' && <span>· {item.role}</span>}
+                          </div>
+                        </li>
+                      ))}
+                      {action.args._items.length > 10 && (
+                        <li className="text-xs text-muted-foreground px-2.5">
+                          ...and {action.args._items.length - 10} more
+                        </li>
+                      )}
                     </ul>
                   )}
                 </>
