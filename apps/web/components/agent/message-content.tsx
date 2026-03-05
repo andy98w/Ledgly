@@ -794,29 +794,23 @@ export function ConfirmationCard({
                 <>
                   <span className="font-medium">{action.description}</span>
                   {action.args._items && action.args._items.length > 0 && (
-                    <ul className="mt-1.5 space-y-1.5">
+                    <ul className="mt-1 space-y-0.5 text-sm text-muted-foreground">
                       {action.args._items.slice(0, 10).map((item: any, i: number) => (
-                        <li key={i} className="rounded-md border border-border/40 bg-secondary/20 px-2.5 py-1.5 text-sm">
-                          <div className="font-medium">{item.title || item.name || 'Untitled'}</div>
-                          {item.description && (
-                            <div className="text-xs text-muted-foreground mt-0.5">{item.description}</div>
-                          )}
-                          <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground flex-wrap">
-                            {item.amountCents != null && <span>{formatCents(item.amountCents)}</span>}
-                            {item.memberName && <span>· {item.memberName}</span>}
-                            {item.vendor && <span>· {item.vendor}</span>}
-                            {item.date && <span>· {new Date(item.date).toLocaleDateString()}</span>}
-                            {item.dueDate && <span>· Due {new Date(item.dueDate).toLocaleDateString()}</span>}
-                            {item.category && <span>· {item.category}</span>}
-                            {item.email && <span>{item.email}</span>}
-                            {item.role && item.role !== 'MEMBER' && <span>· {item.role}</span>}
-                          </div>
+                        <li key={i}>
+                          <span className="text-foreground">{item.title || item.name || 'Untitled'}</span>
+                          {item.amountCents != null && <> · {formatCents(item.amountCents)}</>}
+                          {item.memberName && <> · {item.memberName}</>}
+                          {item.vendor && <> · {item.vendor}</>}
+                          {item.date && <> · {new Date(item.date).toLocaleDateString()}</>}
+                          {item.dueDate && <> · Due {new Date(item.dueDate).toLocaleDateString()}</>}
+                          {item.category && <> · {item.category.charAt(0) + item.category.slice(1).toLowerCase()}</>}
+                          {item.email && <> · {item.email}</>}
+                          {item.role && item.role !== 'MEMBER' && <> · {item.role}</>}
+                          {item.description && <> — {item.description}</>}
                         </li>
                       ))}
                       {action.args._items.length > 10 && (
-                        <li className="text-xs text-muted-foreground px-2.5">
-                          ...and {action.args._items.length - 10} more
-                        </li>
+                        <li>...and {action.args._items.length - 10} more</li>
                       )}
                     </ul>
                   )}
@@ -828,13 +822,13 @@ export function ConfirmationCard({
       </div>
 
       {status === 'pending' && (
-        <div className="flex items-center gap-2 pt-1">
-          <Button size="sm" onClick={() => onConfirm(editableActions)} disabled={hasEmptyCharge || hasEmptyExpense} className="gap-1.5">
-            <Check className="h-3.5 w-3.5" />
+        <div className="flex items-center gap-1.5 pt-1">
+          <Button size="sm" onClick={() => onConfirm(editableActions)} disabled={hasEmptyCharge || hasEmptyExpense} className="h-7 px-2.5 text-xs gap-1">
+            <Check className="h-3 w-3" />
             Confirm
           </Button>
-          <Button size="sm" variant="outline" onClick={onCancel} className="gap-1.5">
-            <X className="h-3.5 w-3.5" />
+          <Button size="sm" variant="outline" onClick={onCancel} className="h-7 px-2.5 text-xs gap-1">
+            <X className="h-3 w-3" />
             Cancel
           </Button>
         </div>

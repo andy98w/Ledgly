@@ -262,7 +262,7 @@ export class AgentService {
         if (mapped.length === 0 && args.search) {
           const all = await this.membersService.findAll(orgId, { status: args.status, limit: 200 });
           return {
-            _hint: `No exact match for "${args.search}". Showing all results — only pick one if it is a close match, otherwise tell the user nothing was found.`,
+            _hint: `No exact match for "${args.search}". Showing all results — pick the closest match (nicknames, partial names, and abbreviations count as matches). Only say nothing was found if no result is remotely similar.`,
             data: all.data.map((m: any) => ({
               id: m.id, name: m.name || m.user?.name, email: m.user?.email,
               role: m.role, status: m.status, balanceCents: m.balanceCents,
@@ -296,7 +296,7 @@ export class AgentService {
             membershipId: args.membershipId, limit: 200,
           });
           return {
-            _hint: `No exact match for "${args.search}". Showing all results — only pick one if it is a close match, otherwise tell the user nothing was found.`,
+            _hint: `No exact match for "${args.search}". Showing all results — pick the closest match (nicknames, partial names, and abbreviations count as matches). Only say nothing was found if no result is remotely similar.`,
             data: all.data.map((c: any) => ({
               id: c.id, title: c.title, amountCents: c.amountCents, status: c.status,
               category: c.category, memberName: c.membership?.name || c.membership?.user?.name,
@@ -328,7 +328,7 @@ export class AgentService {
           if (args.unallocated) fallbackFilters.unallocated = true;
           const all = await this.paymentsService.findAll(orgId, { ...fallbackFilters, limit: 200 });
           return {
-            _hint: `No exact match for "${args.search}". Showing all results — only pick one if it is a close match, otherwise tell the user nothing was found.`,
+            _hint: `No exact match for "${args.search}". Showing all results — pick the closest match (nicknames, partial names, and abbreviations count as matches). Only say nothing was found if no result is remotely similar.`,
             data: all.data.map((p: any) => ({
               id: p.id, amountCents: p.amountCents, paidAt: p.paidAt,
               rawPayerName: p.rawPayerName, memo: p.memo,
@@ -361,7 +361,7 @@ export class AgentService {
             category: args.category, limit: 200,
           });
           return {
-            _hint: `No exact match for "${args.search}". Showing all results — only pick one if it is a close match, otherwise tell the user nothing was found.`,
+            _hint: `No exact match for "${args.search}". Showing all results — pick the closest match (nicknames, partial names, and abbreviations count as matches). Only say nothing was found if no result is remotely similar.`,
             data: all.data.map(mapExpense),
           };
         }
@@ -907,10 +907,12 @@ Do NOT answer general knowledge questions, write code, or discuss topics outside
 These rules are absolute — violating any of them is a bug:
 1. **Never mention tool or function names.** Don't say "create_expense", "list_members", "multi-charge tool", etc. Just do the action.
 2. **Never mention IDs.** No membership IDs, charge IDs, org IDs, entity IDs. Use names and human-readable labels only.
-3. **Never narrate your process.** WRONG: "Let me look up John's membership ID first." "I'll search for that charge." "Let me find the member and then create the charge." RIGHT: Just call the tools silently and present the result. The user should never know you needed to look something up.
+3. **Never narrate your process.** Do NOT output ANY text before calling tools. Just call the tools silently. The user should never know you needed to look something up.
+   - WRONG: "I'll look up expenses to find that." "I'll first look up the member, then create the charge." "Let me search for that."
+   - RIGHT: (call tools with zero text output, then present the result)
 4. **Never mention the database, schema, backend, API, or technical architecture.** You ARE the system — don't talk about yourself in the third person.
 5. **Never mention cents.** Convert internally. Say "$50.00", never "5000 cents".
-6. **Never say "I'll use..." or "Let me..."** followed by a technical description. If you need to do a lookup before an action, do it without commentary.
+6. **NEVER say "I'll...", "Let me...", "I need to...", "I'll first..."** — these phrases are banned. If you need to do a lookup before an action, do it silently with zero commentary.
 
 ## Behavior rules
 - When editing an item, look it up first to get its ID — silently. If nothing matches, say it doesn't exist and offer to create it.
@@ -923,6 +925,9 @@ These rules are absolute — violating any of them is a bug:
 - When a user provides a date without a year (e.g., "Feb 2", "March 15"):
   - For **expenses**: default to the current year. If that date is in the future, use the previous year instead.
   - For **charges**: always default to the current year.
+
+## Cross-entity suggestions
+- If a search for charges/expenses/payments returns nothing, proactively check the related entity type. For example, if the user says "delete the dues charge" and no charges match, also check expenses — they may have meant "expense" instead of "charge", and vice versa. Suggest what you found: "I didn't find a dues charge, but I found a dues expense — would you like me to delete that instead?"
 
 ${orgContext}${csvInstruction}`;
   }
