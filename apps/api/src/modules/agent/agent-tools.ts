@@ -181,7 +181,11 @@ export const agentTools: AgentTool[] = [
           expenseId: { type: 'string', description: 'The expense ID to update' },
           title: { type: 'string', description: 'New title (optional)' },
           amountCents: { type: 'number', description: 'New amount in cents (optional)' },
-          category: { type: 'string', description: 'New category (optional)' },
+          category: {
+            type: 'string',
+            enum: ['EVENT', 'SUPPLIES', 'FOOD', 'VENUE', 'MARKETING', 'SERVICES', 'OTHER'],
+            description: 'New category (optional)',
+          },
           date: { type: 'string', description: 'New date in ISO format YYYY-MM-DD (optional)' },
           vendor: { type: 'string', description: 'New vendor name (optional)' },
         },
@@ -261,7 +265,11 @@ export const agentTools: AgentTool[] = [
       input_schema: {
         type: 'object' as const,
         properties: {
-          category: { type: 'string', description: 'Expense category' },
+          category: {
+            type: 'string',
+            enum: ['EVENT', 'SUPPLIES', 'FOOD', 'VENUE', 'MARKETING', 'SERVICES', 'OTHER'],
+            description: 'Expense category',
+          },
           title: { type: 'string', description: 'Expense title' },
           amountCents: { type: 'number', description: 'Amount in cents' },
           date: { type: 'string', description: 'Expense date (YYYY-MM-DD)' },
@@ -313,7 +321,11 @@ export const agentTools: AgentTool[] = [
       input_schema: {
         type: 'object' as const,
         properties: {
-          category: { type: 'string', description: 'Expense category' },
+          category: {
+            type: 'string',
+            enum: ['EVENT', 'SUPPLIES', 'FOOD', 'VENUE', 'MARKETING', 'SERVICES', 'OTHER'],
+            description: 'Expense category',
+          },
           title: { type: 'string', description: 'Parent expense title' },
           date: { type: 'string', description: 'Expense date (YYYY-MM-DD)' },
           vendor: { type: 'string', description: 'Vendor name (optional)' },

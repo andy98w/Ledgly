@@ -418,7 +418,7 @@ export class AgentService {
         return this.expensesService.update(orgId, args.expenseId, {
           ...(args.title && { title: args.title }),
           ...(args.amountCents && { amountCents: args.amountCents }),
-          ...(args.category && { category: args.category }),
+          ...(args.category && { category: args.category.toUpperCase() }),
           ...(args.date && { date: args.date }),
           ...(args.vendor !== undefined && { vendor: args.vendor }),
         }, actorId);
@@ -434,7 +434,7 @@ export class AgentService {
 
       case 'create_expense':
         return this.expensesService.create(orgId, actorId, {
-          category: args.category,
+          category: args.category?.toUpperCase(),
           title: args.title,
           amountCents: args.amountCents,
           date: args.date,
@@ -452,7 +452,7 @@ export class AgentService {
 
       case 'create_multi_expense':
         return this.expensesService.createMultiExpense(orgId, actorId, {
-          category: args.category,
+          category: args.category?.toUpperCase(),
           title: args.title,
           date: args.date,
           vendor: args.vendor,
@@ -530,7 +530,7 @@ export class AgentService {
         if (args.amountCents !== undefined) this.validateAmount(args.amountCents);
         if (args.date) this.validateDate(args.date, 'date');
         if (args.vendor) this.validateStringLength(args.vendor, 'vendor');
-        if (args.category) this.validateStringLength(args.category, 'category');
+        if (args.category) this.validateExpenseCategory(args.category);
         break;
 
       case 'create_charges':
@@ -548,7 +548,7 @@ export class AgentService {
         this.validateRequiredString(args.title, 'title');
         this.validateDate(args.date, 'date');
         if (args.vendor) this.validateStringLength(args.vendor, 'vendor');
-        if (args.category) this.validateStringLength(args.category, 'category');
+        if (args.category) this.validateExpenseCategory(args.category);
         break;
 
       case 'create_multi_charge':
@@ -565,7 +565,7 @@ export class AgentService {
         this.validateRequiredString(args.title, 'title');
         this.validateDate(args.date, 'date');
         if (args.vendor) this.validateStringLength(args.vendor, 'vendor');
-        if (args.category) this.validateStringLength(args.category, 'category');
+        if (args.category) this.validateExpenseCategory(args.category);
         if (!Array.isArray(args.children) || args.children.length === 0)
           throw new Error('children array is required and cannot be empty');
         if (args.children.length > AgentService.MAX_BATCH_SIZE)
@@ -657,9 +657,17 @@ export class AgentService {
     this.validateStringLength(value, fieldName);
   }
 
+  private static readonly VALID_EXPENSE_CATEGORIES = ['EVENT', 'SUPPLIES', 'FOOD', 'VENUE', 'MARKETING', 'SERVICES', 'OTHER'];
+
   private validateStringLength(value: string, fieldName: string): void {
     if (value.length > AgentService.MAX_STRING_LENGTH)
       throw new Error(`${fieldName} cannot exceed ${AgentService.MAX_STRING_LENGTH} characters`);
+  }
+
+  private validateExpenseCategory(value: string): void {
+    const upper = value?.toUpperCase();
+    if (!AgentService.VALID_EXPENSE_CATEGORIES.includes(upper))
+      throw new Error(`Invalid expense category "${value}". Must be one of: ${AgentService.VALID_EXPENSE_CATEGORIES.join(', ')}`);
   }
 
   private validateDate(value: any, fieldName: string): void {
