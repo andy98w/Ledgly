@@ -391,6 +391,9 @@ export class AgentService {
       case 'remove_members':
         return this.membersService.bulkRemove(orgId, args.memberIds, actorId);
 
+      case 'delete_expenses':
+        return this.expensesService.bulkDelete(orgId, args.expenseIds, actorId);
+
       case 'import_csv':
         return this.executeImport(orgId, actorId, args.type, args.rows);
 
@@ -488,6 +491,13 @@ export class AgentService {
           throw new Error('memberIds array is required and cannot be empty');
         if (args.memberIds.length > AgentService.MAX_BATCH_SIZE)
           throw new Error(`Cannot remove more than ${AgentService.MAX_BATCH_SIZE} members at once`);
+        break;
+
+      case 'delete_expenses':
+        if (!Array.isArray(args.expenseIds) || args.expenseIds.length === 0)
+          throw new Error('expenseIds array is required and cannot be empty');
+        if (args.expenseIds.length > AgentService.MAX_BATCH_SIZE)
+          throw new Error(`Cannot delete more than ${AgentService.MAX_BATCH_SIZE} expenses at once`);
         break;
 
       case 'import_csv':
@@ -589,6 +599,8 @@ export class AgentService {
         return `Void ${args.chargeIds?.length || 0} charge(s)`;
       case 'remove_members':
         return `Remove ${args.memberIds?.length || 0} member(s)`;
+      case 'delete_expenses':
+        return `Delete ${args.expenseIds?.length || 0} expense(s)`;
       case 'import_csv':
         return `Import ${args.rows?.length || 0} ${args.type} row(s) from CSV`;
       default:
@@ -676,10 +688,10 @@ export class AgentService {
 You can ONLY perform these actions:
 - Add, edit, or remove members
 - Create, edit, or void charges
-- Create or edit expenses
+- Create, edit, or delete expenses
 - Record payments
 - Import CSV data (members, charges, payments, or expenses)
-- Look up members, charges, payments, and balances
+- Look up members, charges, payments, expenses, and balances
 
 Do NOT answer general knowledge questions, write code, or discuss topics outside of organization financial management. If asked, politely redirect to the available actions.
 

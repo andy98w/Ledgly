@@ -329,6 +329,24 @@ export const agentTools: AgentTool[] = [
   {
     requiresConfirmation: true,
     definition: {
+      name: 'delete_expenses',
+      description: 'Delete one or more expenses by their IDs. Look up expenses first using list_expenses.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          expenseIds: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Array of expense IDs to delete',
+          },
+        },
+        required: ['expenseIds'],
+      },
+    },
+  },
+  {
+    requiresConfirmation: true,
+    definition: {
       name: 'import_csv',
       description:
         'Import data from parsed CSV rows. Use when user provides CSV data or a CSV file.',

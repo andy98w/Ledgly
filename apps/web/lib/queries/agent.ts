@@ -207,7 +207,7 @@ export function useDeleteAgentSession() {
 
 const TOOL_QUERY_MAP: Record<string, (orgId: string) => readonly (readonly unknown[])[]> = {
   add_members: (orgId) => [queryKeys.members.all(orgId)],
-  remove_member: (orgId) => [queryKeys.members.all(orgId)],
+  remove_members: (orgId) => [queryKeys.members.all(orgId)],
   update_member: (orgId) => [queryKeys.members.all(orgId)],
   create_charges: (orgId) => [queryKeys.charges.all(orgId), queryKeys.members.all(orgId)],
   update_charge: (orgId) => [queryKeys.charges.all(orgId), queryKeys.members.all(orgId)],
@@ -219,6 +219,7 @@ const TOOL_QUERY_MAP: Record<string, (orgId: string) => readonly (readonly unkno
   ],
   create_expense: (orgId) => [queryKeys.expenses.all(orgId)],
   update_expense: (orgId) => [queryKeys.expenses.all(orgId)],
+  delete_expenses: (orgId) => [queryKeys.expenses.all(orgId)],
 };
 
 export function useConfirmAgentActions() {
