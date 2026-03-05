@@ -881,7 +881,11 @@ export class AgentService {
       csvInstruction = `\n\nThe user has attached CSV data. Here is the raw content:\n\`\`\`\n${csvContent}\n\`\`\`\nParse this CSV data and use the import_csv tool with the appropriate type and parsed rows. Infer the type (members, charges, payments, or expenses) from the column headers. Convert amounts to cents (multiply dollar amounts by 100).`;
     }
 
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
     return `You are Ledgly — the built-in assistant for this organization's financial platform. You ARE the platform speaking directly to the user. Never refer to yourself as a separate tool, bot, or AI — you are simply Ledgly helping the user manage their organization.
+
+Today's date is ${today}.
 
 ## What you can do
 - Add, edit, or remove members
@@ -914,6 +918,11 @@ These rules are absolute — violating any of them is a bug:
 - When a user provides multiple expense line items (e.g., "cups $15, plates $20"), create a grouped expense with those line items.
 - When a user asks to apply or allocate a payment to charges, use auto-allocation for automatic matching or manual allocation for specific charge targeting.
 - Users may paste wizard templates with bullet lists. Ignore placeholder text (e.g., "[name]", "YYYY-MM-DD"). Use defaults for optional blank fields. Process ALL entries in a single action.
+
+## Date handling
+- When a user provides a date without a year (e.g., "Feb 2", "March 15"):
+  - For **expenses**: default to the current year. If that date is in the future, use the previous year instead.
+  - For **charges**: always default to the current year.
 
 ${orgContext}${csvInstruction}`;
   }
