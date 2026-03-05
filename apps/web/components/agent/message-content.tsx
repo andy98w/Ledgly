@@ -232,13 +232,13 @@ function ChargeActionEditor({
       <div className="rounded-lg border border-border/60 bg-secondary/20 p-3 space-y-2">
         <FieldRow label="Title">
           <input type="text" value={action.args.title || ''} onChange={(e) => update('title', e.target.value)}
-            className="font-medium text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors w-full py-0.5" />
+            className="font-medium text-sm bg-transparent border-b border-transparent hover:border-border/60 focus:border-border focus:outline-none transition-colors w-full py-0.5" />
         </FieldRow>
 
         <FieldRow label="Amount">
           <span className="text-muted-foreground text-xs">$</span>
           <input type="text" value={((action.args.amountCents || 0) / 100).toFixed(2)} onChange={(e) => updateAmount(e.target.value)}
-            className="w-24 text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors tabular-nums py-0.5" />
+            className="w-24 text-sm bg-transparent border-b border-transparent hover:border-border/60 focus:border-border focus:outline-none transition-colors tabular-nums py-0.5" />
           {memberIds.length > 1 && <span className="text-xs text-muted-foreground">each</span>}
         </FieldRow>
 
@@ -335,7 +335,7 @@ function ExpenseActionEditor({
       <div className="rounded-lg border border-border/60 bg-secondary/20 p-3 space-y-2">
         <FieldRow label="Title">
           <input type="text" value={action.args.title || ''} onChange={(e) => update('title', e.target.value)}
-            className="font-medium text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors w-full py-0.5" />
+            className="font-medium text-sm bg-transparent border-b border-transparent hover:border-border/60 focus:border-border focus:outline-none transition-colors w-full py-0.5" />
         </FieldRow>
         <FieldRow label="Category">
           <InlineSelect value={action.args.category || 'OTHER'} onValueChange={(v) => update('category', v)} options={EXPENSE_CATEGORIES} />
@@ -359,10 +359,10 @@ function ExpenseActionEditor({
             {children.map((child, idx) => (
               <div key={idx} className="flex items-center gap-2">
                 <input type="text" value={child.title} onChange={(e) => updateChild(idx, 'title', e.target.value)}
-                  className="flex-1 text-xs bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5" />
+                  className="flex-1 text-xs bg-transparent border-b border-transparent hover:border-border/60 focus:border-border focus:outline-none transition-colors py-0.5" />
                 <span className="text-muted-foreground text-xs">$</span>
                 <input type="text" value={(child.amountCents / 100).toFixed(2)} onChange={(e) => updateChildAmount(idx, e.target.value)}
-                  className="w-20 text-xs bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors tabular-nums py-0.5" />
+                  className="w-20 text-xs bg-transparent border-b border-transparent hover:border-border/60 focus:border-border focus:outline-none transition-colors tabular-nums py-0.5" />
                 {children.length > 1 && (
                   <button type="button" onClick={() => removeChild(idx)} className="text-muted-foreground hover:text-destructive transition-colors">
                     <XIcon className="h-3 w-3" />
@@ -386,7 +386,7 @@ const EXPENSE_CATEGORIES = ['EVENT', 'SUPPLIES', 'FOOD', 'VENUE', 'MARKETING', '
 const CHARGE_CATEGORIES = ['DUES', 'EVENT', 'FINE', 'MERCH', 'OTHER'] as const;
 const MEMBER_ROLES = ['MEMBER', 'ADMIN', 'TREASURER'] as const;
 
-const INPUT_CLASS = 'text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5';
+const INPUT_CLASS = 'text-sm bg-transparent border-b border-transparent hover:border-border/60 focus:border-border focus:outline-none transition-colors py-0.5';
 const AMOUNT_INPUT_CLASS = cn(INPUT_CLASS, 'w-24 tabular-nums [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none');
 
 /** Shared editable field row */
@@ -453,12 +453,12 @@ function SingleExpenseEditor({
       <div className="rounded-lg border border-border/60 bg-secondary/20 p-3 space-y-2">
         <FieldRow label="Title">
           <input type="text" value={action.args.title || ''} onChange={(e) => update('title', e.target.value)}
-            className="font-medium text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors w-full py-0.5" />
+            className="font-medium text-sm bg-transparent border-b border-transparent hover:border-border/60 focus:border-border focus:outline-none transition-colors w-full py-0.5" />
         </FieldRow>
         <FieldRow label="Amount">
           <span className="text-muted-foreground text-xs">$</span>
           <input type="text" value={((action.args.amountCents || 0) / 100).toFixed(2)} onChange={(e) => updateAmount(e.target.value)}
-            className="w-24 text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors tabular-nums py-0.5" />
+            className="w-24 text-sm bg-transparent border-b border-transparent hover:border-border/60 focus:border-border focus:outline-none transition-colors tabular-nums py-0.5" />
         </FieldRow>
         <FieldRow label="Category">
           <InlineSelect value={action.args.category || 'OTHER'} onValueChange={(v) => update('category', v)} options={EXPENSE_CATEGORIES} />
@@ -534,7 +534,7 @@ function UpdateFieldsEditor({
                 )}
                 <span className="text-muted-foreground text-xs">$</span>
                 <input type="text" value={((getFieldValue(field) || 0) / 100).toFixed(2)} onChange={(e) => updateAmount(e.target.value)}
-                  className="w-24 text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors tabular-nums py-0.5" />
+                  className="w-24 text-sm bg-transparent border-b border-transparent hover:border-border/60 focus:border-border focus:outline-none transition-colors tabular-nums py-0.5" />
               </FieldRow>
             );
           }
@@ -620,7 +620,7 @@ function MembersEditor({
             <div className="flex items-center gap-2">
               <FieldRow label="Name">
                 <input type="text" value={m.name} onChange={(e) => updateMember(idx, 'name', e.target.value)}
-                  className="flex-1 text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5" />
+                  className="flex-1 text-sm bg-transparent border-b border-transparent hover:border-border/60 focus:border-border focus:outline-none transition-colors py-0.5" />
               </FieldRow>
               {members.length > 1 && (
                 <button type="button" onClick={() => removeMember(idx)} className="text-muted-foreground hover:text-destructive transition-colors shrink-0">
@@ -630,7 +630,7 @@ function MembersEditor({
             </div>
             <FieldRow label="Email">
               <input type="text" value={m.email || ''} onChange={(e) => updateMember(idx, 'email', e.target.value)} placeholder="Optional"
-                className="flex-1 text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5 placeholder:text-muted-foreground/40" />
+                className="flex-1 text-sm bg-transparent border-b border-transparent hover:border-border/60 focus:border-border focus:outline-none transition-colors py-0.5 placeholder:text-muted-foreground/40" />
             </FieldRow>
             <FieldRow label="Role">
               <InlineSelect value={m.role || 'MEMBER'} onValueChange={(v) => updateMember(idx, 'role', v)} options={MEMBER_ROLES} />
@@ -678,7 +678,7 @@ function PaymentsEditor({
             <div className="flex items-center gap-2">
               <FieldRow label="Payer">
                 <input type="text" value={p.rawPayerName || ''} onChange={(e) => updatePayment(idx, 'rawPayerName', e.target.value)}
-                  className="flex-1 text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5" />
+                  className="flex-1 text-sm bg-transparent border-b border-transparent hover:border-border/60 focus:border-border focus:outline-none transition-colors py-0.5" />
               </FieldRow>
               {payments.length > 1 && (
                 <button type="button" onClick={() => removePayment(idx)} className="text-muted-foreground hover:text-destructive transition-colors shrink-0">
@@ -689,7 +689,7 @@ function PaymentsEditor({
             <FieldRow label="Amount">
               <span className="text-muted-foreground text-xs">$</span>
               <input type="text" value={(p.amountCents / 100).toFixed(2)} onChange={(e) => updatePaymentAmount(idx, e.target.value)}
-                className="w-24 text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors tabular-nums py-0.5" />
+                className="w-24 text-sm bg-transparent border-b border-transparent hover:border-border/60 focus:border-border focus:outline-none transition-colors tabular-nums py-0.5" />
             </FieldRow>
             <FieldRow label="Date">
               <DateInput value={p.date || ''} onChange={(v) => updatePayment(idx, 'date', v)} />
