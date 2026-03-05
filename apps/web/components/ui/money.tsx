@@ -14,11 +14,11 @@ interface MoneyProps {
 }
 
 const sizeClasses = {
-  xs: 'text-sm font-medium',
-  sm: 'text-lg font-semibold',
-  md: 'text-2xl font-bold',
-  lg: 'text-4xl font-bold',
-  xl: 'text-5xl font-bold tracking-tight',
+  xs: 'text-xs font-medium',
+  sm: 'text-base font-semibold',
+  md: 'text-xl font-bold',
+  lg: 'text-3xl font-bold',
+  xl: 'text-4xl font-bold tracking-tight',
 };
 
 const currencyFormatter = new Intl.NumberFormat('en-US', {

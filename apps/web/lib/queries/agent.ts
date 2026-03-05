@@ -136,7 +136,8 @@ export async function confirmAgentActions(
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({ message: 'Confirm failed' }));
-    throw new Error(err.message);
+    const msg = Array.isArray(err.message) ? err.message.join(', ') : err.message;
+    throw new Error(msg || 'Confirm failed');
   }
 
   return response.json();
@@ -198,6 +199,53 @@ export function useDeleteAgentSession() {
       api.delete<{ success: boolean }>(`/organizations/${orgId}/agent/sessions/${sessionId}`),
     onSuccess: (_, { orgId }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.agentSessions.all(orgId) });
+    },
+  });
+}
+
+// ── Confirm with cache invalidation ───────────────────────
+
+const TOOL_QUERY_MAP: Record<string, (orgId: string) => readonly (readonly unknown[])[]> = {
+  add_members: (orgId) => [queryKeys.members.all(orgId)],
+  remove_member: (orgId) => [queryKeys.members.all(orgId)],
+  update_member: (orgId) => [queryKeys.members.all(orgId)],
+  create_charges: (orgId) => [queryKeys.charges.all(orgId), queryKeys.members.all(orgId)],
+  update_charge: (orgId) => [queryKeys.charges.all(orgId), queryKeys.members.all(orgId)],
+  void_charges: (orgId) => [queryKeys.charges.all(orgId), queryKeys.members.all(orgId)],
+  record_payments: (orgId) => [
+    queryKeys.payments.all(orgId),
+    queryKeys.charges.all(orgId),
+    queryKeys.members.all(orgId),
+  ],
+  create_expense: (orgId) => [queryKeys.expenses.all(orgId)],
+  update_expense: (orgId) => [queryKeys.expenses.all(orgId)],
+};
+
+export function useConfirmAgentActions() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      orgId,
+      actions,
+    }: {
+      orgId: string;
+      actions: Array<{ toolName: string; args: Record<string, any> }>;
+    }) => confirmAgentActions(orgId, actions),
+    onSuccess: (_, { orgId, actions }) => {
+      // Always invalidate dashboard
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(orgId) });
+      // Invalidate per-tool query keys
+      const seen = new Set<string>();
+      for (const action of actions) {
+        const getKeys = TOOL_QUERY_MAP[action.toolName];
+        if (!getKeys) continue;
+        for (const key of getKeys(orgId)) {
+          const k = JSON.stringify(key);
+          if (seen.has(k)) continue;
+          seen.add(k);
+          queryClient.invalidateQueries({ queryKey: key });
+        }
+      }
     },
   });
 }

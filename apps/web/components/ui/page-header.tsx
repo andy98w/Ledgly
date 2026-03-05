@@ -20,7 +20,7 @@ export function PageHeader({ title, helpText, actions }: PageHeaderProps) {
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">
-          <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+          <h1 className="text-xl font-bold tracking-tight">{title}</h1>
           <TooltipProvider delayDuration={0}>
             <Tooltip>
               <TooltipTrigger asChild>

@@ -1,7 +1,7 @@
 import { Controller, Post, Get, Patch, Delete, Body, Param, Req, Res, UseGuards, Header, NotFoundException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { Throttle } from '@nestjs/throttler';
-import { IsString, IsOptional, IsArray, IsEnum, IsIn, ValidateNested, ArrayMinSize, ArrayMaxSize, MaxLength } from 'class-validator';
+import { IsString, IsOptional, IsArray, IsEnum, IsIn, ValidateNested, ArrayMinSize, ArrayMaxSize, MaxLength, Allow } from 'class-validator';
 import { Type } from 'class-transformer';
 import type { Response } from 'express';
 import { AgentService } from './agent.service';
@@ -35,6 +35,7 @@ class ConfirmActionDto {
   @IsString()
   toolName: string;
 
+  @Allow()
   args: Record<string, any>;
 }
 

@@ -156,6 +156,11 @@ export class AgentService {
         }
 
         if (readTools.length > 0) {
+          // Emit a separator so the next round's text doesn't merge with the previous
+          if (currentText.length > 0) {
+            yield { type: 'text', content: '\n\n' };
+          }
+
           // Execute read tools and feed results back to Claude
           // Add assistant message with tool use to conversation
           anthropicMessages.push({
@@ -289,6 +294,21 @@ export class AgentService {
         }));
       }
 
+      case 'list_expenses': {
+        const result = await this.expensesService.findAll(orgId, {
+          category: args.category,
+          limit: 200,
+        });
+        return result.data.map((e: any) => ({
+          id: e.id,
+          title: e.title,
+          amountCents: e.amountCents,
+          category: e.category,
+          date: e.date,
+          vendor: e.vendor,
+        }));
+      }
+
       case 'get_balances': {
         const members = await this.membersService.findAll(orgId, { status: 'ACTIVE', limit: 500 });
         return members.data
@@ -320,6 +340,29 @@ export class AgentService {
     switch (toolName) {
       case 'add_members':
         return this.membersService.createMany(orgId, args.members, actorId);
+
+      case 'update_member':
+        return this.membersService.update(orgId, args.membershipId, {
+          ...(args.name && { name: args.name }),
+          ...(args.role && { role: args.role }),
+          ...(args.status && { status: args.status }),
+        }, actorId);
+
+      case 'update_charge':
+        return this.chargesService.update(orgId, args.chargeId, {
+          ...(args.title && { title: args.title }),
+          ...(args.amountCents && { amountCents: args.amountCents }),
+          ...(args.dueDate !== undefined && { dueDate: args.dueDate }),
+        }, actorId);
+
+      case 'update_expense':
+        return this.expensesService.update(orgId, args.expenseId, {
+          ...(args.title && { title: args.title }),
+          ...(args.amountCents && { amountCents: args.amountCents }),
+          ...(args.category && { category: args.category }),
+          ...(args.date && { date: args.date }),
+          ...(args.vendor !== undefined && { vendor: args.vendor }),
+        }, actorId);
 
       case 'create_charges':
         return this.chargesService.create(orgId, actorId, {
@@ -376,6 +419,30 @@ export class AgentService {
           this.validateStringLength(m.name, 'member name');
           if (m.email && typeof m.email === 'string') this.validateStringLength(m.email, 'email');
         }
+        break;
+
+      case 'update_member':
+        if (!args.membershipId || typeof args.membershipId !== 'string')
+          throw new Error('membershipId is required');
+        if (args.name) this.validateStringLength(args.name, 'name');
+        break;
+
+      case 'update_charge':
+        if (!args.chargeId || typeof args.chargeId !== 'string')
+          throw new Error('chargeId is required');
+        if (args.title) this.validateStringLength(args.title, 'title');
+        if (args.amountCents !== undefined) this.validateAmount(args.amountCents);
+        if (args.dueDate && args.dueDate !== null) this.validateDate(args.dueDate, 'dueDate');
+        break;
+
+      case 'update_expense':
+        if (!args.expenseId || typeof args.expenseId !== 'string')
+          throw new Error('expenseId is required');
+        if (args.title) this.validateStringLength(args.title, 'title');
+        if (args.amountCents !== undefined) this.validateAmount(args.amountCents);
+        if (args.date) this.validateDate(args.date, 'date');
+        if (args.vendor) this.validateStringLength(args.vendor, 'vendor');
+        if (args.category) this.validateStringLength(args.category, 'category');
         break;
 
       case 'create_charges':
@@ -504,6 +571,12 @@ export class AgentService {
 
   private describeAction(toolName: string, args: Record<string, any>): string {
     switch (toolName) {
+      case 'update_member':
+        return `Update member`;
+      case 'update_charge':
+        return `Update charge${args.title ? ` "${args.title}"` : ''}`;
+      case 'update_expense':
+        return `Update expense${args.title ? ` "${args.title}"` : ''}`;
       case 'add_members':
         return `Add ${args.members?.length || 0} member(s)`;
       case 'create_charges':
@@ -555,6 +628,11 @@ export class AgentService {
   }
 
   async updateSession(orgId: string, sessionId: string, data: { messages?: any; title?: string }) {
+    // Verify session exists and belongs to org before updating
+    const session = await this.prisma.agentSession.findFirst({
+      where: { id: sessionId, orgId },
+    });
+    if (!session) return null;
     return this.prisma.agentSession.update({
       where: { id: sessionId },
       data: {
@@ -596,20 +674,28 @@ export class AgentService {
     return `You are Ledgly Assistant, a financial operations agent for organization management.
 
 You can ONLY perform these actions:
-- Add or remove members
-- Create or void charges
-- Create expenses
+- Add, edit, or remove members
+- Create, edit, or void charges
+- Create or edit expenses
 - Record payments
 - Import CSV data (members, charges, payments, or expenses)
 - Look up members, charges, payments, and balances
 
 Do NOT answer general knowledge questions, write code, or discuss topics outside of organization financial management. If asked, politely redirect to the available actions.
 
+IMPORTANT: Never mention internal function or tool names (like "create_expense", "list_members", etc.) in your responses. Speak in plain language — say "I can create an expense" not "I'll use the create_expense function". Never expose internal IDs (like membership IDs, charge IDs, etc.) to the user — just use names and other human-readable identifiers.
+
 When performing write operations, always call the appropriate tool. Do not just describe what you would do.
 
-When creating charges for "all members" or "everyone", first call list_members to get all active member IDs, then create_charges with those IDs.
+When you need to look up data before performing an action (e.g., finding a member's ID to remove them), do it silently without narrating the process. Do NOT say things like "I'll look up X to get their ID" or "Let me search for X first." Just do the lookup and then present the result or action to the user.
 
-When the user mentions dollar amounts, convert to cents (e.g., $50 = 5000 cents).
+When editing (updating) an item, ALWAYS look it up first to get its ID. If no matching item is found, tell the user it doesn't exist and offer to create it instead.
+
+When creating charges for "all members" or "everyone", first call list_members to get all active member IDs, then create charges with those IDs.
+
+When the user mentions dollar amounts, convert to cents internally (e.g., $50 = 5000 cents). Never mention cent values in your responses — always use dollar amounts (e.g., say "$100.00" not "10000 cents" or "$100.00 (10000 cents)").
+
+Users may use wizard templates with bullet lists and format hints. When a field is left blank or still shows placeholder text (e.g., "Name", "[name]", "YYYY-MM-DD"), treat it as not provided — do NOT ask about it if it's optional. Use defaults for optional fields left blank. Process ALL entries the user provides in a single tool call where possible.
 
 Keep responses concise and action-oriented.
 

@@ -150,6 +150,8 @@ export const ChargeCard = memo(function ChargeCard({
             ) : (
               <div className="w-8 h-8" />
             )}
+            {/* Spacer matching the chevron button in group cards for consistent alignment */}
+            {!nested && <div className="w-8 h-8" />}
           </div>
         </div>
         {isAdmin && allocations.length > 0 && onUnallocate && (

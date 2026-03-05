@@ -6,6 +6,8 @@ import { useIsMutating } from '@tanstack/react-query';
 import { Sidebar } from '@/components/layout/sidebar';
 import { MobileNav } from '@/components/layout/mobile-nav';
 import { Header } from '@/components/layout/header';
+import { AISidebar } from '@/components/ai-sidebar';
+import { useAISidebarStore } from '@/lib/stores/ai-sidebar';
 import dynamic from 'next/dynamic';
 
 const TourOverlay = dynamic(() => import('@/components/tour/tour-overlay').then((m) => m.TourOverlay), {
@@ -33,6 +35,7 @@ export default function DashboardLayout({
   const hasSeenTutorial = useTutorialStore((s) => s.hasSeenTutorial);
   const startTutorial = useTutorialStore((s) => s.start);
   const isCollapsed = useSidebarStore((s) => s.isCollapsed);
+  const isAISidebarOpen = useAISidebarStore((s) => s.isOpen);
   const isMutating = useIsMutating();
   const { showHelp, setShowHelp } = useKeyboardShortcuts();
 
@@ -93,7 +96,7 @@ export default function DashboardLayout({
       )}
       <Sidebar />
       <Header />
-      <main className={`pb-20 md:pb-0 transition-all duration-300 ${isCollapsed ? 'md:pl-[68px]' : 'md:pl-64'}`}>
+      <main className={`pb-20 md:pb-0 transition-all duration-300 ${isCollapsed ? 'md:pl-[68px]' : 'md:pl-64'} ${isAISidebarOpen && pathname !== '/agent' && !pathname.startsWith('/settings') ? 'md:pr-[400px]' : ''}`}>
         {pathname === '/agent' ? (
           <div className="h-screen pt-6 px-2 md:px-4">{children}</div>
         ) : (
@@ -101,6 +104,7 @@ export default function DashboardLayout({
         )}
       </main>
       <MobileNav />
+      <AISidebar />
       <TourOverlay />
       <CommandPalette />
       <KeyboardShortcutsDialog open={showHelp} onOpenChange={setShowHelp} />

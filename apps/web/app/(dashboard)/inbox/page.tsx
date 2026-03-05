@@ -817,7 +817,7 @@ export default function InboxPage() {
       <FadeIn>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-bold tracking-tight">Inbox</h1>
+            <h1 className="text-xl font-bold tracking-tight">Inbox</h1>
             <TooltipProvider delayDuration={0}>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -962,14 +962,14 @@ export default function InboxPage() {
                 <Clock className="w-4 h-4" />
                 <span className="text-sm">Pending</span>
               </div>
-              <p className="text-2xl font-bold">{importStats.pending}</p>
+              <p className="text-xl font-bold">{importStats.pending}</p>
             </div>
             <div className="rounded-xl border bg-card p-4">
               <div className="flex items-center gap-2 text-success mb-1">
                 <CheckCircle2 className="w-4 h-4" />
                 <span className="text-sm">Confirmed</span>
               </div>
-              <p className="text-2xl font-bold text-success">{importStats.autoConfirmed + importStats.confirmed}</p>
+              <p className="text-xl font-bold text-success">{importStats.autoConfirmed + importStats.confirmed}</p>
               <p className="text-xs text-muted-foreground">last 7 days</p>
             </div>
             <div className="rounded-xl border bg-card p-4">
@@ -977,7 +977,7 @@ export default function InboxPage() {
                 <X className="w-4 h-4" />
                 <span className="text-sm">Ignored</span>
               </div>
-              <p className="text-2xl font-bold">{importStats.ignored}</p>
+              <p className="text-xl font-bold">{importStats.ignored}</p>
               <p className="text-xs text-muted-foreground">last 7 days</p>
             </div>
           </div>

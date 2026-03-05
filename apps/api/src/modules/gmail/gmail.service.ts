@@ -526,7 +526,7 @@ export class GmailService {
         amountCents: parsed.amount,
         date: emailDate,
         vendor: formatSourceName(parsed.source),
-        createdById: adminMembership?.id || '',
+        createdById: adminMembership?.id ?? null,
       },
     });
 
@@ -833,6 +833,41 @@ export class GmailService {
     return '';
   }
 
+  private async autoLearnAlias(membershipId: string, payerName: string): Promise<void> {
+    try {
+      const membership = await this.prisma.membership.findUnique({
+        where: { id: membershipId },
+        select: { name: true, paymentAliases: true, user: { select: { name: true } } },
+      });
+
+      if (!membership) return;
+
+      const trimmed = payerName.trim();
+      if (!trimmed) return;
+
+      const lower = trimmed.toLowerCase();
+
+      // Skip if it already matches membership name or user name
+      if (membership.name?.toLowerCase() === lower) return;
+      if (membership.user?.name?.toLowerCase() === lower) return;
+
+      // Skip if already an existing alias
+      if (membership.paymentAliases.some(a => a.toLowerCase() === lower)) return;
+
+      // Cap at 20 aliases
+      if (membership.paymentAliases.length >= 20) return;
+
+      await this.prisma.membership.update({
+        where: { id: membershipId },
+        data: { paymentAliases: { push: trimmed } },
+      });
+
+      this.logger.log(`Auto-learned alias "${trimmed}" for membership ${membershipId}`);
+    } catch (err) {
+      this.logger.warn(`Failed to auto-learn alias: ${err.message}`);
+    }
+  }
+
   async getPendingImports(orgId: string, limit = 50) {
     return this.prisma.emailImport.findMany({
       where: {
@@ -1048,6 +1083,11 @@ export class GmailService {
         rawPayerName: payment.rawPayerName,
         source: 'inbox_confirm',
       }).catch((err) => this.logger.warn(`Audit log failed: ${err.message}`));
+
+      // Auto-learn payer name as alias for matched member
+      if (membershipId && emailImport.parsedPayerName) {
+        await this.autoLearnAlias(membershipId, emailImport.parsedPayerName);
+      }
 
       return payment;
     } catch (error) {

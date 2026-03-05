@@ -74,7 +74,7 @@ export function StatCard({
         {isMoney ? (
           <Money cents={value as number} size="lg" />
         ) : (
-          <p className="text-3xl font-bold tracking-tight truncate font-mono-numbers">
+          <p className="text-2xl font-bold tracking-tight truncate font-mono-numbers">
             <AnimatedNumber value={value} />
           </p>
         )}

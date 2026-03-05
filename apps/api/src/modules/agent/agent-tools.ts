@@ -83,6 +83,28 @@ export const agentTools: AgentTool[] = [
   {
     requiresConfirmation: false,
     definition: {
+      name: 'list_expenses',
+      description:
+        'List organization expenses. Returns expense IDs, titles, amounts, categories, dates, and vendors.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          search: {
+            type: 'string',
+            description: 'Optional search string to filter by title or vendor',
+          },
+          category: {
+            type: 'string',
+            description: 'Filter by expense category',
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    requiresConfirmation: false,
+    definition: {
       name: 'get_balances',
       description:
         'Get per-member balance summary: total charged, total paid, and outstanding balance for each member.',
@@ -95,6 +117,70 @@ export const agentTools: AgentTool[] = [
   },
 
   // ── Write tools (require confirmation) ────────────────────────
+  {
+    requiresConfirmation: true,
+    definition: {
+      name: 'update_member',
+      description:
+        'Update an existing member. First look up the member using list_members to get their ID, then call this tool with the fields to change.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          membershipId: { type: 'string', description: 'The membership ID to update' },
+          name: { type: 'string', description: 'New name (optional)' },
+          role: {
+            type: 'string',
+            enum: ['MEMBER', 'TREASURER', 'ADMIN'],
+            description: 'New role (optional)',
+          },
+          status: {
+            type: 'string',
+            enum: ['ACTIVE', 'REMOVED'],
+            description: 'New status (optional)',
+          },
+        },
+        required: ['membershipId'],
+      },
+    },
+  },
+  {
+    requiresConfirmation: true,
+    definition: {
+      name: 'update_charge',
+      description:
+        'Update an existing charge. First look up the charge using list_charges to get its ID, then call this tool with the fields to change.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          chargeId: { type: 'string', description: 'The charge ID to update' },
+          title: { type: 'string', description: 'New title (optional)' },
+          amountCents: { type: 'number', description: 'New amount in cents (optional)' },
+          dueDate: { type: 'string', description: 'New due date in ISO format YYYY-MM-DD (optional, use null to remove)' },
+        },
+        required: ['chargeId'],
+      },
+    },
+  },
+  {
+    requiresConfirmation: true,
+    definition: {
+      name: 'update_expense',
+      description:
+        'Update an existing expense. The user must provide enough info to identify the expense. Use list context or ask the user for clarification.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          expenseId: { type: 'string', description: 'The expense ID to update' },
+          title: { type: 'string', description: 'New title (optional)' },
+          amountCents: { type: 'number', description: 'New amount in cents (optional)' },
+          category: { type: 'string', description: 'New category (optional)' },
+          date: { type: 'string', description: 'New date in ISO format YYYY-MM-DD (optional)' },
+          vendor: { type: 'string', description: 'New vendor name (optional)' },
+        },
+        required: ['expenseId'],
+      },
+    },
+  },
   {
     requiresConfirmation: true,
     definition: {

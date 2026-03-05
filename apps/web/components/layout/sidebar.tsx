@@ -158,10 +158,10 @@ export function Sidebar() {
         {currentOrg && (
           <div className={cn('py-4', isCollapsed ? 'px-2' : 'px-3')}>
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                {isCollapsed ? (
-                  <TooltipProvider delayDuration={0}>
-                    <Tooltip>
+              {isCollapsed ? (
+                <TooltipProvider delayDuration={0}>
+                  <Tooltip>
+                    <DropdownMenuTrigger asChild>
                       <TooltipTrigger asChild>
                         <button className="w-full flex items-center justify-center p-2.5 rounded-xl bg-secondary/50 hover:bg-secondary transition-colors">
                           <div className="p-2 rounded-lg bg-primary/10">
@@ -169,10 +169,12 @@ export function Sidebar() {
                           </div>
                         </button>
                       </TooltipTrigger>
-                      <TooltipContent side="right">{currentOrg.orgName}</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                ) : (
+                    </DropdownMenuTrigger>
+                    <TooltipContent side="right">{currentOrg.orgName}</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : (
+                <DropdownMenuTrigger asChild>
                   <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-secondary/50 hover:bg-secondary transition-colors text-left">
                     <div className="p-2 rounded-lg bg-primary/10">
                       <Building2 className="h-4 w-4 text-primary" />
@@ -183,8 +185,8 @@ export function Sidebar() {
                     </div>
                     <ChevronDown className="h-4 w-4 text-muted-foreground" />
                   </button>
-                )}
-              </DropdownMenuTrigger>
+                </DropdownMenuTrigger>
+              )}
               <DropdownMenuContent align="start" className="w-56">
                 {allOrgs.map((org) => (
                   <DropdownMenuItem

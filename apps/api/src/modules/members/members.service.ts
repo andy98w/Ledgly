@@ -15,6 +15,7 @@ interface UpdateMemberDto {
   name?: string;
   role?: MembershipRole;
   status?: MembershipStatus;
+  paymentAliases?: string[];
 }
 
 interface MemberFilters {
@@ -123,6 +124,7 @@ export class MembersService {
         role: m.role,
         status: m.status,
         name: m.name,
+        paymentAliases: m.paymentAliases,
         displayName: m.name || m.user?.name || m.user?.email || 'Unknown',
         joinedAt: m.joinedAt,
         user: m.user,
@@ -238,6 +240,7 @@ export class MembersService {
       role: member.role,
       status: member.status,
       name: member.name,
+      paymentAliases: member.paymentAliases,
       displayName: member.name || member.user?.name || member.user?.email || 'Unknown',
       joinedAt: member.joinedAt,
       user: member.user,
@@ -483,6 +486,9 @@ export class MembersService {
         ...(dto.role && { role: dto.role }),
         ...(dto.status && { status: dto.status }),
         ...(dto.status === 'LEFT' && { leftAt: new Date() }),
+        ...(dto.paymentAliases !== undefined && {
+          paymentAliases: dto.paymentAliases.map(a => a.trim()).filter(Boolean).slice(0, 20),
+        }),
       },
     });
 
@@ -509,6 +515,10 @@ export class MembersService {
       if (dto.status && dto.status !== member.status) {
         before.status = member.status;
         after.status = dto.status;
+      }
+      if (dto.paymentAliases !== undefined) {
+        before.paymentAliases = member.paymentAliases;
+        after.paymentAliases = dto.paymentAliases;
       }
       if (Object.keys(after).length > 0) {
         await this.auditService.logUpdate(orgId, actorId, 'MEMBER', membershipId, before, after);

@@ -18,6 +18,7 @@ interface MemberCandidate {
   name: string | null;
   userName: string | null;
   userEmail: string | null;
+  aliases: string[];
 }
 
 @Injectable()
@@ -48,6 +49,7 @@ export class PaymentMatcherService {
       name: m.name,
       userName: m.user?.name || null,
       userEmail: m.user?.email || null,
+      aliases: m.paymentAliases || [],
     }));
 
     // Try to match by name
@@ -142,6 +144,21 @@ export class PaymentMatcherService {
         );
         if (similarity > (bestMatch?.confidence || 0.5)) {
           bestMatch = { membershipId: candidate.id, confidence: similarity };
+        }
+      }
+
+      // Check aliases
+      for (const alias of candidate.aliases) {
+        const normalizedAlias = this.normalizeName(alias);
+        if (normalizedAlias === normalizedPayerName) {
+          if (0.95 > (bestMatch?.confidence || 0.5)) {
+            bestMatch = { membershipId: candidate.id, confidence: 0.95 };
+          }
+        } else {
+          const similarity = this.calculateNameSimilarity(normalizedPayerName, normalizedAlias);
+          if (similarity > (bestMatch?.confidence || 0.5)) {
+            bestMatch = { membershipId: candidate.id, confidence: similarity };
+          }
         }
       }
     }

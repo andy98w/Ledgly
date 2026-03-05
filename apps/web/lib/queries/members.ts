@@ -68,7 +68,7 @@ export function useUpdateMember() {
     }: {
       orgId: string;
       memberId: string;
-      data: { name?: string; role?: string; status?: string };
+      data: { name?: string; role?: string; status?: string; paymentAliases?: string[] };
     }) => api.patch(`/organizations/${orgId}/members/${memberId}`, data),
     onSuccess: (_, variables) => {
       // Only invalidate members — no need to refetch dashboard for member metadata changes

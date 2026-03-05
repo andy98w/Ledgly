@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useCallback, memo } from 'react';
 import Link from 'next/link';
 
-import { Plus, Search, Users, AlertCircle, MoreHorizontal, Pencil, Trash2, ArrowUp, ArrowDown, Circle, CheckCircle2, Mail, Clock, Upload, MoreVertical, FileSpreadsheet, FileText } from 'lucide-react';
+import { Plus, Search, Users, AlertCircle, MoreHorizontal, Pencil, Trash2, ArrowUp, ArrowDown, Circle, CheckCircle2, Mail, Clock, Upload, MoreVertical, FileSpreadsheet, FileText, X } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import { useMembers, useCreateMembers, useUpdateMember, useDeleteMember, useRestoreMember, useResendInvitation, useBulkDeleteMembers, useApproveMember } from '@/lib/queries/members';
 import { useAuthStore, useIsAdminOrTreasurer, useIsOwner, useCurrentMembership } from '@/lib/stores/auth';
@@ -249,6 +249,8 @@ function EditMemberDialog({
 }) {
   const [name, setName] = useState(member?.displayName || '');
   const [role, setRole] = useState(member?.role || 'MEMBER');
+  const [aliases, setAliases] = useState<string[]>(member?.paymentAliases || []);
+  const [newAlias, setNewAlias] = useState('');
   const { toast } = useToast();
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
   const currentMembership = useCurrentMembership();
@@ -262,6 +264,8 @@ function EditMemberDialog({
     if (member) {
       setName(member.displayName);
       setRole(member.role);
+      setAliases(member.paymentAliases || []);
+      setNewAlias('');
     }
   }, [member]);
 
@@ -272,13 +276,14 @@ function EditMemberDialog({
     // Capture original values for undo
     const oldName = member.displayName;
     const oldRole = member.role;
+    const oldAliases = member.paymentAliases || [];
     const memberId = member.id;
 
     try {
       await updateMember.mutateAsync({
         orgId: currentOrgId,
         memberId,
-        data: { name: name.trim(), role },
+        data: { name: name.trim(), role, paymentAliases: aliases },
       });
       toast({
         title: 'Member updated',
@@ -287,15 +292,16 @@ function EditMemberDialog({
             onClick={() => {
               const redoName = name.trim();
               const redoRole = role;
+              const redoAliases = aliases;
               updateMember.mutate(
-                { orgId: currentOrgId!, memberId, data: { name: oldName, role: oldRole } },
+                { orgId: currentOrgId!, memberId, data: { name: oldName, role: oldRole, paymentAliases: oldAliases } },
                 {
                   onSuccess: () => toast({
                     title: 'Change reverted',
                     action: (
                       <ToastUndoButton
                         onClick={() => updateMember.mutate(
-                          { orgId: currentOrgId!, memberId, data: { name: redoName, role: redoRole } },
+                          { orgId: currentOrgId!, memberId, data: { name: redoName, role: redoRole, paymentAliases: redoAliases } },
                           { onSuccess: () => toast({ title: 'Member updated' }) },
                         )}
                         label="Redo"
@@ -353,6 +359,65 @@ function EditMemberDialog({
                   <SelectItem value="ADMIN">Admin</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Payment Aliases</Label>
+              <p className="text-xs text-muted-foreground">
+                Names this member uses on Venmo, Zelle, CashApp, etc. Aliases are also learned automatically when you confirm payments.
+              </p>
+              {aliases.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {aliases.map((alias, i) => (
+                    <Badge key={i} variant="secondary" className="text-xs gap-1 pr-1">
+                      {alias}
+                      <button
+                        type="button"
+                        onClick={() => setAliases(aliases.filter((_, j) => j !== i))}
+                        className="ml-0.5 rounded-full hover:bg-destructive/20 p-0.5 transition-colors"
+                        aria-label={`Remove alias ${alias}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              {aliases.length < 20 && (
+                <div className="flex gap-2">
+                  <Input
+                    value={newAlias}
+                    onChange={(e) => setNewAlias(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const trimmed = newAlias.trim();
+                        if (trimmed && !aliases.some(a => a.toLowerCase() === trimmed.toLowerCase())) {
+                          setAliases([...aliases, trimmed]);
+                          setNewAlias('');
+                        }
+                      }
+                    }}
+                    placeholder="e.g. Johnny D"
+                    className="h-9 bg-secondary/50 border-border/50 focus:border-primary"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-9 shrink-0"
+                    onClick={() => {
+                      const trimmed = newAlias.trim();
+                      if (trimmed && !aliases.some(a => a.toLowerCase() === trimmed.toLowerCase())) {
+                        setAliases([...aliases, trimmed]);
+                        setNewAlias('');
+                      }
+                    }}
+                    disabled={!newAlias.trim()}
+                  >
+                    Add
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>

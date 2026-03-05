@@ -39,6 +39,12 @@ class UpdateMemberDto {
   @IsEnum(MembershipStatus)
   @IsOptional()
   status?: MembershipStatus;
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  @ArrayMaxSize(20)
+  paymentAliases?: string[];
 }
 
 class BulkMemberIdsDto {

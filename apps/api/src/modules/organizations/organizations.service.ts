@@ -36,6 +36,22 @@ export class OrganizationsService {
   ) {}
 
   async create(userId: string, dto: CreateOrganizationDto) {
+    // Prevent duplicate org names within user's memberships
+    const existingMembership = await this.prisma.membership.findFirst({
+      where: {
+        userId,
+        status: { in: ['ACTIVE', 'PENDING'] },
+        org: {
+          name: { equals: dto.name, mode: 'insensitive' },
+        },
+      },
+    });
+    if (existingMembership) {
+      throw new ConflictException(
+        `You're already a member of an organization named "${dto.name}". Leave that organization first or choose a different name.`,
+      );
+    }
+
     // Look up the user's name so the membership record has it
     const user = await this.prisma.user.findUnique({
       where: { id: userId },

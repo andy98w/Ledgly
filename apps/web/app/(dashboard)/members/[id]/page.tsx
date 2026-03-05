@@ -89,7 +89,7 @@ export default function MemberDetailPage() {
           <div className="flex items-center gap-4">
             <AvatarGradient name={member.displayName} size="lg" />
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">{member.displayName}</h1>
+              <h1 className="text-xl font-bold tracking-tight">{member.displayName}</h1>
               <div className="flex items-center gap-2 mt-1">
                 <Badge
                   variant={member.status === 'ACTIVE' ? 'secondary' : 'outline'}

@@ -24,6 +24,7 @@ export interface Membership {
   role: MembershipRole;
   status: MembershipStatus;
   name: string | null;
+  paymentAliases: string[];
   joinedAt: Date;
   leftAt: Date | null;
   invitedEmail: string | null;

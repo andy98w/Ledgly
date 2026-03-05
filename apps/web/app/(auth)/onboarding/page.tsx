@@ -3,9 +3,9 @@
 import { Suspense, useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { Sun, Moon, Monitor, Mail, MailX, Check, Plus, Trash2, Loader2, ChevronLeft, CreditCard, Palette, Users } from 'lucide-react';
+import { Sun, Moon, Monitor, Mail, MailX, Check, Plus, Trash2, Loader2, ChevronLeft, CreditCard, Palette, Users, LogIn } from 'lucide-react';
 import Image from 'next/image';
-import { useCreateOrganization, useUpdateOrganization } from '@/lib/queries/organizations';
+import { useCreateOrganization, useUpdateOrganization, useResolveJoinCode, useJoinOrganization } from '@/lib/queries/organizations';
 import { useCreateMembers } from '@/lib/queries/members';
 import { getGmailConnectUrl } from '@/lib/queries/gmail';
 import { useAuthStore } from '@/lib/stores/auth';
@@ -54,6 +54,8 @@ function OnboardingWizard() {
   const urlOrgId = searchParams.get('orgId');
   const connected = searchParams.get('connected');
 
+  const setCurrentOrgId = useAuthStore((s) => s.setCurrentOrgId);
+
   const [step, setStep] = useState(0);
   const [orgName, setOrgName] = useState('');
   const [orgId, setOrgId] = useState<string | null>(null);
@@ -62,8 +64,15 @@ function OnboardingWizard() {
   const [members, setMembers] = useState([{ key: nextMemberKey++, name: '', email: '' }]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Join mode state
+  const [joinMode, setJoinMode] = useState(false);
+  const [joinCode, setJoinCode] = useState('');
+  const [submittedJoinCode, setSubmittedJoinCode] = useState('');
+
   const updateOrganization = useUpdateOrganization(orgId);
   const createMembers = useCreateMembers();
+  const { data: resolved, isLoading: resolving, error: resolveError } = useResolveJoinCode(submittedJoinCode || null);
+  const joinOrg = useJoinOrganization();
 
   // Handle OAuth return — resume at step 2 with org already created
   useEffect(() => {
@@ -93,6 +102,38 @@ function OnboardingWizard() {
       toast({
         title: 'Error',
         description: error.message || 'Failed to create organization',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleJoinLookup = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = joinCode.trim().toUpperCase();
+    if (trimmed.length !== 6) {
+      toast({ title: 'Enter a 6-character join code', variant: 'destructive' });
+      return;
+    }
+    setSubmittedJoinCode(trimmed);
+  };
+
+  const handleJoin = async () => {
+    if (!submittedJoinCode) return;
+    try {
+      const result = await joinOrg.mutateAsync(submittedJoinCode);
+      setCurrentOrgId(result.orgId);
+
+      if (result.status === 'PENDING') {
+        toast({ title: 'Request sent', description: 'An admin will approve your membership.' });
+      } else {
+        toast({ title: `Joined ${result.orgName}!` });
+      }
+
+      window.location.href = '/portal';
+    } catch (error: any) {
+      toast({
+        title: 'Could not join',
+        description: error.message || 'Something went wrong',
         variant: 'destructive',
       });
     }
@@ -210,50 +251,158 @@ function OnboardingWizard() {
         </p>
       </div>
 
-      {/* Step 0: Org Name */}
+      {/* Step 0: Org Name / Join */}
       {step === 0 && (
         <>
           <CardHeader className="text-center px-0 pt-0">
             <Image src="/logo.png" alt="Ledgly" width={48} height={48} className="mx-auto mb-4 w-12 h-12 rounded-xl" />
-            <CardTitle>Create your organization</CardTitle>
+            <CardTitle>{joinMode ? 'Join an organization' : 'Create your organization'}</CardTitle>
             <CardDescription>
-              Set up your fraternity, club, or group to start tracking finances
+              {joinMode
+                ? 'Enter the code shared by your admin'
+                : 'Set up your fraternity, club, or group to start tracking finances'}
             </CardDescription>
           </CardHeader>
           <CardContent className="px-0 pb-0">
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleCreateOrg();
-              }}
-              className="space-y-4"
-            >
-              <div className="space-y-2">
-                <Label htmlFor="name">Organization Name</Label>
-                <Input
-                  id="name"
-                  placeholder="e.g., Alpha Beta Gamma, Chess Club"
-                  value={orgName}
-                  onChange={(e) => setOrgName(e.target.value)}
-                  className="h-11 bg-secondary/50 border-border/50 focus:border-primary"
-                  autoFocus
-                />
-              </div>
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={!orgName.trim() || createOrganization.isPending}
-              >
-                {createOrganization.isPending ? (
+            {!joinMode ? (
+              <>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleCreateOrg();
+                  }}
+                  className="space-y-4"
+                >
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Organization Name</Label>
+                    <Input
+                      id="name"
+                      placeholder="e.g., Alpha Beta Gamma, Chess Club"
+                      value={orgName}
+                      onChange={(e) => setOrgName(e.target.value)}
+                      className="h-11 bg-secondary/50 border-border/50 focus:border-primary"
+                      autoFocus
+                    />
+                  </div>
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={!orgName.trim() || createOrganization.isPending}
+                  >
+                    {createOrganization.isPending ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      'Next'
+                    )}
+                  </Button>
+                </form>
+
+                <div className="relative my-6">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-border" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-card px-2 text-muted-foreground">or</span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setJoinMode(true)}
+                  className="w-full flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <LogIn className="w-4 h-4" />
+                  Have a join code?
+                </button>
+              </>
+            ) : (
+              <div className="space-y-4">
+                {/* Resolved org — show join confirmation */}
+                {submittedJoinCode && resolved && !resolveError ? (
                   <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Creating...
+                    <div className="text-center py-2">
+                      <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-primary/10 flex items-center justify-center">
+                        <Users className="w-6 h-6 text-primary" />
+                      </div>
+                      <p className="font-medium text-lg">{resolved.orgName}</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        You&apos;ll be added as a member of this organization.
+                      </p>
+                    </div>
+                    <Button
+                      onClick={handleJoin}
+                      className="w-full"
+                      disabled={joinOrg.isPending}
+                    >
+                      {joinOrg.isPending ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Joining...
+                        </>
+                      ) : (
+                        `Join ${resolved.orgName}`
+                      )}
+                    </Button>
+                    <button
+                      onClick={() => { setSubmittedJoinCode(''); }}
+                      className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      Try a different code
+                    </button>
                   </>
+                ) : resolving ? (
+                  <div className="flex flex-col items-center gap-3 py-6">
+                    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">Looking up code...</p>
+                  </div>
                 ) : (
-                  'Next'
+                  <>
+                    {resolveError && (
+                      <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive">
+                        Invalid or disabled code. Check with your admin.
+                      </div>
+                    )}
+                    <form onSubmit={handleJoinLookup} className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="joinCode">Join Code</Label>
+                        <Input
+                          id="joinCode"
+                          type="text"
+                          placeholder="ABC123"
+                          value={joinCode}
+                          onChange={(e) => {
+                            const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+                            setJoinCode(val);
+                            if (resolveError && val !== submittedJoinCode) setSubmittedJoinCode('');
+                          }}
+                          className="h-14 text-center text-2xl font-mono tracking-[0.3em] bg-secondary/50 border-border/50 focus:border-primary"
+                          maxLength={6}
+                          autoFocus
+                        />
+                      </div>
+                      <Button
+                        type="submit"
+                        className="w-full"
+                        disabled={joinCode.length !== 6}
+                      >
+                        Look Up
+                      </Button>
+                    </form>
+                  </>
                 )}
-              </Button>
-            </form>
+
+                {!resolving && !resolved && (
+                  <button
+                    onClick={() => { setJoinMode(false); setJoinCode(''); setSubmittedJoinCode(''); }}
+                    className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Back to create
+                  </button>
+                )}
+              </div>
+            )}
           </CardContent>
         </>
       )}

@@ -40,7 +40,7 @@ export const tourSteps: TourStep[] = [
     target: '[data-tour="members-list"]',
     title: 'Members',
     description:
-      'Manage your members here. Add them first, then create charges against them.',
+      'Manage your members here. Share your join code to let members request access, or add them manually. Then create charges against them.',
     placement: 'left',
     page: '/members',
   },
@@ -88,6 +88,15 @@ export const tourSteps: TourStep[] = [
       'Every action is tracked here. See who did what, and undo or redo any change with one click.',
     placement: 'left',
     page: '/audit',
+  },
+  {
+    id: 'agent-chat',
+    target: '[data-tour="agent-chat"]',
+    title: 'AI Assistant',
+    description:
+      'Chat with LedgelyAI to manage your org using natural language. Add members, create charges, record payments, and more — just ask.',
+    placement: 'left',
+    page: '/agent',
   },
   {
     id: 'settings-tutorial',

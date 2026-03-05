@@ -132,7 +132,7 @@ export default function NewPaymentPage() {
               <CreditCard className="h-6 w-6 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Record Payment</h1>
+              <h1 className="text-xl font-bold tracking-tight">Record Payment</h1>
               <p className="text-muted-foreground">Manually record a payment received</p>
             </div>
           </div>

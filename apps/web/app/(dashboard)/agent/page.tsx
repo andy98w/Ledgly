@@ -1,115 +1,46 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Send, Paperclip, X, Loader2, Check, XCircle, Sparkles, AlertCircle, Plus, MessageSquare, Trash2, PanelLeftClose, PanelLeft } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { Send, Paperclip, X, Loader2, Sparkles, Plus, MessageSquare, Trash2, PanelLeftClose, PanelLeft, Wand2 } from 'lucide-react';
 import { useAuthStore } from '@/lib/stores/auth';
 import { useSidebarStore } from '@/lib/stores/sidebar';
-import { cn, formatCents, formatRelativeDate } from '@/lib/utils';
+import { cn, formatRelativeDate } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { FadeIn } from '@/components/ui/page-transition';
 import { AvatarGradient } from '@/components/ui/avatar-gradient';
 import {
+  QuickActionPopover,
+  WIZARD_TEMPLATES,
+  type WizardActionId,
+  type WizardEntityId,
+} from '@/components/agent/wizard';
+import { BracketInput } from '@/components/agent/bracket-picker';
+import {
+  MessageContent,
+  ConfirmationCard,
+  formatMessageTime,
+  type DisplayMessage,
+} from '@/components/agent/message-content';
+import {
   streamAgentChat,
-  confirmAgentActions,
   useAgentSessions,
   useCreateAgentSession,
   useAgentSession,
   useUpdateAgentSession,
   useDeleteAgentSession,
+  useConfirmAgentActions,
   type ChatMessage,
   type ProposedAction,
-  type ActionResult,
 } from '@/lib/queries/agent';
 
-
-interface DisplayMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  createdAt?: string;
-  actions?: ProposedAction[];
-  actionStatus?: 'pending' | 'confirming' | 'confirmed' | 'cancelled';
-  actionResults?: ActionResult[];
-  csvFileName?: string;
-}
-
-function formatMessageTime(iso?: string): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-}
-
-/** Lightweight inline markdown: **bold**, *italic*, `code` */
-function InlineMarkdown({ text }: { text: string }) {
-  const parts = useMemo(() => {
-    const tokens: { type: 'text' | 'bold' | 'italic' | 'code'; value: string }[] = [];
-    // Process bold (**), italic (*), and inline code (`)
-    const regex = /(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`)/g;
-    let lastIndex = 0;
-    let match: RegExpExecArray | null;
-    while ((match = regex.exec(text)) !== null) {
-      if (match.index > lastIndex) {
-        tokens.push({ type: 'text', value: text.slice(lastIndex, match.index) });
-      }
-      if (match[2]) tokens.push({ type: 'bold', value: match[2] });
-      else if (match[3]) tokens.push({ type: 'italic', value: match[3] });
-      else if (match[4]) tokens.push({ type: 'code', value: match[4] });
-      lastIndex = match.index + match[0].length;
-    }
-    if (lastIndex < text.length) {
-      tokens.push({ type: 'text', value: text.slice(lastIndex) });
-    }
-    return tokens;
-  }, [text]);
-
-  return (
-    <>
-      {parts.map((t, i) => {
-        switch (t.type) {
-          case 'bold': return <strong key={i} className="font-semibold">{t.value}</strong>;
-          case 'italic': return <em key={i}>{t.value}</em>;
-          case 'code': return <code key={i} className="px-1 py-0.5 rounded bg-secondary text-xs font-mono">{t.value}</code>;
-          default: return <span key={i}>{t.value}</span>;
-        }
-      })}
-    </>
-  );
-}
-
-/** Render text with line-by-line inline markdown + list handling */
-function MessageContent({ content }: { content: string }) {
-  const lines = content.split('\n');
-  return (
-    <div className="text-sm whitespace-pre-wrap break-words space-y-1">
-      {lines.map((line, i) => {
-        const trimmed = line.trimStart();
-        // Bullet list items (- or *)
-        if (/^[-*]\s/.test(trimmed)) {
-          return (
-            <div key={i} className="flex gap-2 pl-1">
-              <span className="text-muted-foreground shrink-0">•</span>
-              <span><InlineMarkdown text={trimmed.slice(2)} /></span>
-            </div>
-          );
-        }
-        // Numbered list items
-        const numMatch = trimmed.match(/^(\d+)\.\s(.*)/);
-        if (numMatch) {
-          return (
-            <div key={i} className="flex gap-2 pl-1">
-              <span className="text-muted-foreground shrink-0">{numMatch[1]}.</span>
-              <span><InlineMarkdown text={numMatch[2]} /></span>
-            </div>
-          );
-        }
-        // Empty line
-        if (!line.trim()) return <div key={i} className="h-2" />;
-        // Normal text
-        return <div key={i}><InlineMarkdown text={line} /></div>;
-      })}
-    </div>
-  );
+// Strip wizard hint text before sending to LLM
+function stripWizardHints(text: string): string {
+  // Strip parenthesized instruction lines at the end (e.g., "(one per line — email and role optional: Name, Email, Role)")
+  let result = text.replace(/\n\([^)]*\)\s*$/, '');
+  // Strip list-mode bracket placeholders: [member names], [charge titles], [charge details], [expense details]
+  result = result.replace(/\n?\[(?:member (?:names|details)|charge (?:titles|details)|expense details)\]/gi, '');
+  return result.trim();
 }
 
 export default function AgentPage() {
@@ -123,6 +54,8 @@ export default function AgentPage() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [csvFile, setCsvFile] = useState<{ name: string; content: string; rowCount: number } | null>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [wizardAction, setWizardAction] = useState<WizardActionId | null>(null);
+  const [wizardOpen, setWizardOpen] = useState(false);
   const [showSidebar, setShowSidebar] = useState(() => {
     if (typeof window === 'undefined') return false;
     const saved = localStorage.getItem('agent-sidebar-open');
@@ -143,6 +76,7 @@ export default function AgentPage() {
   const createSession = useCreateAgentSession();
   const updateSession = useUpdateAgentSession();
   const deleteSession = useDeleteAgentSession();
+  const confirmActions = useConfirmAgentActions();
   const { data: loadedSession } = useAgentSession(
     currentOrgId,
     activeSessionId,
@@ -173,12 +107,6 @@ export default function AgentPage() {
   }, [messages]);
 
   // Auto-resize textarea
-  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInput(e.target.value);
-    e.target.style.height = 'auto';
-    e.target.style.height = Math.min(e.target.scrollHeight, 160) + 'px';
-  };
-
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !file.name.endsWith('.csv')) return;
@@ -273,7 +201,7 @@ export default function AgentPage() {
       ...messages
         .filter((m) => m.content)
         .map((m) => ({ role: m.role, content: m.content })),
-      { role: 'user' as const, content: input.trim() || 'Please import this CSV data.' },
+      { role: 'user' as const, content: stripWizardHints(input.trim()) || 'Please import this CSV data.' },
     ];
 
     const csvContent = csvFile?.content;
@@ -334,49 +262,57 @@ export default function AgentPage() {
     );
   }, [input, csvFile, isStreaming, currentOrgId, messages, activeSessionId, createSession, saveMessages]);
 
-  const handleConfirm = async (messageId: string) => {
+  const handleConfirm = async (messageId: string, modifiedActions?: ProposedAction[]) => {
     if (!currentOrgId) return;
     const msg = messages.find((m) => m.id === messageId);
     if (!msg?.actions) return;
+
+    const actionsToSend = modifiedActions || msg.actions;
 
     setMessages((prev) =>
       prev.map((m) => (m.id === messageId ? { ...m, actionStatus: 'confirming' } : m)),
     );
 
     try {
-      const results = await confirmAgentActions(
-        currentOrgId,
-        msg.actions.map((a) => ({ toolName: a.toolName, args: a.args })),
-      );
-      const updatedMessages = messages.map((m) =>
-        m.id === messageId ? { ...m, actionStatus: 'confirmed' as const, actionResults: results } : m,
-      );
-      setMessages(updatedMessages);
-      saveMessages(updatedMessages, activeSessionId);
+      const results = await confirmActions.mutateAsync({
+        orgId: currentOrgId,
+        actions: actionsToSend.map((a) => ({ toolName: a.toolName, args: a.args })),
+      });
+      setMessages((prev) => {
+        const updated = prev.map((m) =>
+          m.id === messageId ? { ...m, actionStatus: 'confirmed' as const, actionResults: results } : m,
+        );
+        saveMessages(updated, activeSessionId);
+        return updated;
+      });
     } catch (err: any) {
-      const updatedMessages = messages.map((m) =>
-        m.id === messageId
-          ? {
-              ...m,
-              actionStatus: 'confirmed' as const,
-              actionResults: [{ toolName: '', success: false, message: err.message }],
-            }
-          : m,
-      );
-      setMessages(updatedMessages);
-      saveMessages(updatedMessages, activeSessionId);
+      setMessages((prev) => {
+        const updated = prev.map((m) =>
+          m.id === messageId
+            ? {
+                ...m,
+                actionStatus: 'confirmed' as const,
+                actionResults: [{ toolName: '', success: false, message: err.message || 'Action failed' }],
+              }
+            : m,
+        );
+        saveMessages(updated, activeSessionId);
+        return updated;
+      });
     }
   };
 
   const handleCancel = (messageId: string) => {
-    const updatedMessages = messages.map((m) =>
-      m.id === messageId ? { ...m, actionStatus: 'cancelled' as const } : m,
-    );
-    setMessages(updatedMessages);
-    saveMessages(updatedMessages, activeSessionId);
+    setMessages((prev) => {
+      const updated = prev.map((m) =>
+        m.id === messageId ? { ...m, actionStatus: 'cancelled' as const } : m,
+      );
+      saveMessages(updated, activeSessionId);
+      return updated;
+    });
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -461,6 +397,7 @@ export default function AgentPage() {
 
         {/* Main chat area */}
         <div
+          data-tour="agent-chat"
           className="flex-1 flex flex-col min-w-0 px-2 md:px-4"
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
@@ -487,9 +424,11 @@ export default function AgentPage() {
                 </div>
                 <h2 className="text-lg font-semibold mb-2">LedgelyAI</h2>
                 <p className="text-muted-foreground text-sm max-w-md">
-                  I can help you manage your organization. Try:
+                  I can help you manage your organization.
                 </p>
-                <div className="mt-4 grid gap-2 text-sm text-left max-w-sm w-full">
+
+                {/* Suggestion buttons */}
+                <div className="grid gap-2 text-sm text-left max-w-sm w-full mt-6">
                   {[
                     'How many members do I have?',
                     'Charge all active members $50 for Spring Dues',
@@ -529,10 +468,10 @@ export default function AgentPage() {
                 )}
 
                 {/* Bubble + meta */}
-                <div className={cn('max-w-[80%] md:max-w-[68%]', msg.role === 'user' ? 'text-right' : 'text-left')}>
+                <div className="max-w-[90%] md:max-w-[80%] text-left">
 
                   {/* Name + timestamp */}
-                  <div className={cn('flex items-center gap-2 mb-1', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
+                  <div className="flex items-center gap-2 mb-1">
                     <span className="text-xs font-medium text-muted-foreground">
                       {msg.role === 'user' ? userName : 'LedgelyAI'}
                     </span>
@@ -560,8 +499,9 @@ export default function AgentPage() {
                         actions={msg.actions}
                         status={msg.actionStatus || 'pending'}
                         results={msg.actionResults}
-                        onConfirm={() => handleConfirm(msg.id)}
+                        onConfirm={(modified) => handleConfirm(msg.id, modified)}
                         onCancel={() => handleCancel(msg.id)}
+                        orgId={currentOrgId}
                       />
                     )}
                   </div>
@@ -623,15 +563,50 @@ export default function AgentPage() {
                 <Paperclip className="h-5 w-5" />
               </Button>
 
-              <textarea
-                ref={inputRef}
+              <QuickActionPopover
+                wizardAction={wizardAction}
+                open={wizardOpen}
+                onOpenChange={(open) => { setWizardOpen(open); if (!open) setWizardAction(null); }}
+                onSelectAction={setWizardAction}
+                onSelectEntity={(entity) => {
+                  const template = WIZARD_TEMPLATES[`${wizardAction}-${entity}`];
+                  if (template) {
+                    setInput(template);
+                    setWizardAction(null);
+                    setWizardOpen(false);
+                    setTimeout(() => {
+                      if (inputRef.current) {
+                        inputRef.current.focus();
+                        inputRef.current.style.height = 'auto';
+                        inputRef.current.style.height = Math.min(inputRef.current.scrollHeight, 160) + 'px';
+                      }
+                    }, 0);
+                  }
+                }}
+                onBack={() => setWizardAction(null)}
+              >
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0 h-10 w-10 text-muted-foreground hover:text-foreground"
+                  disabled={isStreaming}
+                >
+                  <Wand2 className="h-5 w-5" />
+                </Button>
+              </QuickActionPopover>
+
+              <BracketInput
                 value={input}
-                onChange={handleInputChange}
+                onChange={setInput}
                 onKeyDown={handleKeyDown}
+                onSend={handleSend}
+                orgId={currentOrgId || ''}
                 placeholder="Ask me to manage members, charges, expenses, or payments..."
                 disabled={isStreaming}
-                rows={1}
-                className="flex-1 resize-none rounded-xl border border-border bg-secondary/30 px-4 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                inputRef={inputRef}
+                maxHeight={160}
+                className="resize-none rounded-xl border border-border bg-secondary/30 px-4 py-[9px] text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed"
               />
 
               <Button
@@ -652,134 +627,5 @@ export default function AgentPage() {
         </div>
       </div>
     </FadeIn>
-  );
-}
-
-// ── Confirmation Card ─────────────────────────────────────────
-
-function ConfirmationCard({
-  actions,
-  status,
-  results,
-  onConfirm,
-  onCancel,
-}: {
-  actions: ProposedAction[];
-  status: 'pending' | 'confirming' | 'confirmed' | 'cancelled';
-  results?: ActionResult[];
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  const allSucceeded = results?.every((r) => r.success);
-  const hasSkipped = results?.some((r) => r.skipped && r.skipped.length > 0);
-
-  return (
-    <div className="mt-3 rounded-xl border border-border/40 bg-card/60 backdrop-blur-sm p-4 space-y-3">
-      {/* Action list */}
-      <div className="space-y-2">
-        {actions.map((action) => (
-          <div key={action.id} className="flex items-start gap-2 text-sm">
-            <span className="text-primary font-medium shrink-0">+</span>
-            <div>
-              <span className="font-medium">{action.description}</span>
-              {action.toolName === 'add_members' && action.args.members && (
-                <ul className="mt-1 space-y-0.5 text-muted-foreground">
-                  {action.args.members.slice(0, 10).map((m: any, i: number) => (
-                    <li key={i}>
-                      {m.name}
-                      {m.email ? ` (${m.email})` : ''}
-                      {m.role && m.role !== 'MEMBER' ? ` — ${m.role}` : ''}
-                    </li>
-                  ))}
-                  {action.args.members.length > 10 && (
-                    <li>...and {action.args.members.length - 10} more</li>
-                  )}
-                </ul>
-              )}
-              {action.toolName === 'create_charges' && (
-                <p className="text-muted-foreground mt-0.5">
-                  {formatCents(action.args.amountCents)} each for {action.args.membershipIds?.length} member(s)
-                </p>
-              )}
-              {action.toolName === 'record_payments' && action.args.payments && (
-                <ul className="mt-1 space-y-0.5 text-muted-foreground">
-                  {action.args.payments.slice(0, 5).map((p: any, i: number) => (
-                    <li key={i}>
-                      {formatCents(p.amountCents)} from {p.rawPayerName || 'Unknown'}
-                    </li>
-                  ))}
-                  {action.args.payments.length > 5 && (
-                    <li>...and {action.args.payments.length - 5} more</li>
-                  )}
-                </ul>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Status / Buttons */}
-      {status === 'pending' && (
-        <div className="flex items-center gap-2 pt-1">
-          <Button size="sm" onClick={onConfirm} className="gap-1.5">
-            <Check className="h-3.5 w-3.5" />
-            Confirm
-          </Button>
-          <Button size="sm" variant="outline" onClick={onCancel} className="gap-1.5">
-            <X className="h-3.5 w-3.5" />
-            Cancel
-          </Button>
-        </div>
-      )}
-
-      {status === 'confirming' && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Executing...
-        </div>
-      )}
-
-      {status === 'confirmed' && (
-        <div className="space-y-1.5">
-          {allSucceeded && !hasSkipped ? (
-            <div className="flex items-center gap-2 text-sm text-emerald-600">
-              <Check className="h-4 w-4" />
-              Done! Actions completed successfully.
-            </div>
-          ) : allSucceeded && hasSkipped ? (
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 text-sm text-amber-600">
-                <AlertCircle className="h-4 w-4" />
-                Completed with warnings
-              </div>
-              {results?.filter((r) => r.skipped && r.skipped.length > 0).map((r, i) => (
-                <p key={i} className="text-xs text-muted-foreground pl-6">
-                  {r.message}
-                </p>
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 text-sm text-destructive">
-                <AlertCircle className="h-4 w-4" />
-                {results?.find((r) => !r.success)?.message || 'Some actions failed.'}
-              </div>
-              {results?.filter((r) => r.skipped && r.skipped.length > 0).map((r, i) => (
-                <p key={i} className="text-xs text-muted-foreground pl-6">
-                  {r.message}
-                </p>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {status === 'cancelled' && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <XCircle className="h-4 w-4" />
-          Cancelled
-        </div>
-      )}
-    </div>
   );
 }

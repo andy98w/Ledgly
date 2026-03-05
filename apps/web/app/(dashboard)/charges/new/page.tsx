@@ -189,7 +189,7 @@ export default function NewChargePage() {
               <Receipt className="h-6 w-6 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Create Charge</h1>
+              <h1 className="text-xl font-bold tracking-tight">Create Charge</h1>
               <p className="text-muted-foreground">Charge dues, fees, or fines to members</p>
             </div>
           </div>

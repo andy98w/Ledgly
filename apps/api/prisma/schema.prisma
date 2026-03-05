@@ -96,6 +96,7 @@ model Membership {
   role               MembershipRole      @default(MEMBER)
   status             MembershipStatus    @default(ACTIVE)
   name               String?
+  paymentAliases     String[]            @default([]) @map("payment_aliases")
   joinedAt           DateTime            @default(now()) @map("joined_at")
   leftAt             DateTime?           @map("left_at")
   auditLogsCreated   AuditLog[]
@@ -265,11 +266,11 @@ model Expense {
   date        DateTime
   vendor      String?
   receiptUrl  String?         @map("receipt_url")
-  createdById String          @map("created_by_id")
+  createdById String?         @map("created_by_id")
   createdAt   DateTime        @default(now()) @map("created_at")
   updatedAt   DateTime        @updatedAt @map("updated_at")
   deletedAt   DateTime?       @map("deleted_at")
-  createdBy   Membership      @relation("ExpenseCreatedBy", fields: [createdById], references: [id])
+  createdBy   Membership?     @relation("ExpenseCreatedBy", fields: [createdById], references: [id])
   org         Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@index([orgId])

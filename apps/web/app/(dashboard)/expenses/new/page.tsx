@@ -135,7 +135,7 @@ export default function NewExpensePage() {
               <Receipt className="h-6 w-6 text-destructive-foreground" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Add Expense</h1>
+              <h1 className="text-xl font-bold tracking-tight">Add Expense</h1>
               <p className="text-muted-foreground">Record organization spending</p>
             </div>
           </div>
