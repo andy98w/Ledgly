@@ -443,6 +443,78 @@ describe('AgentService edge cases', () => {
     expect(results[0].message).toContain('500 characters');
   });
 
+  // ─── update_member edge cases ───────────────────────────
+
+  it('rejects update_member without membershipId', async () => {
+    const results = await agentService.confirm(orgId, adminMembershipId, [
+      { toolName: 'update_member', args: { name: 'New Name' } },
+    ]);
+
+    expect(results[0].success).toBe(false);
+    expect(results[0].message).toContain('membershipId is required');
+  });
+
+  // ─── update_charge edge cases ──────────────────────────
+
+  it('rejects update_charge without chargeId', async () => {
+    const results = await agentService.confirm(orgId, adminMembershipId, [
+      { toolName: 'update_charge', args: { title: 'New Title' } },
+    ]);
+
+    expect(results[0].success).toBe(false);
+    expect(results[0].message).toContain('chargeId is required');
+  });
+
+  it('rejects update_charge with negative amountCents', async () => {
+    const results = await agentService.confirm(orgId, adminMembershipId, [
+      { toolName: 'update_charge', args: { chargeId: 'some-id', amountCents: -500 } },
+    ]);
+
+    expect(results[0].success).toBe(false);
+    expect(results[0].message).toContain('positive');
+  });
+
+  // ─── update_expense edge cases ─────────────────────────
+
+  it('rejects update_expense without expenseId', async () => {
+    const results = await agentService.confirm(orgId, adminMembershipId, [
+      { toolName: 'update_expense', args: { title: 'New Title' } },
+    ]);
+
+    expect(results[0].success).toBe(false);
+    expect(results[0].message).toContain('expenseId is required');
+  });
+
+  it('rejects update_expense with invalid date', async () => {
+    const results = await agentService.confirm(orgId, adminMembershipId, [
+      { toolName: 'update_expense', args: { expenseId: 'some-id', date: 'not-a-date' } },
+    ]);
+
+    expect(results[0].success).toBe(false);
+    expect(results[0].message).toContain('ISO format');
+  });
+
+  // ─── delete_expenses edge cases ────────────────────────
+
+  it('rejects delete_expenses with empty array', async () => {
+    const results = await agentService.confirm(orgId, adminMembershipId, [
+      { toolName: 'delete_expenses', args: { expenseIds: [] } },
+    ]);
+
+    expect(results[0].success).toBe(false);
+    expect(results[0].message).toContain('empty');
+  });
+
+  it('rejects delete_expenses exceeding 200 batch size', async () => {
+    const expenseIds = Array.from({ length: 201 }, (_, i) => `fake-expense-${i}`);
+    const results = await agentService.confirm(orgId, adminMembershipId, [
+      { toolName: 'delete_expenses', args: { expenseIds } },
+    ]);
+
+    expect(results[0].success).toBe(false);
+    expect(results[0].message).toContain('200');
+  });
+
   // ─── Batch size limits ────────────────────────────────────
 
   it('rejects adding more than 200 members at once', async () => {

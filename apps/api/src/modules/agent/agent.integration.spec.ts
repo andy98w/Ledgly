@@ -278,6 +278,123 @@ describe('AgentService integration', () => {
     expect(names).toContain('CSV Import Diana');
   });
 
+  // ─── confirm: update_member ──────────────────────────────
+
+  it('confirm: update_member updates a member name', async () => {
+    // Create a member to update
+    const user = await prisma.user.create({
+      data: { email: `update-member-${Date.now()}@test.local`, name: 'Before Update' },
+    });
+    const m = await prisma.membership.create({
+      data: { orgId, userId: user.id, role: 'MEMBER', status: 'ACTIVE', name: 'Before Update' },
+    });
+
+    const results = await agentService.confirm(orgId, membershipId, [
+      {
+        toolName: 'update_member',
+        args: { membershipId: m.id, name: 'After Update' },
+      },
+    ]);
+
+    expect(results).toHaveLength(1);
+    expect(results[0].success).toBe(true);
+
+    const updated = await prisma.membership.findUnique({ where: { id: m.id } });
+    expect(updated?.name).toBe('After Update');
+
+    // Cleanup
+    await prisma.auditLog.deleteMany({ where: { entityId: m.id } });
+    await prisma.membership.delete({ where: { id: m.id } });
+    await prisma.user.delete({ where: { id: user.id } });
+  });
+
+  // ─── confirm: update_charge ─────────────────────────────
+
+  it('confirm: update_charge updates charge title and amount', async () => {
+    const members = await membersService.findAll(orgId, { search: 'Agent Test Alice' });
+    const aliceId = members.data[0]?.id;
+    expect(aliceId).toBeTruthy();
+
+    // Create a charge to update
+    const created = await chargesService.create(orgId, membershipId, {
+      membershipIds: [aliceId],
+      category: 'OTHER' as any,
+      title: 'Original Title',
+      amountCents: 3000,
+    });
+
+    const results = await agentService.confirm(orgId, membershipId, [
+      {
+        toolName: 'update_charge',
+        args: { chargeId: created[0].id, title: 'Updated Title', amountCents: 4000 },
+      },
+    ]);
+
+    expect(results).toHaveLength(1);
+    expect(results[0].success).toBe(true);
+
+    const charge = await prisma.charge.findUnique({ where: { id: created[0].id } });
+    expect(charge?.title).toBe('Updated Title');
+    expect(charge?.amountCents).toBe(4000);
+  });
+
+  // ─── confirm: update_expense ────────────────────────────
+
+  it('confirm: update_expense updates expense title', async () => {
+    // Create an expense to update
+    const expense = await prisma.expense.create({
+      data: {
+        orgId,
+        category: 'SUPPLIES',
+        title: 'Old Expense Title',
+        amountCents: 2000,
+        date: new Date('2026-03-01'),
+        createdById: membershipId,
+      },
+    });
+
+    const results = await agentService.confirm(orgId, membershipId, [
+      {
+        toolName: 'update_expense',
+        args: { expenseId: expense.id, title: 'New Expense Title' },
+      },
+    ]);
+
+    expect(results).toHaveLength(1);
+    expect(results[0].success).toBe(true);
+
+    const updated = await prisma.expense.findUnique({ where: { id: expense.id } });
+    expect(updated?.title).toBe('New Expense Title');
+  });
+
+  // ─── confirm: delete_expenses ───────────────────────────
+
+  it('confirm: delete_expenses soft-deletes an expense', async () => {
+    // Create an expense to delete
+    const expense = await prisma.expense.create({
+      data: {
+        orgId,
+        category: 'FOOD',
+        title: 'To Be Deleted',
+        amountCents: 1000,
+        date: new Date('2026-03-01'),
+        createdById: membershipId,
+      },
+    });
+
+    const results = await agentService.confirm(orgId, membershipId, [
+      { toolName: 'delete_expenses', args: { expenseIds: [expense.id] } },
+    ]);
+
+    expect(results).toHaveLength(1);
+    expect(results[0].success).toBe(true);
+    expect(results[0].details?.deletedCount).toBe(1);
+
+    // Verify soft-deleted (deletedAt is set)
+    const deleted = await prisma.expense.findUnique({ where: { id: expense.id } });
+    expect(deleted?.deletedAt).toBeTruthy();
+  });
+
   // ─── confirm: multiple actions in one batch ────────────────
 
   it('confirm: executes multiple actions and returns per-action results', async () => {

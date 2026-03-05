@@ -2,8 +2,8 @@ import { agentTools, toolDefinitions, toolMap } from './agent-tools';
 
 describe('Agent tool definitions', () => {
   it('exports correct number of tools', () => {
-    expect(agentTools.length).toBe(11);
-    expect(toolDefinitions.length).toBe(11);
+    expect(agentTools.length).toBe(16);
+    expect(toolDefinitions.length).toBe(16);
   });
 
   it('every tool has a unique name', () => {
@@ -25,7 +25,7 @@ describe('Agent tool definitions', () => {
   });
 
   it('read tools do not require confirmation', () => {
-    const readNames = ['list_members', 'list_charges', 'list_payments', 'get_balances'];
+    const readNames = ['list_members', 'list_charges', 'list_payments', 'get_balances', 'list_expenses'];
     for (const name of readNames) {
       const tool = toolMap.get(name);
       expect(tool).toBeDefined();
@@ -35,8 +35,10 @@ describe('Agent tool definitions', () => {
 
   it('write tools require confirmation', () => {
     const writeNames = [
+      'update_member', 'update_charge', 'update_expense',
       'add_members', 'create_charges', 'create_expense',
-      'record_payments', 'void_charges', 'remove_members', 'import_csv',
+      'record_payments', 'void_charges', 'remove_members',
+      'delete_expenses', 'import_csv',
     ];
     for (const name of writeNames) {
       const tool = toolMap.get(name);
@@ -62,5 +64,30 @@ describe('Agent tool definitions', () => {
     expect(tool.input_schema.required).toEqual(
       expect.arrayContaining(['type', 'rows']),
     );
+  });
+
+  it('update_member requires membershipId', () => {
+    const tool = toolDefinitions.find((t) => t.name === 'update_member')!;
+    expect(tool.input_schema.required).toContain('membershipId');
+  });
+
+  it('update_charge requires chargeId', () => {
+    const tool = toolDefinitions.find((t) => t.name === 'update_charge')!;
+    expect(tool.input_schema.required).toContain('chargeId');
+  });
+
+  it('update_expense requires expenseId', () => {
+    const tool = toolDefinitions.find((t) => t.name === 'update_expense')!;
+    expect(tool.input_schema.required).toContain('expenseId');
+  });
+
+  it('delete_expenses requires expenseIds', () => {
+    const tool = toolDefinitions.find((t) => t.name === 'delete_expenses')!;
+    expect(tool.input_schema.required).toContain('expenseIds');
+  });
+
+  it('list_expenses has no required fields', () => {
+    const tool = toolDefinitions.find((t) => t.name === 'list_expenses')!;
+    expect(tool.input_schema.required).toEqual([]);
   });
 });
