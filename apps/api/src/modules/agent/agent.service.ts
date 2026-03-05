@@ -249,7 +249,7 @@ export class AgentService {
           status: args.status,
           limit: 200,
         });
-        return result.data.map((m: any) => ({
+        const mapped = result.data.map((m: any) => ({
           id: m.id,
           name: m.name || m.user?.name,
           email: m.user?.email,
@@ -257,6 +257,17 @@ export class AgentService {
           status: m.status,
           balanceCents: m.balanceCents,
         }));
+        if (mapped.length === 0 && args.search) {
+          const all = await this.membersService.findAll(orgId, { status: args.status, limit: 200 });
+          return {
+            _hint: `No exact match for "${args.search}". Showing all results — only pick one if it is a close match, otherwise tell the user nothing was found.`,
+            data: all.data.map((m: any) => ({
+              id: m.id, name: m.name || m.user?.name, email: m.user?.email,
+              role: m.role, status: m.status, balanceCents: m.balanceCents,
+            })),
+          };
+        }
+        return mapped;
       }
 
       case 'list_charges': {
@@ -267,7 +278,7 @@ export class AgentService {
           search: args.search,
           limit: 200,
         });
-        return result.data.map((c: any) => ({
+        const mapped = result.data.map((c: any) => ({
           id: c.id,
           title: c.title,
           amountCents: c.amountCents,
@@ -277,6 +288,21 @@ export class AgentService {
           membershipId: c.membershipId,
           dueDate: c.dueDate,
         }));
+        if (mapped.length === 0 && args.search) {
+          const all = await this.chargesService.findAll(orgId, {
+            status: args.status, category: args.category,
+            membershipId: args.membershipId, limit: 200,
+          });
+          return {
+            _hint: `No exact match for "${args.search}". Showing all results — only pick one if it is a close match, otherwise tell the user nothing was found.`,
+            data: all.data.map((c: any) => ({
+              id: c.id, title: c.title, amountCents: c.amountCents, status: c.status,
+              category: c.category, memberName: c.membership?.name || c.membership?.user?.name,
+              membershipId: c.membershipId, dueDate: c.dueDate,
+            })),
+          };
+        }
+        return mapped;
       }
 
       case 'list_payments': {
@@ -285,7 +311,7 @@ export class AgentService {
         if (args.unallocated) filters.unallocated = true;
         if (args.search) filters.search = args.search;
         const result = await this.paymentsService.findAll(orgId, { ...filters, limit: 200 });
-        return result.data.map((p: any) => ({
+        const mapped = result.data.map((p: any) => ({
           id: p.id,
           amountCents: p.amountCents,
           paidAt: p.paidAt,
@@ -294,6 +320,22 @@ export class AgentService {
           memberName: p.membership?.name || p.membership?.user?.name,
           allocatedCents: p.allocatedCents,
         }));
+        if (mapped.length === 0 && args.search) {
+          const fallbackFilters: any = {};
+          if (args.membershipId) fallbackFilters.membershipId = args.membershipId;
+          if (args.unallocated) fallbackFilters.unallocated = true;
+          const all = await this.paymentsService.findAll(orgId, { ...fallbackFilters, limit: 200 });
+          return {
+            _hint: `No exact match for "${args.search}". Showing all results — only pick one if it is a close match, otherwise tell the user nothing was found.`,
+            data: all.data.map((p: any) => ({
+              id: p.id, amountCents: p.amountCents, paidAt: p.paidAt,
+              rawPayerName: p.rawPayerName, memo: p.memo,
+              memberName: p.membership?.name || p.membership?.user?.name,
+              allocatedCents: p.allocatedCents,
+            })),
+          };
+        }
+        return mapped;
       }
 
       case 'list_expenses': {
@@ -302,7 +344,7 @@ export class AgentService {
           search: args.search,
           limit: 200,
         });
-        return result.data.map((e: any) => ({
+        const mapped = result.data.map((e: any) => ({
           id: e.id,
           title: e.title,
           amountCents: e.amountCents,
@@ -310,6 +352,19 @@ export class AgentService {
           date: e.date,
           vendor: e.vendor,
         }));
+        if (mapped.length === 0 && args.search) {
+          const all = await this.expensesService.findAll(orgId, {
+            category: args.category, limit: 200,
+          });
+          return {
+            _hint: `No exact match for "${args.search}". Showing all results — only pick one if it is a close match, otherwise tell the user nothing was found.`,
+            data: all.data.map((e: any) => ({
+              id: e.id, title: e.title, amountCents: e.amountCents,
+              category: e.category, date: e.date, vendor: e.vendor,
+            })),
+          };
+        }
+        return mapped;
       }
 
       case 'get_balances': {

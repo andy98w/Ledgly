@@ -525,7 +525,7 @@ export class GmailService {
         description: parsed.memo || undefined,
         amountCents: parsed.amount,
         date: emailDate,
-        vendor: formatSourceName(parsed.source),
+        vendor: parsed.payerName || formatSourceName(parsed.source),
         createdById: adminMembership?.id ?? null,
       },
     });
@@ -1167,7 +1167,7 @@ export class GmailService {
           description: emailImport.parsedMemo || undefined,
           amountCents: emailImport.parsedAmount,
           date: emailImport.emailDate,
-          vendor: formatSourceName(emailImport.parsedSource),
+          vendor: emailImport.parsedPayerName || formatSourceName(emailImport.parsedSource),
           createdById: actorId,
         },
       });
