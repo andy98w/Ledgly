@@ -745,12 +745,24 @@ export class AgentService {
       }
       case 'add_members':
         return `Add ${args.members?.length || 0} member(s): ${(args.members || []).slice(0, 3).map((m: any) => m.name).join(', ')}${(args.members?.length || 0) > 3 ? '...' : ''}`;
-      case 'create_charges':
-        return `Charge "${args.title}" ($${((args.amountCents || 0) / 100).toFixed(2)}) to ${args.membershipIds?.length || 0} member(s)`;
+      case 'create_charges': {
+        const chargeMembers = await this.prisma.membership.findMany({
+          where: { id: { in: args.membershipIds || [] }, orgId },
+          select: { id: true, name: true, user: { select: { name: true } } },
+        });
+        args._memberNames = Object.fromEntries(chargeMembers.map((m) => [m.id, m.name || m.user?.name || 'Unknown']));
+        return `Charge "${args.title}" ($${((args.amountCents || 0) / 100).toFixed(2)}) to ${chargeMembers.length} member(s)`;
+      }
       case 'create_expense':
         return `Record expense "${args.title}" ($${((args.amountCents || 0) / 100).toFixed(2)})`;
-      case 'create_multi_charge':
-        return `Charge "${args.title}" ($${((args.amountCents || 0) / 100).toFixed(2)}/each) to ${args.membershipIds?.length || 0} member(s)`;
+      case 'create_multi_charge': {
+        const multiChargeMembers = await this.prisma.membership.findMany({
+          where: { id: { in: args.membershipIds || [] }, orgId },
+          select: { id: true, name: true, user: { select: { name: true } } },
+        });
+        args._memberNames = Object.fromEntries(multiChargeMembers.map((m) => [m.id, m.name || m.user?.name || 'Unknown']));
+        return `Charge "${args.title}" ($${((args.amountCents || 0) / 100).toFixed(2)}/each) to ${multiChargeMembers.length} member(s)`;
+      }
       case 'create_multi_expense':
         return `Record "${args.title}" with ${args.children?.length || 0} line item(s)`;
       case 'record_payments':

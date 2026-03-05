@@ -196,107 +196,75 @@ function ChargeActionEditor({
     });
   };
 
-  const updateTitle = (title: string) => {
-    onChange({ ...action, args: { ...action.args, title } });
+  const update = (field: string, value: any) => {
+    onChange({ ...action, args: { ...action.args, [field]: value } });
   };
 
   const updateAmount = (raw: string) => {
     const cleaned = raw.replace(/[^0-9.]/g, '');
     const cents = Math.round(parseFloat(cleaned || '0') * 100);
-    if (!isNaN(cents)) {
-      onChange({ ...action, args: { ...action.args, amountCents: cents } });
-    }
+    if (!isNaN(cents)) update('amountCents', cents);
   };
 
   return (
     <div className="space-y-2">
-      {/* Description header */}
       <span className="font-medium text-sm">{action.description}</span>
 
-      {/* Editable fields */}
       <div className="rounded-lg border border-border/60 bg-secondary/20 p-3 space-y-2">
-        {/* Title */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground w-12 shrink-0">Title</span>
-          <input
-            type="text"
-            value={action.args.title || ''}
-            onChange={(e) => updateTitle(e.target.value)}
-            className="font-medium text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors w-full py-0.5"
-          />
-        </div>
+        <FieldRow label="Title">
+          <input type="text" value={action.args.title || ''} onChange={(e) => update('title', e.target.value)}
+            className="font-medium text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors w-full py-0.5" />
+        </FieldRow>
 
-        {/* Amount + metadata row */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-muted-foreground w-12 shrink-0">Amount</span>
+        <FieldRow label="Amount">
           <span className="text-muted-foreground text-xs">$</span>
-          <input
-            type="text"
-            value={(action.args.amountCents / 100).toFixed(2)}
-            onChange={(e) => updateAmount(e.target.value)}
-            className="w-20 text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors tabular-nums py-0.5"
-          />
-          <span className="text-xs text-muted-foreground">each</span>
-          {action.args.category && (
-            <span className="text-xs px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
-              {action.args.category}
-            </span>
-          )}
-          {action.args.dueDate && (
-            <span className="text-xs px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
-              Due {new Date(action.args.dueDate).toLocaleDateString()}
-            </span>
-          )}
-        </div>
+          <input type="text" value={((action.args.amountCents || 0) / 100).toFixed(2)} onChange={(e) => updateAmount(e.target.value)}
+            className="w-24 text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors tabular-nums py-0.5" />
+          {memberIds.length > 1 && <span className="text-xs text-muted-foreground">each</span>}
+        </FieldRow>
+
+        <FieldRow label="Category">
+          <select value={action.args.category || 'OTHER'} onChange={(e) => update('category', e.target.value)}
+            className="text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5 cursor-pointer">
+            {CHARGE_CATEGORIES.map((c) => <option key={c} value={c}>{c.charAt(0) + c.slice(1).toLowerCase()}</option>)}
+          </select>
+        </FieldRow>
+
+        <FieldRow label="Due date">
+          <input type="date" value={action.args.dueDate?.slice(0, 10) || ''} onChange={(e) => update('dueDate', e.target.value || null)}
+            className="text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5" />
+        </FieldRow>
 
         {/* Members */}
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground w-12 shrink-0">For</span>
-            <span className="text-xs text-muted-foreground">
-              {memberIds.length} member{memberIds.length !== 1 ? 's' : ''}
-            </span>
+        <FieldRow label="Members">
+          <span className="text-xs text-muted-foreground">{memberIds.length}</span>
+        </FieldRow>
+        {memberIds.length === 0 ? (
+          <p className="text-xs text-destructive ml-[72px]">No members selected — add at least one to confirm.</p>
+        ) : (
+          <div className="flex flex-wrap gap-1 ml-[72px]">
+            {visibleIds.map((id: string) => (
+              <span key={id} className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-secondary text-foreground">
+                {action.args._memberNames?.[id] || memberNameMap.get(id) || 'Loading...'}
+                <button type="button" onClick={() => removeMember(id)} className="text-muted-foreground hover:text-destructive transition-colors">
+                  <XIcon className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+            {!expanded && hiddenCount > 0 && (
+              <button type="button" onClick={() => setExpanded(true)}
+                className="text-xs px-2 py-0.5 rounded-full bg-secondary/60 text-muted-foreground hover:text-foreground transition-colors">
+                +{hiddenCount} more
+              </button>
+            )}
+            {expanded && hiddenCount > 0 && (
+              <button type="button" onClick={() => setExpanded(false)}
+                className="text-xs px-2 py-0.5 rounded-full bg-secondary/60 text-muted-foreground hover:text-foreground transition-colors">
+                Show less
+              </button>
+            )}
           </div>
-          {memberIds.length === 0 ? (
-            <p className="text-xs text-destructive pl-14">No members selected — add at least one to confirm.</p>
-          ) : (
-            <div className="flex flex-wrap gap-1 pl-14">
-              {visibleIds.map((id: string) => (
-                <span
-                  key={id}
-                  className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-secondary text-foreground"
-                >
-                  {memberNameMap.get(id) || id.slice(0, 8)}
-                  <button
-                    type="button"
-                    onClick={() => removeMember(id)}
-                    className="text-muted-foreground hover:text-destructive transition-colors"
-                  >
-                    <XIcon className="h-3 w-3" />
-                  </button>
-                </span>
-              ))}
-              {!expanded && hiddenCount > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setExpanded(true)}
-                  className="text-xs px-2 py-0.5 rounded-full bg-secondary/60 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  +{hiddenCount} more
-                </button>
-              )}
-              {expanded && hiddenCount > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setExpanded(false)}
-                  className="text-xs px-2 py-0.5 rounded-full bg-secondary/60 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  Show less
-                </button>
-              )}
-            </div>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );
@@ -312,8 +280,8 @@ function ExpenseActionEditor({
 }) {
   const children: Array<{ title: string; amountCents: number; vendor?: string }> = action.args.children || [];
 
-  const updateParentTitle = (title: string) => {
-    onChange({ ...action, args: { ...action.args, title } });
+  const update = (field: string, value: any) => {
+    onChange({ ...action, args: { ...action.args, [field]: value } });
   };
 
   const updateChild = (idx: number, field: string, value: any) => {
@@ -329,8 +297,7 @@ function ExpenseActionEditor({
   };
 
   const removeChild = (idx: number) => {
-    const updated = children.filter((_, i) => i !== idx);
-    onChange({ ...action, args: { ...action.args, children: updated } });
+    onChange({ ...action, args: { ...action.args, children: children.filter((_, i) => i !== idx) } });
   };
 
   const totalCents = children.reduce((sum, c) => sum + (c.amountCents || 0), 0);
@@ -338,80 +305,53 @@ function ExpenseActionEditor({
   return (
     <div className="space-y-2">
       <span className="font-medium text-sm">{action.description}</span>
-
       <div className="rounded-lg border border-border/60 bg-secondary/20 p-3 space-y-2">
-        {/* Parent title */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground w-12 shrink-0">Title</span>
-          <input
-            type="text"
-            value={action.args.title || ''}
-            onChange={(e) => updateParentTitle(e.target.value)}
-            className="font-medium text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors w-full py-0.5"
-          />
-        </div>
-
-        {/* Metadata row */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {action.args.category && (
-            <span className="text-xs px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
-              {action.args.category}
-            </span>
-          )}
-          {action.args.date && (
-            <span className="text-xs px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
-              {new Date(action.args.date).toLocaleDateString()}
-            </span>
-          )}
-          {action.args.vendor && (
-            <span className="text-xs px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
-              {action.args.vendor}
-            </span>
-          )}
-        </div>
+        <FieldRow label="Title">
+          <input type="text" value={action.args.title || ''} onChange={(e) => update('title', e.target.value)}
+            className="font-medium text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors w-full py-0.5" />
+        </FieldRow>
+        <FieldRow label="Category">
+          <select value={action.args.category || 'OTHER'} onChange={(e) => update('category', e.target.value)}
+            className="text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5 cursor-pointer">
+            {EXPENSE_CATEGORIES.map((c) => <option key={c} value={c}>{c.charAt(0) + c.slice(1).toLowerCase()}</option>)}
+          </select>
+        </FieldRow>
+        <FieldRow label="Date">
+          <input type="date" value={action.args.date?.slice(0, 10) || ''} onChange={(e) => update('date', e.target.value)}
+            className="text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5" />
+        </FieldRow>
+        <FieldRow label="Vendor">
+          <input type="text" value={action.args.vendor || ''} onChange={(e) => update('vendor', e.target.value)} placeholder="Optional"
+            className="text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors w-full py-0.5 placeholder:text-muted-foreground/40" />
+        </FieldRow>
 
         {/* Line items */}
-        <div className="space-y-1.5">
-          <span className="text-xs text-muted-foreground">
-            {children.length} line item{children.length !== 1 ? 's' : ''}
-          </span>
-          {children.length === 0 ? (
-            <p className="text-xs text-destructive">No line items — add at least one to confirm.</p>
-          ) : (
-            <div className="space-y-1">
-              {children.map((child, idx) => (
-                <div key={idx} className="flex items-center gap-2 pl-2">
-                  <input
-                    type="text"
-                    value={child.title}
-                    onChange={(e) => updateChild(idx, 'title', e.target.value)}
-                    className="flex-1 text-xs bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5"
-                  />
-                  <span className="text-muted-foreground text-xs">$</span>
-                  <input
-                    type="text"
-                    value={(child.amountCents / 100).toFixed(2)}
-                    onChange={(e) => updateChildAmount(idx, e.target.value)}
-                    className="w-20 text-xs bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors tabular-nums py-0.5"
-                  />
-                  {children.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeChild(idx)}
-                      className="text-muted-foreground hover:text-destructive transition-colors"
-                    >
-                      <XIcon className="h-3 w-3" />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <FieldRow label="Items">
+          <span className="text-xs text-muted-foreground">{children.length} line item{children.length !== 1 ? 's' : ''}</span>
+        </FieldRow>
+        {children.length === 0 ? (
+          <p className="text-xs text-destructive ml-[72px]">No line items — add at least one to confirm.</p>
+        ) : (
+          <div className="space-y-1 ml-[72px]">
+            {children.map((child, idx) => (
+              <div key={idx} className="flex items-center gap-2">
+                <input type="text" value={child.title} onChange={(e) => updateChild(idx, 'title', e.target.value)}
+                  className="flex-1 text-xs bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5" />
+                <span className="text-muted-foreground text-xs">$</span>
+                <input type="text" value={(child.amountCents / 100).toFixed(2)} onChange={(e) => updateChildAmount(idx, e.target.value)}
+                  className="w-20 text-xs bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors tabular-nums py-0.5" />
+                {children.length > 1 && (
+                  <button type="button" onClick={() => removeChild(idx)} className="text-muted-foreground hover:text-destructive transition-colors">
+                    <XIcon className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
 
-        {/* Total */}
         <div className="flex items-center gap-2 pt-1 border-t border-border/40">
-          <span className="text-xs text-muted-foreground w-12 shrink-0">Total</span>
+          <span className="text-xs text-muted-foreground w-16 shrink-0">Total</span>
           <span className="text-sm font-medium tabular-nums">{formatCents(totalCents)}</span>
         </div>
       </div>
@@ -628,22 +568,31 @@ function MembersEditor({
   return (
     <div className="space-y-2">
       <span className="font-medium text-sm">{action.description}</span>
-      <div className="rounded-lg border border-border/60 bg-secondary/20 p-3 space-y-2">
+      <div className="rounded-lg border border-border/60 bg-secondary/20 p-3 space-y-2.5">
         {members.map((m, idx) => (
-          <div key={idx} className="flex items-center gap-2">
-            <input type="text" value={m.name} onChange={(e) => updateMember(idx, 'name', e.target.value)} placeholder="Name"
-              className="flex-1 text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5" />
-            <input type="text" value={m.email || ''} onChange={(e) => updateMember(idx, 'email', e.target.value)} placeholder="Email"
-              className="flex-1 text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5 placeholder:text-muted-foreground/40" />
-            <select value={m.role || 'MEMBER'} onChange={(e) => updateMember(idx, 'role', e.target.value)}
-              className="text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5 cursor-pointer">
-              {MEMBER_ROLES.map((r) => <option key={r} value={r}>{r.charAt(0) + r.slice(1).toLowerCase()}</option>)}
-            </select>
-            {members.length > 1 && (
-              <button type="button" onClick={() => removeMember(idx)} className="text-muted-foreground hover:text-destructive transition-colors">
-                <XIcon className="h-3 w-3" />
-              </button>
-            )}
+          <div key={idx} className="space-y-1">
+            <div className="flex items-center gap-2">
+              <FieldRow label="Name">
+                <input type="text" value={m.name} onChange={(e) => updateMember(idx, 'name', e.target.value)}
+                  className="flex-1 text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5" />
+              </FieldRow>
+              {members.length > 1 && (
+                <button type="button" onClick={() => removeMember(idx)} className="text-muted-foreground hover:text-destructive transition-colors shrink-0">
+                  <XIcon className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+            <FieldRow label="Email">
+              <input type="text" value={m.email || ''} onChange={(e) => updateMember(idx, 'email', e.target.value)} placeholder="Optional"
+                className="flex-1 text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5 placeholder:text-muted-foreground/40" />
+            </FieldRow>
+            <FieldRow label="Role">
+              <select value={m.role || 'MEMBER'} onChange={(e) => updateMember(idx, 'role', e.target.value)}
+                className="text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5 cursor-pointer">
+                {MEMBER_ROLES.map((r) => <option key={r} value={r}>{r.charAt(0) + r.slice(1).toLowerCase()}</option>)}
+              </select>
+            </FieldRow>
+            {idx < members.length - 1 && <div className="border-t border-border/30 mt-1" />}
           </div>
         ))}
       </div>
@@ -680,21 +629,30 @@ function PaymentsEditor({
   return (
     <div className="space-y-2">
       <span className="font-medium text-sm">{action.description}</span>
-      <div className="rounded-lg border border-border/60 bg-secondary/20 p-3 space-y-2">
+      <div className="rounded-lg border border-border/60 bg-secondary/20 p-3 space-y-2.5">
         {payments.map((p, idx) => (
-          <div key={idx} className="flex items-center gap-2">
-            <input type="text" value={p.rawPayerName || ''} onChange={(e) => updatePayment(idx, 'rawPayerName', e.target.value)} placeholder="Payer"
-              className="flex-1 text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5" />
-            <span className="text-muted-foreground text-xs">$</span>
-            <input type="text" value={(p.amountCents / 100).toFixed(2)} onChange={(e) => updatePaymentAmount(idx, e.target.value)}
-              className="w-20 text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors tabular-nums py-0.5" />
-            <input type="date" value={p.date?.slice(0, 10) || ''} onChange={(e) => updatePayment(idx, 'date', e.target.value)}
-              className="text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5" />
-            {payments.length > 1 && (
-              <button type="button" onClick={() => removePayment(idx)} className="text-muted-foreground hover:text-destructive transition-colors">
-                <XIcon className="h-3 w-3" />
-              </button>
-            )}
+          <div key={idx} className="space-y-1">
+            <div className="flex items-center gap-2">
+              <FieldRow label="Payer">
+                <input type="text" value={p.rawPayerName || ''} onChange={(e) => updatePayment(idx, 'rawPayerName', e.target.value)}
+                  className="flex-1 text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5" />
+              </FieldRow>
+              {payments.length > 1 && (
+                <button type="button" onClick={() => removePayment(idx)} className="text-muted-foreground hover:text-destructive transition-colors shrink-0">
+                  <XIcon className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+            <FieldRow label="Amount">
+              <span className="text-muted-foreground text-xs">$</span>
+              <input type="text" value={(p.amountCents / 100).toFixed(2)} onChange={(e) => updatePaymentAmount(idx, e.target.value)}
+                className="w-24 text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors tabular-nums py-0.5" />
+            </FieldRow>
+            <FieldRow label="Date">
+              <input type="date" value={p.date?.slice(0, 10) || ''} onChange={(e) => updatePayment(idx, 'date', e.target.value)}
+                className="text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5" />
+            </FieldRow>
+            {idx < payments.length - 1 && <div className="border-t border-border/30 mt-1" />}
           </div>
         ))}
       </div>
