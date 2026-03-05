@@ -39,6 +39,10 @@ export const agentTools: AgentTool[] = [
       input_schema: {
         type: 'object' as const,
         properties: {
+          search: {
+            type: 'string',
+            description: 'Optional search string to filter by title',
+          },
           status: {
             type: 'string',
             enum: ['OPEN', 'PARTIALLY_PAID', 'PAID', 'VOID'],
@@ -67,6 +71,10 @@ export const agentTools: AgentTool[] = [
       input_schema: {
         type: 'object' as const,
         properties: {
+          search: {
+            type: 'string',
+            description: 'Optional search string to filter by payer name or memo',
+          },
           membershipId: {
             type: 'string',
             description: 'Filter payments for a specific member',
@@ -122,7 +130,7 @@ export const agentTools: AgentTool[] = [
     definition: {
       name: 'update_member',
       description:
-        'Update an existing member. First look up the member using list_members to get their ID, then call this tool with the fields to change.',
+        'Update an existing member. Look up the member first to get their ID, then provide the fields to change.',
       input_schema: {
         type: 'object' as const,
         properties: {
@@ -148,7 +156,7 @@ export const agentTools: AgentTool[] = [
     definition: {
       name: 'update_charge',
       description:
-        'Update an existing charge. First look up the charge using list_charges to get its ID, then call this tool with the fields to change.',
+        'Update an existing charge. Look up the charge first to get its ID, then provide the fields to change.',
       input_schema: {
         type: 'object' as const,
         properties: {
@@ -394,7 +402,7 @@ export const agentTools: AgentTool[] = [
     requiresConfirmation: true,
     definition: {
       name: 'delete_expenses',
-      description: 'Delete one or more expenses by their IDs. Look up expenses first using list_expenses.',
+      description: 'Delete one or more expenses by their IDs. Look up expenses first to get their IDs.',
       input_schema: {
         type: 'object' as const,
         properties: {

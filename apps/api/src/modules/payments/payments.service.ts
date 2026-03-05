@@ -32,6 +32,7 @@ interface UpdatePaymentDto {
 interface PaymentFilters {
   membershipId?: string;
   unallocated?: boolean;
+  search?: string;
   page?: number;
   limit?: number;
   cursor?: string;
@@ -46,12 +47,19 @@ export class PaymentsService {
   ) {}
 
   async findAll(orgId: string, filters: PaymentFilters = {}) {
-    const { membershipId, unallocated, page = 1, limit = 50, cursor } = filters;
+    const { membershipId, unallocated, search, page = 1, limit = 50, cursor } = filters;
 
     const where: any = { orgId, deletedAt: null };
 
     if (membershipId) {
       where.membershipId = membershipId;
+    }
+
+    if (search) {
+      where.OR = [
+        { rawPayerName: { contains: search, mode: 'insensitive' } },
+        { memo: { contains: search, mode: 'insensitive' } },
+      ];
     }
 
     // Move unallocated filter into the where clause so pagination counts are correct.

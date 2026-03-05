@@ -67,12 +67,12 @@ export const ChargeCard = memo(function ChargeCard({
           )}
           <div className="flex items-center gap-3 flex-1 min-w-0">
             <AvatarGradient
-              name={charge.membership?.displayName || 'Unknown'}
+              name={charge.membership?.displayName || charge.title || 'Unknown'}
               size="sm"
             />
             <div className="min-w-0 space-y-1">
               <div className="flex items-center gap-2 min-w-0">
-                <p className="font-medium truncate" title={nested ? charge.membership?.displayName : charge.title}>{nested ? charge.membership?.displayName : charge.title}</p>
+                <p className="font-medium truncate" title={nested ? (charge.membership?.displayName || charge.title) : charge.title}>{nested ? (charge.membership?.displayName || charge.title) : charge.title}</p>
                 {isOverdue && (
                   <Badge variant="destructive" className="text-xs">
                     <AlertCircle className="w-3 h-3 mr-1" />
@@ -82,7 +82,7 @@ export const ChargeCard = memo(function ChargeCard({
               </div>
               {!nested && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span className="truncate" title={charge.membership?.displayName}>{charge.membership?.displayName}</span>
+                  <span className="truncate" title={charge.membership?.displayName || charge.title}>{charge.membership?.displayName || charge.title}</span>
                   <span className="opacity-30">&bull;</span>
                   <Badge variant="outline" className="text-xs">
                     {CHARGE_CATEGORY_LABELS[charge.category as keyof typeof CHARGE_CATEGORY_LABELS]}

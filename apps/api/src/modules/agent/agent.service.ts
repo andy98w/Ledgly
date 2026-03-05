@@ -264,6 +264,7 @@ export class AgentService {
           status: args.status,
           category: args.category,
           membershipId: args.membershipId,
+          search: args.search,
           limit: 200,
         });
         return result.data.map((c: any) => ({
@@ -282,6 +283,7 @@ export class AgentService {
         const filters: any = {};
         if (args.membershipId) filters.membershipId = args.membershipId;
         if (args.unallocated) filters.unallocated = true;
+        if (args.search) filters.search = args.search;
         const result = await this.paymentsService.findAll(orgId, { ...filters, limit: 200 });
         return result.data.map((p: any) => ({
           id: p.id,

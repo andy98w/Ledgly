@@ -32,6 +32,7 @@ interface ChargeFilters {
   category?: ChargeCategory;
   membershipId?: string;
   overdue?: boolean;
+  search?: string;
   page?: number;
   limit?: number;
   cursor?: string;
@@ -46,7 +47,7 @@ export class ChargesService {
   ) {}
 
   async findAll(orgId: string, filters: ChargeFilters = {}) {
-    const { status, category, membershipId, overdue, page = 1, limit = 50, cursor } = filters;
+    const { status, category, membershipId, overdue, search, page = 1, limit = 50, cursor } = filters;
     const now = new Date();
 
     const where: any = { orgId, parentId: null };
@@ -64,6 +65,10 @@ export class ChargesService {
 
     if (membershipId) {
       where.membershipId = membershipId;
+    }
+
+    if (search) {
+      where.title = { contains: search, mode: 'insensitive' };
     }
 
     if (overdue === true) {
