@@ -340,9 +340,9 @@ function EditableCell({
           onChange={(e) => setEditValue(e.target.value)}
           onKeyDown={handleKeyDown}
           onBlur={handleSave}
-          className="h-6 text-xs bg-transparent border-0 shadow-none ring-0 outline-none focus:ring-0 focus:border-0 focus:outline-none"
+          className="h-6 text-xs bg-transparent border-0 shadow-none ring-0 outline-none focus:ring-0 focus:border-0 focus:outline-none [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:opacity-50"
           type="date"
-          style={{ WebkitAppearance: 'none', border: 'none', outline: 'none' }}
+          style={{ colorScheme: 'dark' }}
         />
       );
     }
@@ -355,12 +355,13 @@ function EditableCell({
         onKeyDown={handleKeyDown}
         onBlur={handleSave}
         className={cn(
-          'h-6 text-xs bg-transparent border-0 shadow-none ring-0 outline-none focus:ring-0 focus:border-0 focus:outline-none',
-          type === 'money' ? 'w-16 text-right' : 'w-full'
+          'h-6 text-xs bg-transparent border-0 shadow-none ring-0 outline-none focus:ring-0 focus:border-0 focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none',
+          type === 'money' ? 'w-16 text-right tabular-nums' : 'w-full'
         )}
         type={type === 'money' ? 'number' : 'text'}
         step={type === 'money' ? '0.01' : undefined}
-        style={{ WebkitAppearance: 'none', border: 'none', outline: 'none' }}
+        inputMode={type === 'money' ? 'decimal' : undefined}
+        style={{ MozAppearance: 'textfield' }}
       />
     );
   }

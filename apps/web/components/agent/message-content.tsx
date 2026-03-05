@@ -1,8 +1,9 @@
 'use client';
 
 import { useMemo, useState, useEffect } from 'react';
-import { Check, X, XCircle, Loader2, AlertCircle, XIcon } from 'lucide-react';
+import { Check, X, XCircle, Loader2, AlertCircle, XIcon, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { cn, formatCents } from '@/lib/utils';
 import { useMembers } from '@/lib/queries/members';
 import type { ProposedAction, ActionResult } from '@/lib/queries/agent';
@@ -186,12 +187,30 @@ function ChargeActionEditor({
   const visibleIds = expanded ? memberIds : memberIds.slice(0, VISIBLE_LIMIT);
   const hiddenCount = memberIds.length - VISIBLE_LIMIT;
 
+  // Available members not yet in the charge
+  const availableMembers = useMemo(() => {
+    const inCharge = new Set(memberIds);
+    return Array.from(memberNameMap.entries())
+      .filter(([id]) => !inCharge.has(id))
+      .map(([id, name]) => ({ id, name }));
+  }, [memberIds, memberNameMap]);
+
   const removeMember = (idToRemove: string) => {
     onChange({
       ...action,
       args: {
         ...action.args,
         membershipIds: memberIds.filter((id: string) => id !== idToRemove),
+      },
+    });
+  };
+
+  const addMember = (id: string) => {
+    onChange({
+      ...action,
+      args: {
+        ...action.args,
+        membershipIds: [...memberIds, id],
       },
     });
   };
@@ -224,20 +243,28 @@ function ChargeActionEditor({
         </FieldRow>
 
         <FieldRow label="Category">
-          <select value={action.args.category || 'OTHER'} onChange={(e) => update('category', e.target.value)}
-            className="text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5 cursor-pointer">
-            {CHARGE_CATEGORIES.map((c) => <option key={c} value={c}>{c.charAt(0) + c.slice(1).toLowerCase()}</option>)}
-          </select>
+          <InlineSelect value={action.args.category || 'OTHER'} onValueChange={(v) => update('category', v)} options={CHARGE_CATEGORIES} />
         </FieldRow>
 
         <FieldRow label="Due date">
-          <input type="date" value={action.args.dueDate?.slice(0, 10) || ''} onChange={(e) => update('dueDate', e.target.value || null)}
-            className="text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5" />
+          <DateInput value={action.args.dueDate || ''} onChange={(v) => update('dueDate', v || null)} />
         </FieldRow>
 
         {/* Members */}
         <FieldRow label="Members">
           <span className="text-xs text-muted-foreground">{memberIds.length}</span>
+          {availableMembers.length > 0 && (
+            <Select onValueChange={addMember}>
+              <SelectTrigger className="h-6 w-6 p-0 bg-secondary/50 border-border/50 rounded-full flex items-center justify-center">
+                <Plus className="h-3 w-3" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableMembers.map((m) => (
+                  <SelectItem key={m.id} value={m.id} className="text-xs">{m.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </FieldRow>
         {memberIds.length === 0 ? (
           <p className="text-xs text-destructive ml-[72px]">No members selected — add at least one to confirm.</p>
@@ -311,18 +338,14 @@ function ExpenseActionEditor({
             className="font-medium text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors w-full py-0.5" />
         </FieldRow>
         <FieldRow label="Category">
-          <select value={action.args.category || 'OTHER'} onChange={(e) => update('category', e.target.value)}
-            className="text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5 cursor-pointer">
-            {EXPENSE_CATEGORIES.map((c) => <option key={c} value={c}>{c.charAt(0) + c.slice(1).toLowerCase()}</option>)}
-          </select>
+          <InlineSelect value={action.args.category || 'OTHER'} onValueChange={(v) => update('category', v)} options={EXPENSE_CATEGORIES} />
         </FieldRow>
         <FieldRow label="Date">
-          <input type="date" value={action.args.date?.slice(0, 10) || ''} onChange={(e) => update('date', e.target.value)}
-            className="text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5" />
+          <DateInput value={action.args.date || ''} onChange={(v) => update('date', v)} />
         </FieldRow>
         <FieldRow label="Vendor">
           <input type="text" value={action.args.vendor || ''} onChange={(e) => update('vendor', e.target.value)} placeholder="Optional"
-            className="text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors w-full py-0.5 placeholder:text-muted-foreground/40" />
+            className={cn(INPUT_CLASS, 'w-full placeholder:text-muted-foreground/40')} />
         </FieldRow>
 
         {/* Line items */}
@@ -363,6 +386,9 @@ const EXPENSE_CATEGORIES = ['EVENT', 'SUPPLIES', 'FOOD', 'VENUE', 'MARKETING', '
 const CHARGE_CATEGORIES = ['DUES', 'EVENT', 'FINE', 'MERCH', 'OTHER'] as const;
 const MEMBER_ROLES = ['MEMBER', 'ADMIN', 'TREASURER'] as const;
 
+const INPUT_CLASS = 'text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5';
+const AMOUNT_INPUT_CLASS = cn(INPUT_CLASS, 'w-24 tabular-nums [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none');
+
 /** Shared editable field row */
 function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -370,6 +396,37 @@ function FieldRow({ label, children }: { label: string; children: React.ReactNod
       <span className="text-xs text-muted-foreground w-16 shrink-0">{label}</span>
       {children}
     </div>
+  );
+}
+
+/** Themed inline select matching filter dropdowns */
+function InlineSelect({ value, onValueChange, options }: {
+  value: string;
+  onValueChange: (v: string) => void;
+  options: readonly string[];
+}) {
+  return (
+    <Select value={value} onValueChange={onValueChange}>
+      <SelectTrigger className="h-7 w-auto min-w-[100px] bg-secondary/30 border-border/50 text-xs px-2 gap-1">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((o) => (
+          <SelectItem key={o} value={o} className="text-xs">
+            {o.charAt(0) + o.slice(1).toLowerCase()}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+/** Themed date input */
+function DateInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <input type="date" value={value?.slice(0, 10) || ''} onChange={(e) => onChange(e.target.value)}
+      className={cn(INPUT_CLASS, '[&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:opacity-50')}
+      style={{ colorScheme: 'dark' }} />
   );
 }
 
@@ -404,18 +461,14 @@ function SingleExpenseEditor({
             className="w-24 text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors tabular-nums py-0.5" />
         </FieldRow>
         <FieldRow label="Category">
-          <select value={action.args.category || 'OTHER'} onChange={(e) => update('category', e.target.value)}
-            className="text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5 cursor-pointer">
-            {EXPENSE_CATEGORIES.map((c) => <option key={c} value={c}>{c.charAt(0) + c.slice(1).toLowerCase()}</option>)}
-          </select>
+          <InlineSelect value={action.args.category || 'OTHER'} onValueChange={(v) => update('category', v)} options={EXPENSE_CATEGORIES} />
         </FieldRow>
         <FieldRow label="Date">
-          <input type="date" value={action.args.date?.slice(0, 10) || ''} onChange={(e) => update('date', e.target.value)}
-            className="text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5" />
+          <DateInput value={action.args.date || ''} onChange={(v) => update('date', v)} />
         </FieldRow>
         <FieldRow label="Vendor">
           <input type="text" value={action.args.vendor || ''} onChange={(e) => update('vendor', e.target.value)} placeholder="Optional"
-            className="text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors w-full py-0.5 placeholder:text-muted-foreground/40" />
+            className={cn(INPUT_CLASS, 'w-full placeholder:text-muted-foreground/40')} />
         </FieldRow>
       </div>
     </div>
@@ -493,10 +546,7 @@ function UpdateFieldsEditor({
                 {oldVal !== undefined && isChanged && (
                   <><span className="line-through text-muted-foreground/60 text-sm">{oldVal}</span><span className="text-muted-foreground text-xs">→</span></>
                 )}
-                <select value={getFieldValue(field) || 'OTHER'} onChange={(e) => update(field, e.target.value)}
-                  className="text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5 cursor-pointer">
-                  {categories.map((c) => <option key={c} value={c}>{c.charAt(0) + c.slice(1).toLowerCase()}</option>)}
-                </select>
+                <InlineSelect value={getFieldValue(field) || 'OTHER'} onValueChange={(v) => update(field, v)} options={categories} />
               </FieldRow>
             );
           }
@@ -508,10 +558,7 @@ function UpdateFieldsEditor({
                 {oldVal !== undefined && isChanged && (
                   <><span className="line-through text-muted-foreground/60 text-sm">{oldVal}</span><span className="text-muted-foreground text-xs">→</span></>
                 )}
-                <select value={getFieldValue(field) || 'MEMBER'} onChange={(e) => update(field, e.target.value)}
-                  className="text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5 cursor-pointer">
-                  {MEMBER_ROLES.map((r) => <option key={r} value={r}>{r.charAt(0) + r.slice(1).toLowerCase()}</option>)}
-                </select>
+                <InlineSelect value={getFieldValue(field) || 'MEMBER'} onValueChange={(v) => update(field, v)} options={MEMBER_ROLES} />
               </FieldRow>
             );
           }
@@ -523,8 +570,7 @@ function UpdateFieldsEditor({
                 {oldVal !== undefined && isChanged && (
                   <><span className="line-through text-muted-foreground/60 text-sm">{formatDisplay(field, oldVal)}</span><span className="text-muted-foreground text-xs">→</span></>
                 )}
-                <input type="date" value={String(getFieldValue(field) || '').slice(0, 10)} onChange={(e) => update(field, e.target.value)}
-                  className="text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5" />
+                <DateInput value={String(getFieldValue(field) || '')} onChange={(v) => update(field, v)} />
               </FieldRow>
             );
           }
@@ -536,7 +582,7 @@ function UpdateFieldsEditor({
                 <><span className="line-through text-muted-foreground/60 text-sm">{oldVal}</span><span className="text-muted-foreground text-xs">→</span></>
               )}
               <input type="text" value={getFieldValue(field)} onChange={(e) => update(field, e.target.value)}
-                className="text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors w-full py-0.5" />
+                className={cn(INPUT_CLASS, 'w-full')} />
             </FieldRow>
           );
         })}
@@ -587,10 +633,7 @@ function MembersEditor({
                 className="flex-1 text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5 placeholder:text-muted-foreground/40" />
             </FieldRow>
             <FieldRow label="Role">
-              <select value={m.role || 'MEMBER'} onChange={(e) => updateMember(idx, 'role', e.target.value)}
-                className="text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5 cursor-pointer">
-                {MEMBER_ROLES.map((r) => <option key={r} value={r}>{r.charAt(0) + r.slice(1).toLowerCase()}</option>)}
-              </select>
+              <InlineSelect value={m.role || 'MEMBER'} onValueChange={(v) => updateMember(idx, 'role', v)} options={MEMBER_ROLES} />
             </FieldRow>
             {idx < members.length - 1 && <div className="border-t border-border/30 mt-1" />}
           </div>
@@ -649,8 +692,7 @@ function PaymentsEditor({
                 className="w-24 text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors tabular-nums py-0.5" />
             </FieldRow>
             <FieldRow label="Date">
-              <input type="date" value={p.date?.slice(0, 10) || ''} onChange={(e) => updatePayment(idx, 'date', e.target.value)}
-                className="text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5" />
+              <DateInput value={p.date || ''} onChange={(v) => updatePayment(idx, 'date', v)} />
             </FieldRow>
             {idx < payments.length - 1 && <div className="border-t border-border/30 mt-1" />}
           </div>
@@ -752,25 +794,71 @@ export function ConfirmationCard({
                 <>
                   <span className="font-medium">{action.description}</span>
                   {action.args._items && action.args._items.length > 0 && (
-                    <ul className="mt-1 space-y-0.5 text-sm text-muted-foreground">
-                      {action.args._items.slice(0, 10).map((item: any, i: number) => (
-                        <li key={i}>
-                          <span className="text-foreground">{item.title || item.name || 'Untitled'}</span>
-                          {item.amountCents != null && <> · {formatCents(item.amountCents)}</>}
-                          {item.memberName && <> · {item.memberName}</>}
-                          {item.vendor && <> · {item.vendor}</>}
-                          {item.date && <> · {new Date(item.date).toLocaleDateString()}</>}
-                          {item.dueDate && <> · Due {new Date(item.dueDate).toLocaleDateString()}</>}
-                          {item.category && <> · {item.category.charAt(0) + item.category.slice(1).toLowerCase()}</>}
-                          {item.email && <> · {item.email}</>}
-                          {item.role && item.role !== 'MEMBER' && <> · {item.role}</>}
-                          {item.description && <> — {item.description}</>}
-                        </li>
-                      ))}
+                    <div className="mt-2 rounded-lg border border-border/60 bg-secondary/20 p-3 space-y-2">
+                      {action.args._items.slice(0, 10).map((item: any, i: number) => {
+                        const isBulk = action.args._items.length > 1;
+                        const content = (
+                          <div className={cn('space-y-1', isBulk && 'pl-3 border-l-2 border-border/40')}>
+                            {(item.title || item.name) && (
+                              <FieldRow label={item.title ? 'Title' : 'Name'}>
+                                <span className="text-sm">{item.title || item.name}</span>
+                              </FieldRow>
+                            )}
+                            {item.amountCents != null && (
+                              <FieldRow label="Amount">
+                                <span className="text-sm tabular-nums">{formatCents(item.amountCents)}</span>
+                              </FieldRow>
+                            )}
+                            {item.category && (
+                              <FieldRow label="Category">
+                                <span className="text-sm">{item.category.charAt(0) + item.category.slice(1).toLowerCase()}</span>
+                              </FieldRow>
+                            )}
+                            {item.memberName && (
+                              <FieldRow label="Member">
+                                <span className="text-sm">{item.memberName}</span>
+                              </FieldRow>
+                            )}
+                            {item.vendor && (
+                              <FieldRow label="Vendor">
+                                <span className="text-sm">{item.vendor}</span>
+                              </FieldRow>
+                            )}
+                            {item.date && (
+                              <FieldRow label="Date">
+                                <span className="text-sm">{new Date(item.date).toLocaleDateString()}</span>
+                              </FieldRow>
+                            )}
+                            {item.dueDate && (
+                              <FieldRow label="Due date">
+                                <span className="text-sm">{new Date(item.dueDate).toLocaleDateString()}</span>
+                              </FieldRow>
+                            )}
+                            {item.email && (
+                              <FieldRow label="Email">
+                                <span className="text-sm">{item.email}</span>
+                              </FieldRow>
+                            )}
+                            {item.role && item.role !== 'MEMBER' && (
+                              <FieldRow label="Role">
+                                <span className="text-sm">{item.role}</span>
+                              </FieldRow>
+                            )}
+                          </div>
+                        );
+                        return (
+                          <div key={i}>
+                            {content}
+                            {isBulk && i < Math.min(action.args._items.length, 10) - 1 && (
+                              <div className="border-t border-border/30 mt-2" />
+                            )}
+                          </div>
+                        );
+                      })}
                       {action.args._items.length > 10 && (
-                        <li>...and {action.args._items.length - 10} more</li>
+                        <p className="text-xs text-muted-foreground">...and {action.args._items.length - 10} more</p>
                       )}
-                    </ul>
+                    </div>
                   )}
                 </>
               )}
