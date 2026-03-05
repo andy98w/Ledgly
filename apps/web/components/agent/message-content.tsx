@@ -255,7 +255,7 @@ function ChargeActionEditor({
           <span className="text-xs text-muted-foreground">{memberIds.length}</span>
           {availableMembers.length > 0 && (
             <Select onValueChange={addMember}>
-              <SelectTrigger className="h-6 w-6 p-0 bg-secondary/50 border-border/50 rounded-full flex items-center justify-center">
+              <SelectTrigger className="h-5 w-5 p-0 bg-secondary/50 border-border/50 rounded-full flex items-center justify-center [&>svg:last-child]:hidden">
                 <Plus className="h-3 w-3" />
               </SelectTrigger>
               <SelectContent>
