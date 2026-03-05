@@ -56,10 +56,6 @@ export function AISidebar() {
 
   const hidden = !isAdmin || !currentOrgId || pathname === '/agent' || pathname.startsWith('/settings');
 
-  // Auto-close sidebar when navigating to a page where it's hidden
-  useEffect(() => {
-    if (hidden && isOpen) close();
-  }, [hidden]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [input, setInput] = useState('');
