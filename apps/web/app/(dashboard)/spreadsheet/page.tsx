@@ -340,10 +340,30 @@ function EditableCell({
           onChange={(e) => setEditValue(e.target.value)}
           onKeyDown={handleKeyDown}
           onBlur={handleSave}
-          className="h-6 text-sm bg-transparent shadow-none !ring-0 !outline-none !border !border-border/40 rounded px-1"
+          className="h-6 text-sm bg-transparent shadow-none !ring-0 !outline-none !border-none rounded px-1"
           type="date"
           style={{ colorScheme: 'dark' }}
         />
+      );
+    }
+
+    if (type === 'money') {
+      return (
+        <div className="inline-flex items-baseline justify-end w-full">
+          <span className="text-base font-semibold opacity-70 mr-0.5">$</span>
+          <input
+            ref={inputRef}
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onBlur={handleSave}
+            className="w-16 text-right tabular-nums text-base font-semibold bg-transparent shadow-none !ring-0 !outline-none !border-none p-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            type="number"
+            step="0.01"
+            inputMode="decimal"
+            style={{ MozAppearance: 'textfield' }}
+          />
+        </div>
       );
     }
 
@@ -354,14 +374,8 @@ function EditableCell({
         onChange={(e) => setEditValue(e.target.value)}
         onKeyDown={handleKeyDown}
         onBlur={handleSave}
-        className={cn(
-          'h-6 text-sm bg-transparent shadow-none !ring-0 !outline-none !border !border-border/40 rounded px-1 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none',
-          type === 'money' ? 'w-16 text-right tabular-nums' : 'w-full'
-        )}
-        type={type === 'money' ? 'number' : 'text'}
-        step={type === 'money' ? '0.01' : undefined}
-        inputMode={type === 'money' ? 'decimal' : undefined}
-        style={{ MozAppearance: 'textfield' }}
+        className="h-6 w-full text-sm bg-transparent shadow-none !ring-0 !outline-none !border-none rounded px-1"
+        type="text"
       />
     );
   }
@@ -407,7 +421,10 @@ function EditableCell({
   return (
     <button
       onClick={onEdit}
-      className="text-left hover:bg-secondary/50 px-1 py-0.5 rounded -mx-1 transition-colors cursor-pointer w-full"
+      className={cn(
+        'hover:bg-secondary/50 px-1 py-0.5 rounded -mx-1 transition-colors cursor-pointer w-full',
+        type === 'money' ? 'text-right' : 'text-left',
+      )}
       title="Click to edit"
     >
       {type === 'money' ? (
@@ -1888,9 +1905,9 @@ export default function SpreadsheetPage() {
                                   <ChevronRight className="w-4 h-4 text-muted-foreground" />
                                 )}
                               </button>
-                            ) : row.isChild ? (
+                            ) : (
                               <div className="w-7 h-7" />
-                            ) : null}
+                            )}
                             {!row.isChild && (
                               <>
                                 <button
