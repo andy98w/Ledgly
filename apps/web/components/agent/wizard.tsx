@@ -28,7 +28,7 @@ export const WIZARD_ENTITIES: { id: WizardEntityId; label: string; actions: Wiza
 export const WIZARD_TEMPLATES: Record<string, string> = {
   'create-members': `Add members:\n- \n(e.g. "John Smith, john@email.com, Treasurer")`,
   'create-charges': `Charge members:\n- \n(e.g. "Spring Dues, $50, all active members, due Apr 1")`,
-  'create-expenses': `Record expenses:\n- \n(e.g. "Office supplies, $120, Operations, Mar 1")`,
+  'create-expenses': `Record expenses:\n- \n(e.g. "Office supplies, $120, Operations, Mar 1"\nor multi-expense: "Party Supplies: cups $15, plates $20, napkins $8")`,
   'create-payments': `Record payments:\n- \n(e.g. "John Smith, $50, Mar 1, Venmo")`,
   'view-members': 'Show me all active members and their current balances',
   'view-charges': 'Show me all outstanding charges',

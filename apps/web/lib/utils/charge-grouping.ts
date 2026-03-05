@@ -9,60 +9,99 @@ export interface ChargeGroup {
   totalAmount: number;
   totalPaid: number;
   memberCount: number;
+  isMultiCharge: boolean;
+  parentId?: string;
 }
 
 /**
- * Groups charges by title + category + due date + created within 1 minute.
- * Uses O(1) Map lookup per charge instead of O(n) iteration over all groups.
+ * Groups charges into ChargeGroups.
+ *
+ * Two modes:
+ * 1. Parent-child (server-side multi-charges): charges with `children[]` are
+ *    built into a group directly from the parent.
+ * 2. Legacy: standalone charges without parentId are grouped using the
+ *    existing title + category + dueDate + 1-minute window heuristic.
  */
 export function groupCharges(charges: any[]): ChargeGroup[] {
   const allGroups: ChargeGroup[] = [];
-  // Maps baseKey -> the most recent group for that key (for 1-minute window matching)
-  const latestGroupByBaseKey = new Map<string, ChargeGroup>();
+  const standaloneCharges: any[] = [];
 
-  // Sort by createdAt first
-  const sorted = [...charges].sort(
-    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-  );
+  // First pass: handle parent-child multi-charges
+  for (const charge of charges) {
+    if (charge.children && charge.children.length > 0) {
+      // This is a parent charge with server-side children
+      const children = charge.children;
+      const totalAmount = children.reduce((sum: number, c: any) => sum + c.amountCents, 0);
+      const totalPaid = children.reduce((sum: number, c: any) => sum + (c.allocatedCents || 0), 0);
 
-  for (const charge of sorted) {
-    const dueDateKey = charge.dueDate
-      ? new Date(charge.dueDate).toISOString().split('T')[0]
-      : 'no-due';
-    const baseKey = `${charge.title}|${charge.category}|${dueDateKey}`;
-
-    const existingGroup = latestGroupByBaseKey.get(baseKey);
-
-    if (existingGroup) {
-      const groupTime = new Date(existingGroup.createdAt).getTime();
-      const chargeTime = new Date(charge.createdAt).getTime();
-
-      if (Math.abs(chargeTime - groupTime) < 60000) {
-        existingGroup.charges.push(charge);
-        existingGroup.totalAmount += charge.amountCents;
-        existingGroup.totalPaid += charge.allocatedCents || 0;
-        existingGroup.memberCount++;
-        continue;
-      }
+      allGroups.push({
+        key: `multi-${charge.id}`,
+        title: charge.title,
+        category: charge.category,
+        amountCents: charge.amountCents,
+        dueDate: charge.dueDate,
+        createdAt: charge.createdAt,
+        charges: children,
+        totalAmount,
+        totalPaid,
+        memberCount: children.length,
+        isMultiCharge: true,
+        parentId: charge.id,
+      });
+    } else if (!charge.parentId) {
+      // Standalone charge — goes through legacy grouping
+      standaloneCharges.push(charge);
     }
+    // Children with parentId are already nested, skip them
+  }
 
-    // No match — create a new group
-    const groupKey = `${baseKey}|${charge.createdAt}`;
-    const newGroup: ChargeGroup = {
-      key: groupKey,
-      title: charge.title,
-      category: charge.category,
-      amountCents: charge.amountCents,
-      dueDate: charge.dueDate,
-      createdAt: charge.createdAt,
-      charges: [charge],
-      totalAmount: charge.amountCents,
-      totalPaid: charge.allocatedCents || 0,
-      memberCount: 1,
-    };
+  // Second pass: legacy grouping for standalone charges
+  if (standaloneCharges.length > 0) {
+    const latestGroupByBaseKey = new Map<string, ChargeGroup>();
 
-    allGroups.push(newGroup);
-    latestGroupByBaseKey.set(baseKey, newGroup);
+    const sorted = [...standaloneCharges].sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    );
+
+    for (const charge of sorted) {
+      const dueDateKey = charge.dueDate
+        ? new Date(charge.dueDate).toISOString().split('T')[0]
+        : 'no-due';
+      const baseKey = `${charge.title}|${charge.category}|${dueDateKey}`;
+
+      const existingGroup = latestGroupByBaseKey.get(baseKey);
+
+      if (existingGroup) {
+        const groupTime = new Date(existingGroup.createdAt).getTime();
+        const chargeTime = new Date(charge.createdAt).getTime();
+
+        if (Math.abs(chargeTime - groupTime) < 60000) {
+          existingGroup.charges.push(charge);
+          existingGroup.totalAmount += charge.amountCents;
+          existingGroup.totalPaid += charge.allocatedCents || 0;
+          existingGroup.memberCount++;
+          continue;
+        }
+      }
+
+      const groupKey = `${baseKey}|${charge.createdAt}`;
+      const newGroup: ChargeGroup = {
+        key: groupKey,
+        title: charge.title,
+        category: charge.category,
+        amountCents: charge.amountCents,
+        dueDate: charge.dueDate,
+        createdAt: charge.createdAt,
+        charges: [charge],
+        totalAmount: charge.amountCents,
+        totalPaid: charge.allocatedCents || 0,
+        memberCount: 1,
+        isMultiCharge: false,
+      };
+
+      allGroups.push(newGroup);
+      latestGroupByBaseKey.set(baseKey, newGroup);
+    }
   }
 
   // Sort groups by createdAt descending (newest first)

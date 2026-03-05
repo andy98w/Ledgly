@@ -266,6 +266,70 @@ export const agentTools: AgentTool[] = [
   {
     requiresConfirmation: true,
     definition: {
+      name: 'create_multi_charge',
+      description:
+        'Create a multi-charge: a parent charge with child charges for each selected member. All children share the same amount, category, and title.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          membershipIds: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Array of membership IDs to charge',
+          },
+          category: {
+            type: 'string',
+            enum: ['DUES', 'EVENT', 'FINE', 'MERCH', 'OTHER'],
+            description: 'Charge category',
+          },
+          title: { type: 'string', description: 'Charge title/description' },
+          amountCents: {
+            type: 'number',
+            description: 'Amount in cents per member (e.g., 5000 for $50.00)',
+          },
+          dueDate: {
+            type: 'string',
+            description: 'Optional due date in ISO format (YYYY-MM-DD)',
+          },
+        },
+        required: ['membershipIds', 'category', 'title', 'amountCents'],
+      },
+    },
+  },
+  {
+    requiresConfirmation: true,
+    definition: {
+      name: 'create_multi_expense',
+      description:
+        'Create a multi-expense: a parent expense with multiple line-item children. The parent total is the sum of all children.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          category: { type: 'string', description: 'Expense category' },
+          title: { type: 'string', description: 'Parent expense title' },
+          date: { type: 'string', description: 'Expense date (YYYY-MM-DD)' },
+          vendor: { type: 'string', description: 'Vendor name (optional)' },
+          children: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                title: { type: 'string', description: 'Line item title' },
+                amountCents: { type: 'number', description: 'Line item amount in cents' },
+                vendor: { type: 'string', description: 'Line item vendor (optional)' },
+              },
+              required: ['title', 'amountCents'],
+            },
+            description: 'Array of line-item expenses',
+          },
+        },
+        required: ['category', 'title', 'date', 'children'],
+      },
+    },
+  },
+  {
+    requiresConfirmation: true,
+    definition: {
       name: 'record_payments',
       description: 'Record one or more payments received.',
       input_schema: {

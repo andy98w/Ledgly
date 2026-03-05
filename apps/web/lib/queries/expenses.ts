@@ -14,10 +14,12 @@ export interface Expense {
   vendor: string | null;
   receiptUrl: string | null;
   createdAt: string;
+  parentId?: string | null;
   createdBy: {
     id: string;
     name: string;
   } | null;
+  children?: Expense[];
 }
 
 export interface ExpenseSummary {
@@ -97,6 +99,37 @@ export function useCreateExpense() {
         receiptUrl?: string;
       };
     }) => api.post(`/organizations/${orgId}/expenses`, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.expenses.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all(variables.orgId) });
+    },
+  });
+}
+
+export function useCreateMultiExpense() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      orgId,
+      data,
+    }: {
+      orgId: string;
+      data: {
+        category: string;
+        title: string;
+        description?: string;
+        date: string;
+        vendor?: string;
+        children: Array<{
+          title: string;
+          amountCents: number;
+          vendor?: string;
+          description?: string;
+        }>;
+      };
+    }) => api.post(`/organizations/${orgId}/expenses/multi`, data),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.expenses.all(variables.orgId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });

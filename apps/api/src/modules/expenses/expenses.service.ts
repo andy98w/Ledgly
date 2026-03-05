@@ -12,6 +12,22 @@ interface CreateExpenseDto {
   receiptUrl?: string;
 }
 
+interface CreateMultiExpenseChildDto {
+  title: string;
+  amountCents: number;
+  vendor?: string;
+  description?: string;
+}
+
+interface CreateMultiExpenseDto {
+  category: string;
+  title: string;
+  description?: string;
+  date: string;
+  vendor?: string;
+  children: CreateMultiExpenseChildDto[];
+}
+
 interface UpdateExpenseDto {
   category?: string;
   title?: string;
@@ -40,7 +56,7 @@ export class ExpensesService {
   async findAll(orgId: string, filters: ExpenseFilters = {}) {
     const { category, startDate, endDate, page = 1, limit = 50 } = filters;
 
-    const where: any = { orgId, deletedAt: null };
+    const where: any = { orgId, deletedAt: null, parentId: null };
 
     if (category) {
       where.category = category;
@@ -56,16 +72,23 @@ export class ExpensesService {
       }
     }
 
+    const createdBySelect = {
+      select: {
+        id: true,
+        name: true,
+        user: { select: { name: true } },
+      },
+    };
+
     const [expenses, total] = await Promise.all([
       this.prisma.expense.findMany({
         where,
         include: {
-          createdBy: {
-            select: {
-              id: true,
-              name: true,
-              user: { select: { name: true } },
-            },
+          createdBy: createdBySelect,
+          children: {
+            where: { deletedAt: null },
+            include: { createdBy: createdBySelect },
+            orderBy: { createdAt: 'asc' as const },
           },
         },
         orderBy: { date: 'desc' },
@@ -76,24 +99,7 @@ export class ExpensesService {
     ]);
 
     return {
-      data: expenses.map((e) => ({
-        id: e.id,
-        orgId: e.orgId,
-        category: e.category,
-        title: e.title,
-        description: e.description,
-        amountCents: e.amountCents,
-        date: e.date,
-        vendor: e.vendor,
-        receiptUrl: e.receiptUrl,
-        createdAt: e.createdAt,
-        createdBy: e.createdBy
-          ? {
-              id: e.createdBy.id,
-              name: e.createdBy.name || e.createdBy.user?.name || 'Unknown',
-            }
-          : null,
-      })),
+      data: expenses.map((e) => this.mapExpenseRow(e)),
       meta: {
         page,
         limit,
@@ -101,6 +107,34 @@ export class ExpensesService {
         totalPages: Math.ceil(total / limit),
       },
     };
+  }
+
+  private mapExpenseRow(e: any) {
+    const row: any = {
+      id: e.id,
+      orgId: e.orgId,
+      category: e.category,
+      title: e.title,
+      description: e.description,
+      amountCents: e.amountCents,
+      date: e.date,
+      vendor: e.vendor,
+      receiptUrl: e.receiptUrl,
+      createdAt: e.createdAt,
+      parentId: e.parentId || null,
+      createdBy: e.createdBy
+        ? {
+            id: e.createdBy.id,
+            name: e.createdBy.name || e.createdBy.user?.name || 'Unknown',
+          }
+        : null,
+    };
+
+    if (e.children && e.children.length > 0) {
+      row.children = e.children.map((child: any) => this.mapExpenseRow(child));
+    }
+
+    return row;
   }
 
   async findOne(orgId: string, expenseId: string) {
@@ -167,6 +201,71 @@ export class ExpensesService {
     return expense;
   }
 
+  async createMultiExpense(orgId: string, createdById: string, dto: CreateMultiExpenseDto) {
+    const totalAmountCents = dto.children.reduce((sum, c) => sum + c.amountCents, 0);
+
+    // Create parent expense (total amount = sum of children)
+    const parent = await this.prisma.expense.create({
+      data: {
+        orgId,
+        category: dto.category as any,
+        title: dto.title,
+        description: dto.description,
+        amountCents: totalAmountCents,
+        date: new Date(dto.date),
+        vendor: dto.vendor,
+        createdById,
+      },
+    });
+
+    // Create child expenses
+    const children = await Promise.all(
+      dto.children.map((child) =>
+        this.prisma.expense.create({
+          data: {
+            orgId,
+            category: dto.category as any,
+            title: child.title,
+            description: child.description,
+            amountCents: child.amountCents,
+            date: new Date(dto.date),
+            vendor: child.vendor || dto.vendor,
+            createdById,
+            parentId: parent.id,
+          },
+        }),
+      ),
+    );
+
+    // Audit logging
+    const batch = this.auditService.createBatchContext(
+      `Multi-expense "${dto.title}" with ${dto.children.length} line items`,
+    );
+
+    await this.auditService.logCreate(orgId, createdById, 'EXPENSE', parent.id, {
+      title: parent.title,
+      amountCents: parent.amountCents,
+      category: parent.category,
+      vendor: parent.vendor,
+      isMultiExpense: true,
+      childCount: children.length,
+    }, batch);
+
+    await Promise.all(
+      children.map((child) =>
+        this.auditService.logCreate(orgId, createdById, 'EXPENSE', child.id, {
+          title: child.title,
+          amountCents: child.amountCents,
+          category: child.category,
+          vendor: child.vendor,
+          parentId: parent.id,
+        }, batch),
+      ),
+    );
+
+    return { parent, children };
+  }
+
   async update(orgId: string, expenseId: string, dto: UpdateExpenseDto, actorId?: string) {
     const expense = await this.prisma.expense.findFirst({
       where: { id: expenseId, orgId, deletedAt: null },
@@ -222,15 +321,27 @@ export class ExpensesService {
   async delete(orgId: string, expenseId: string, actorId?: string, batch?: { batchId: string; batchDescription: string }) {
     const expense = await this.prisma.expense.findFirst({
       where: { id: expenseId, orgId, deletedAt: null },
+      include: { children: { where: { deletedAt: null }, select: { id: true } } },
     });
 
     if (!expense) {
       throw new NotFoundException('Expense not found');
     }
 
+    const now = new Date();
+
+    // Soft-delete the expense and any children
+    const childIds = expense.children.map((c) => c.id);
+    if (childIds.length > 0) {
+      await this.prisma.expense.updateMany({
+        where: { id: { in: childIds } },
+        data: { deletedAt: now },
+      });
+    }
+
     await this.prisma.expense.update({
       where: { id: expenseId },
-      data: { deletedAt: new Date() },
+      data: { deletedAt: now },
     });
 
     // Log audit entry for delete
@@ -240,6 +351,7 @@ export class ExpensesService {
         amountCents: expense.amountCents,
         category: expense.category,
         vendor: expense.vendor,
+        childrenDeleted: childIds.length,
       }, batch);
     }
 
@@ -295,7 +407,7 @@ export class ExpensesService {
   }
 
   async getSummary(orgId: string, startDate?: string, endDate?: string) {
-    const where: any = { orgId, deletedAt: null };
+    const where: any = { orgId, deletedAt: null, parentId: null };
 
     if (startDate || endDate) {
       where.date = {};

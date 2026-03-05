@@ -12,6 +12,14 @@ interface CreateChargeDto {
   dueDate?: string | null;
 }
 
+interface CreateMultiChargeDto {
+  membershipIds: string[];
+  category: ChargeCategory;
+  title: string;
+  amountCents: number;
+  dueDate?: string | null;
+}
+
 interface UpdateChargeDto {
   title?: string;
   amountCents?: number;
@@ -41,7 +49,7 @@ export class ChargesService {
     const { status, category, membershipId, overdue, page = 1, limit = 50, cursor } = filters;
     const now = new Date();
 
-    const where: any = { orgId };
+    const where: any = { orgId, parentId: null };
 
     if (status) {
       where.status = status;
@@ -79,6 +87,27 @@ export class ChargesService {
           payment: { select: { id: true, rawPayerName: true, paidAt: true } },
         },
       },
+      children: {
+        where: { status: { not: 'VOID' as const } },
+        include: {
+          membership: {
+            select: {
+              id: true,
+              name: true,
+              status: true,
+              user: { select: { name: true, email: true } },
+            },
+          },
+          allocations: {
+            select: {
+              id: true,
+              amountCents: true,
+              payment: { select: { id: true, rawPayerName: true, paidAt: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: 'asc' as const },
+      },
     };
 
     const orderBy = [{ status: 'asc' as const }, { dueDate: 'asc' as const }, { createdAt: 'desc' as const }];
@@ -97,19 +126,7 @@ export class ChargesService {
       const hasMore = items.length > limit;
       const charges = items.slice(0, limit);
 
-      const data = charges.map((c) => {
-        const allocatedCents = c.allocations.reduce((sum, a) => sum + a.amountCents, 0);
-        return {
-          id: c.id, orgId: c.orgId, membershipId: c.membershipId, category: c.category,
-          title: c.title, amountCents: c.amountCents, dueDate: c.dueDate, status: c.status, createdAt: c.createdAt,
-          membership: { id: c.membership.id, name: c.membership.name, status: c.membership.status, displayName: c.membership.name || c.membership.user?.name || c.membership.user?.email || 'Unknown' },
-          allocatedCents, balanceDueCents: c.amountCents - allocatedCents,
-          allocations: c.allocations.map((a) => ({
-            id: a.id, amountCents: a.amountCents,
-            paymentId: a.payment.id, payerName: a.payment.rawPayerName, paidAt: a.payment.paidAt,
-          })),
-        };
-      });
+      const data = charges.map((c) => this.mapChargeRow(c));
 
       return {
         data,
@@ -129,24 +146,118 @@ export class ChargesService {
       this.prisma.charge.count({ where }),
     ]);
 
-    const data = charges.map((c) => {
-      const allocatedCents = c.allocations.reduce((sum, a) => sum + a.amountCents, 0);
-      return {
-        id: c.id, orgId: c.orgId, membershipId: c.membershipId, category: c.category,
-        title: c.title, amountCents: c.amountCents, dueDate: c.dueDate, status: c.status, createdAt: c.createdAt,
-        membership: { id: c.membership.id, name: c.membership.name, status: c.membership.status, displayName: c.membership.name || c.membership.user?.name || c.membership.user?.email || 'Unknown' },
-        allocatedCents, balanceDueCents: c.amountCents - allocatedCents,
-        allocations: c.allocations.map((a) => ({
-          id: a.id, amountCents: a.amountCents,
-          paymentId: a.payment.id, payerName: a.payment.rawPayerName, paidAt: a.payment.paidAt,
-        })),
-      };
-    });
+    const data = charges.map((c) => this.mapChargeRow(c));
 
     return {
       data,
       meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
+  }
+
+  private mapChargeRow(c: any) {
+    const allocatedCents = c.allocations.reduce((sum: number, a: any) => sum + a.amountCents, 0);
+    const membership = c.membership
+      ? { id: c.membership.id, name: c.membership.name, status: c.membership.status, displayName: c.membership.name || c.membership.user?.name || c.membership.user?.email || 'Unknown' }
+      : null;
+
+    const row: any = {
+      id: c.id, orgId: c.orgId, membershipId: c.membershipId, category: c.category,
+      title: c.title, amountCents: c.amountCents, dueDate: c.dueDate, status: c.status,
+      createdAt: c.createdAt, parentId: c.parentId || null,
+      membership,
+      allocatedCents, balanceDueCents: c.amountCents - allocatedCents,
+      allocations: c.allocations.map((a: any) => ({
+        id: a.id, amountCents: a.amountCents,
+        paymentId: a.payment.id, payerName: a.payment.rawPayerName, paidAt: a.payment.paidAt,
+      })),
+    };
+
+    if (c.children && c.children.length > 0) {
+      row.children = c.children.map((child: any) => this.mapChargeRow(child));
+    }
+
+    return row;
+  }
+
+  async createMultiCharge(orgId: string, createdById: string, dto: CreateMultiChargeDto) {
+    // Validate all membership IDs belong to this org
+    const memberships = await this.prisma.membership.findMany({
+      where: { id: { in: dto.membershipIds }, orgId, status: 'ACTIVE' },
+      include: { user: { select: { name: true, email: true } } },
+    });
+
+    if (memberships.length !== dto.membershipIds.length) {
+      throw new BadRequestException('Some member IDs are invalid');
+    }
+
+    let parsedDueDate: Date | null = null;
+    if (dto.dueDate) {
+      const dateValue = new Date(dto.dueDate + 'T12:00:00');
+      if (!isNaN(dateValue.getTime())) parsedDueDate = dateValue;
+    }
+
+    const memberNameMap = new Map(
+      memberships.map((m) => [m.id, m.name || m.user?.name || m.user?.email || 'Unknown']),
+    );
+
+    // Create parent charge (no membership — it's the group header)
+    const parent = await this.prisma.charge.create({
+      data: {
+        orgId,
+        membershipId: null,
+        category: dto.category,
+        title: dto.title,
+        amountCents: dto.amountCents,
+        dueDate: parsedDueDate,
+        createdById,
+      },
+    });
+
+    // Create child charges for each member
+    const children = await Promise.all(
+      dto.membershipIds.map((membershipId) =>
+        this.prisma.charge.create({
+          data: {
+            orgId,
+            membershipId,
+            category: dto.category,
+            title: dto.title,
+            amountCents: dto.amountCents,
+            dueDate: parsedDueDate,
+            createdById,
+            parentId: parent.id,
+          },
+        }),
+      ),
+    );
+
+    // Audit logging
+    const batch = this.auditService.createBatchContext(
+      `Multi-charge "${dto.title}" for ${dto.membershipIds.length} members`,
+    );
+
+    await this.auditService.logCreate(orgId, createdById, 'CHARGE', parent.id, {
+      title: parent.title,
+      amountCents: parent.amountCents,
+      category: parent.category,
+      isMultiCharge: true,
+      childCount: children.length,
+    }, batch);
+
+    await Promise.all(
+      children.map((child) =>
+        this.auditService.logCreate(orgId, createdById, 'CHARGE', child.id, {
+          title: child.title,
+          amountCents: child.amountCents,
+          category: child.category,
+          membershipId: child.membershipId,
+          memberName: memberNameMap.get(child.membershipId!) || 'Unknown',
+          parentId: parent.id,
+        }, batch),
+      ),
+    );
+
+    return { parent, children };
   }
 
   async findOne(orgId: string, chargeId: string) {
@@ -195,12 +306,14 @@ export class ChargesService {
       dueDate: charge.dueDate,
       status: charge.status,
       createdAt: charge.createdAt,
-      membership: {
-        id: charge.membership.id,
-        name: charge.membership.name,
-        status: charge.membership.status,
-        displayName: charge.membership.name || charge.membership.user?.name || charge.membership.user?.email || 'Unknown',
-      },
+      membership: charge.membership
+        ? {
+            id: charge.membership.id,
+            name: charge.membership.name,
+            status: charge.membership.status,
+            displayName: charge.membership.name || charge.membership.user?.name || charge.membership.user?.email || 'Unknown',
+          }
+        : null,
       createdBy: {
         id: charge.createdBy.id,
         name: charge.createdBy.name || charge.createdBy.user?.name || 'Unknown',
@@ -283,7 +396,7 @@ export class ChargesService {
           amountCents: charge.amountCents,
           category: charge.category,
           membershipId: charge.membershipId,
-          memberName: memberNameMap.get(charge.membershipId) || 'Unknown',
+          memberName: memberNameMap.get(charge.membershipId!) || 'Unknown',
         }, batch),
       ),
     );
@@ -374,6 +487,7 @@ export class ChargesService {
       where: { id: chargeId, orgId },
       include: {
         allocations: { select: { id: true } },
+        children: { where: { status: { not: 'VOID' } }, select: { id: true } },
       },
     });
 
@@ -386,13 +500,17 @@ export class ChargesService {
       return { success: true };
     }
 
-    // Delete allocations and void the charge
+    // Collect all charge IDs to void (parent + children)
+    const childIds = charge.children.map((c) => c.id);
+    const allIds = [chargeId, ...childIds];
+
+    // Delete allocations and void the charge (and children if parent)
     await this.prisma.$transaction([
       this.prisma.paymentAllocation.deleteMany({
-        where: { chargeId },
+        where: { chargeId: { in: allIds } },
       }),
-      this.prisma.charge.update({
-        where: { id: chargeId },
+      this.prisma.charge.updateMany({
+        where: { id: { in: allIds } },
         data: { status: 'VOID' },
       }),
     ]);
@@ -403,6 +521,7 @@ export class ChargesService {
         title: charge.title,
         amountCents: charge.amountCents,
         category: charge.category,
+        childrenVoided: childIds.length,
       }, batch);
     }
 
@@ -412,17 +531,19 @@ export class ChargesService {
   async bulkVoid(orgId: string, chargeIds: string[], actorId: string) {
     if (chargeIds.length === 0) return { success: true, voidedCount: 0 };
 
-    // Fetch all target charges in one query
+    // Fetch all target charges in one query, including children
     const charges = await this.prisma.charge.findMany({
       where: { id: { in: chargeIds }, orgId, status: { not: 'VOID' } },
-      select: { id: true, title: true, amountCents: true, category: true },
+      select: { id: true, title: true, amountCents: true, category: true, children: { where: { status: { not: 'VOID' } }, select: { id: true } } },
     });
 
     if (charges.length === 0) return { success: true, voidedCount: 0 };
 
-    const validIds = charges.map((c) => c.id);
+    // Collect all IDs including children of any parent charges
+    const childIds = charges.flatMap((c) => c.children.map((ch) => ch.id));
+    const validIds = [...charges.map((c) => c.id), ...childIds];
 
-    // Batch: delete allocations, void charges, and log audit in one transaction
+    // Batch: delete allocations, void charges + children, and log audit in one transaction
     await this.prisma.$transaction([
       this.prisma.paymentAllocation.deleteMany({
         where: { chargeId: { in: validIds } },
@@ -509,7 +630,7 @@ export class ChargesService {
           amountCents: charge.amountCents,
           category: charge.category,
           membershipId: charge.membershipId,
-          memberName: memberNameMap.get(charge.membershipId) || 'Unknown',
+          memberName: memberNameMap.get(charge.membershipId!) || 'Unknown',
         }, batch),
       ),
     );
@@ -598,6 +719,7 @@ export class ChargesService {
         id: { in: chargeIds },
         orgId,
         status: { in: ['OPEN', 'PARTIALLY_PAID'] },
+        membershipId: { not: null },
       },
       include: {
         membership: {

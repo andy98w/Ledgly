@@ -77,6 +77,29 @@ class BulkCreateChargeDto {
   charges: BulkCreateChargeItemDto[];
 }
 
+class CreateMultiChargeDto {
+  @IsArray()
+  @IsString({ each: true })
+  @ArrayMinSize(1)
+  @ArrayMaxSize(500)
+  membershipIds: string[];
+
+  @IsEnum(ChargeCategory)
+  category: ChargeCategory;
+
+  @IsString()
+  title: string;
+
+  @IsInt()
+  @Min(1)
+  @Max(99_999_999)
+  amountCents: number;
+
+  @IsString()
+  @IsOptional()
+  dueDate?: string;
+}
+
 class BulkChargeIdsDto {
   @IsArray()
   @ArrayMinSize(1)
@@ -124,6 +147,13 @@ export class ChargesController {
       limit: query.limit ? parseInt(query.limit, 10) : 50,
       cursor: query.cursor,
     });
+  }
+
+  @Post('multi')
+  @Roles('ADMIN', 'TREASURER')
+  async createMulti(@Param('orgId') orgId: string, @Body() dto: CreateMultiChargeDto, @Req() req: any) {
+    const membershipId = req.membership.id;
+    return this.chargesService.createMultiCharge(orgId, membershipId, dto);
   }
 
   @Post('bulk-create')

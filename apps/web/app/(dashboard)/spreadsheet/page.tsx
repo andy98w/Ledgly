@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect, useLayoutEffect } from 'react';
-import { ArrowUpRight, ArrowDownRight, Download, Upload, Filter, Plus, DollarSign, Wallet, Search, Minus, ArrowUp, ArrowDown, Trash2, Circle, CheckCircle2, Check, Link2, Loader2, CreditCard, MoreVertical, FileSpreadsheet } from 'lucide-react';
-import { useCharges, useUpdateCharge, useCreateCharge, useVoidCharge, useRestoreCharge, useBulkCreateCharges } from '@/lib/queries/charges';
-import { useExpenses, useUpdateExpense, useCreateExpense, useDeleteExpense, useRestoreExpense } from '@/lib/queries/expenses';
+import { ArrowUpRight, ArrowDownRight, Download, Upload, Filter, Plus, DollarSign, Wallet, Search, Minus, ArrowUp, ArrowDown, Trash2, Circle, CheckCircle2, Check, Link2, Loader2, CreditCard, MoreVertical, FileSpreadsheet, ChevronDown, ChevronRight, Layers } from 'lucide-react';
+import { useCharges, useUpdateCharge, useCreateCharge, useCreateMultiCharge, useVoidCharge, useRestoreCharge, useBulkCreateCharges } from '@/lib/queries/charges';
+import { useExpenses, useUpdateExpense, useCreateExpense, useCreateMultiExpense, useDeleteExpense, useRestoreExpense } from '@/lib/queries/expenses';
 import { usePayments, useUpdatePayment, useCreatePayment, useDeletePayment, useRestorePayment, useAllocatePayment, useAutoAllocateToCharge, useBulkCreatePayments } from '@/lib/queries/payments';
 import { useMembers } from '@/lib/queries/members';
 import { useAuthStore, useIsAdminOrTreasurer, useCurrentMembership } from '@/lib/stores/auth';
@@ -60,6 +60,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { CSVImportDialog, type ImportField } from '@/components/import/csv-import-dialog';
 import { calculateNameSimilarity } from '@/lib/utils/name-similarity';
+import { ChargeCreateDialog } from '@/components/charges/charge-create-dialog';
+import { MultiExpenseCreateDialog } from '@/components/expenses/multi-expense-create-dialog';
 
 /** Strip "VENMO payment to " etc. prefixes from Gmail-imported expense titles */
 function cleanExpenseTitle(title: string): string {
@@ -81,6 +83,11 @@ interface SpreadsheetRow {
   status?: string;
   allocatedCents?: number;
   unallocatedCents?: number;
+  isParent?: boolean;
+  isChild?: boolean;
+  parentId?: string;
+  childCount?: number;
+  children?: SpreadsheetRow[];
 }
 
 type EditingCell = {
@@ -434,7 +441,10 @@ export default function SpreadsheetPage() {
   const [inlineNewRowField, setInlineNewRowField] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
-  const [newRowType, setNewRowType] = useState<'charge' | 'expense' | 'payment'>('charge');
+  const [newRowType, setNewRowType] = useState<'charge' | 'multi-charge' | 'expense' | 'multi-expense' | 'payment'>('charge');
+  const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
+  const [showMultiChargeDialog, setShowMultiChargeDialog] = useState(false);
+  const [showMultiExpenseDialog, setShowMultiExpenseDialog] = useState(false);
   const [newRowData, setNewRowData] = useState({
     date: new Date().toISOString().split('T')[0],
     category: '',
@@ -458,7 +468,9 @@ export default function SpreadsheetPage() {
   const updateExpense = useUpdateExpense();
   const updatePayment = useUpdatePayment();
   const createCharge = useCreateCharge();
+  const createMultiCharge = useCreateMultiCharge();
   const createExpense = useCreateExpense();
+  const createMultiExpense = useCreateMultiExpense();
   const createPayment = useCreatePayment();
   const voidCharge = useVoidCharge();
   const restoreCharge = useRestoreCharge();
@@ -508,19 +520,45 @@ export default function SpreadsheetPage() {
       for (const charge of chargesData.data) {
         if (typeFilter !== 'all' && typeFilter !== 'charge') continue;
         const c = charge as any;
+        const hasChildren = c.children && c.children.length > 0;
+
+        const childRows: SpreadsheetRow[] = hasChildren
+          ? c.children.map((child: any) => ({
+              id: child.id,
+              date: typeof child.createdAt === 'string' ? child.createdAt : new Date(child.createdAt).toISOString(),
+              type: 'charge' as const,
+              category: child.category,
+              description: child.title,
+              member: child.membership?.displayName || child.membership?.name || child.membership?.user?.name || undefined,
+              membershipId: child.membershipId,
+              incomeCents: child.allocatedCents || 0,
+              outstandingCents: child.balanceDueCents ?? child.amountCents,
+              expenseCents: 0,
+              status: child.status,
+              allocatedCents: child.allocatedCents || 0,
+              isChild: true,
+              parentId: charge.id,
+            }))
+          : [];
+
         allRows.push({
           id: charge.id,
           date: typeof charge.createdAt === 'string' ? charge.createdAt : new Date(charge.createdAt).toISOString(),
           type: 'charge',
           category: charge.category,
           description: charge.title,
-          member: c.membership?.displayName || charge.membership?.name || charge.membership?.user?.name || undefined,
-          membershipId: charge.membershipId,
+          member: hasChildren
+            ? `${c.children.length} members`
+            : (c.membership?.displayName || charge.membership?.name || charge.membership?.user?.name || undefined),
+          membershipId: hasChildren ? undefined : charge.membershipId ?? undefined,
           incomeCents: c.allocatedCents || 0,
           outstandingCents: c.balanceDueCents ?? charge.amountCents,
           expenseCents: 0,
           status: charge.status,
           allocatedCents: c.allocatedCents || 0,
+          isParent: hasChildren,
+          childCount: hasChildren ? c.children.length : undefined,
+          children: hasChildren ? childRows : undefined,
         });
       }
     }
@@ -529,7 +567,26 @@ export default function SpreadsheetPage() {
     if (expensesData?.data) {
       for (const expense of expensesData.data) {
         if (typeFilter !== 'all' && typeFilter !== 'expense') continue;
+        const e = expense as any;
+        const hasChildren = e.children && e.children.length > 0;
         const cleanedTitle = cleanExpenseTitle(expense.title);
+
+        const childRows: SpreadsheetRow[] = hasChildren
+          ? e.children.map((child: any) => ({
+              id: child.id,
+              date: typeof child.date === 'string' ? child.date : new Date(child.date).toISOString(),
+              type: 'expense' as const,
+              category: child.category,
+              description: child.description || cleanExpenseTitle(child.title),
+              member: child.vendor || undefined,
+              incomeCents: 0,
+              outstandingCents: 0,
+              expenseCents: child.amountCents,
+              isChild: true,
+              parentId: expense.id,
+            }))
+          : [];
+
         allRows.push({
           id: expense.id,
           date: typeof expense.date === 'string' ? expense.date : new Date(expense.date).toISOString(),
@@ -540,6 +597,9 @@ export default function SpreadsheetPage() {
           incomeCents: 0,
           outstandingCents: 0,
           expenseCents: expense.amountCents,
+          isParent: hasChildren,
+          childCount: hasChildren ? e.children.length : undefined,
+          children: hasChildren ? childRows : undefined,
         });
       }
     }
@@ -643,14 +703,32 @@ export default function SpreadsheetPage() {
   const totalPages = Math.ceil(rows.length / pageSize);
   const paginatedRows = useMemo(() => {
     const start = (page - 1) * pageSize;
-    return rows.slice(start, start + pageSize);
-  }, [rows, page, pageSize]);
+    const sliced = rows.slice(start, start + pageSize);
+    // Inject child rows after expanded parents
+    const result: SpreadsheetRow[] = [];
+    for (const row of sliced) {
+      result.push(row);
+      if (row.isParent && row.children && expandedParents.has(row.id)) {
+        result.push(...row.children);
+      }
+    }
+    return result;
+  }, [rows, page, pageSize, expandedParents]);
 
   // Reset to page 1 when filters change
   useEffect(() => {
     setPage(1);
     setSelectedRows(new Set());
   }, [typeFilter, searchQuery, sortBy, sortOrder, pageSize]);
+
+  const toggleParentExpand = (parentId: string) => {
+    setExpandedParents((prev) => {
+      const next = new Set(prev);
+      if (next.has(parentId)) next.delete(parentId);
+      else next.add(parentId);
+      return next;
+    });
+  };
 
   // Calculate totals — separate realized income (payments) from outstanding (charges)
   const totals = useMemo(() => {
@@ -933,7 +1011,7 @@ export default function SpreadsheetPage() {
     try {
       if (newRowType === 'charge') {
         if (!newRowData.membershipId || !newRowData.description || !newRowData.amountCents) {
-          toast({ title: 'Please fill in member, description, and amount', variant: 'destructive' });
+          toast({ title: 'Please fill in member, title, and amount', variant: 'destructive' });
           return;
         }
         await createCharge.mutateAsync({
@@ -948,7 +1026,7 @@ export default function SpreadsheetPage() {
         });
       } else if (newRowType === 'expense') {
         if (!newRowData.description || !newRowData.amountCents) {
-          toast({ title: 'Please fill in description and amount', variant: 'destructive' });
+          toast({ title: 'Please fill in title and amount', variant: 'destructive' });
           return;
         }
         await createExpense.mutateAsync({
@@ -1153,7 +1231,7 @@ export default function SpreadsheetPage() {
   );
 
   const handleExportCSV = () => {
-    const headers = ['Date', 'Type', 'Member/Vendor', 'Category', 'Description', 'Income', 'Outstanding', 'Expense'];
+    const headers = ['Date', 'Type', 'Member/Vendor', 'Category', 'Title', 'Income', 'Outstanding', 'Expense'];
     const csvRows = [
       headers.join(','),
       ...rows.map((row) => [
@@ -1519,7 +1597,7 @@ export default function SpreadsheetPage() {
                       )}
                     </span>
                   </th>
-                  <th className="text-left px-5 py-3 font-medium text-muted-foreground w-48 max-w-[12rem]">Description</th>
+                  <th className="text-left px-5 py-3 font-medium text-muted-foreground w-48 max-w-[12rem]">Title</th>
                   <th
                     className="text-right px-5 py-3 font-medium text-success cursor-pointer hover:text-success/80 select-none w-24"
                     onClick={() => {
@@ -1609,16 +1687,29 @@ export default function SpreadsheetPage() {
                     {/* Type selector */}
                     <td className="px-5 py-2 w-28">
                       <Select value={newRowType} onValueChange={(v) => {
-                        setNewRowType(v as any);
+                        const val = v as typeof newRowType;
+                        if (val === 'multi-charge') {
+                          handleCancelInlineRow();
+                          setShowMultiChargeDialog(true);
+                          return;
+                        }
+                        if (val === 'multi-expense') {
+                          handleCancelInlineRow();
+                          setShowMultiExpenseDialog(true);
+                          return;
+                        }
+                        setNewRowType(val);
                         setNewRowData(d => ({ ...d, category: '' }));
                         setInlineNewRowField('date');
                       }}>
-                        <SelectTrigger className="h-7 text-xs bg-transparent border-border/50 w-24">
+                        <SelectTrigger className="h-7 text-xs bg-transparent border-border/50 w-28">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="charge">Charge</SelectItem>
+                          <SelectItem value="multi-charge">Multi-charge</SelectItem>
                           <SelectItem value="expense">Expense</SelectItem>
+                          <SelectItem value="multi-expense">Multi-expense</SelectItem>
                           <SelectItem value="payment">Payment</SelectItem>
                         </SelectContent>
                       </Select>
@@ -1675,10 +1766,10 @@ export default function SpreadsheetPage() {
                         </Select>
                       )}
                     </td>
-                    {/* Description */}
+                    {/* Title */}
                     <td className="px-5 py-2 w-48">
                       <input
-                        placeholder={newRowType === 'payment' ? 'Memo...' : 'Description...'}
+                        placeholder={newRowType === 'payment' ? 'Memo...' : 'Title...'}
                         value={newRowType === 'payment' ? newRowData.memo : newRowData.description}
                         onChange={(e) => newRowType === 'payment'
                           ? setNewRowData(d => ({ ...d, memo: e.target.value }))
@@ -1778,45 +1869,79 @@ export default function SpreadsheetPage() {
                         row.type === 'charge' && 'bg-warning/5',
                         row.type === 'expense' && 'bg-destructive/5',
                         row.type === 'payment' && 'bg-success/5',
+                        row.isChild && 'bg-secondary/20',
                       )}
                     >
                       {isAdmin && (
                         <td className="pl-5 pr-2 py-2">
                           <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => handleDeleteRow(row)}
-                              className="w-7 h-7 flex items-center justify-center transition-colors hover:text-destructive"
-                              title="Delete row"
-                            >
-                              <Minus className="w-4 h-4 text-muted-foreground hover:text-destructive" />
-                            </button>
-                            <button
-                              onClick={() => toggleRowSelection(row.id)}
-                              className="w-7 h-7 flex items-center justify-center transition-colors"
-                              title={selectedRows.has(row.id) ? "Deselect" : "Select"}
-                            >
-                              {selectedRows.has(row.id) ? (
-                                <CheckCircle2 className="w-4 h-4 text-primary" />
-                              ) : (
-                                <Circle className="w-4 h-4 text-muted-foreground hover:text-primary" />
-                              )}
-                            </button>
+                            {row.isParent ? (
+                              <button
+                                onClick={() => toggleParentExpand(row.id)}
+                                className="w-7 h-7 flex items-center justify-center transition-colors hover:text-primary"
+                                title={expandedParents.has(row.id) ? 'Collapse' : 'Expand'}
+                              >
+                                {expandedParents.has(row.id) ? (
+                                  <ChevronDown className="w-4 h-4 text-primary" />
+                                ) : (
+                                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                                )}
+                              </button>
+                            ) : row.isChild ? (
+                              <div className="w-7 h-7" />
+                            ) : null}
+                            {!row.isChild && (
+                              <>
+                                <button
+                                  onClick={() => handleDeleteRow(row)}
+                                  className="w-7 h-7 flex items-center justify-center transition-colors hover:text-destructive"
+                                  title="Delete row"
+                                >
+                                  <Minus className="w-4 h-4 text-muted-foreground hover:text-destructive" />
+                                </button>
+                                <button
+                                  onClick={() => toggleRowSelection(row.id)}
+                                  className="w-7 h-7 flex items-center justify-center transition-colors"
+                                  title={selectedRows.has(row.id) ? "Deselect" : "Select"}
+                                >
+                                  {selectedRows.has(row.id) ? (
+                                    <CheckCircle2 className="w-4 h-4 text-primary" />
+                                  ) : (
+                                    <Circle className="w-4 h-4 text-muted-foreground hover:text-primary" />
+                                  )}
+                                </button>
+                              </>
+                            )}
                           </div>
                         </td>
                       )}
                       <td className="px-5 py-3 w-28">
-                        <EditableCell
-                          value={row.date}
-                          type="date"
-                          isEditing={editingCell?.rowId === row.id && editingCell?.column === 'date'}
-                          onEdit={() => setEditingCell({ rowId: row.id, column: 'date' })}
-                          onSave={(v) => handleSaveCell(row, 'date', v)}
-                          onCancel={() => setEditingCell(null)}
-                          onNavigate={(dir) => handleCellNavigate(row.id, 'date', dir)}
-                          isAdmin={isAdmin}
-                          rowType={row.type}
-                          column="date"
-                        />
+                        <div className="flex items-center gap-1">
+                          {!isAdmin && row.isParent && (
+                            <button
+                              onClick={() => toggleParentExpand(row.id)}
+                              className="shrink-0 p-0.5 hover:text-primary transition-colors"
+                            >
+                              {expandedParents.has(row.id) ? (
+                                <ChevronDown className="w-3.5 h-3.5 text-primary" />
+                              ) : (
+                                <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                              )}
+                            </button>
+                          )}
+                          <EditableCell
+                            value={row.date}
+                            type="date"
+                            isEditing={editingCell?.rowId === row.id && editingCell?.column === 'date'}
+                            onEdit={() => setEditingCell({ rowId: row.id, column: 'date' })}
+                            onSave={(v) => handleSaveCell(row, 'date', v)}
+                            onCancel={() => setEditingCell(null)}
+                            onNavigate={(dir) => handleCellNavigate(row.id, 'date', dir)}
+                            isAdmin={isAdmin}
+                            rowType={row.type}
+                            column="date"
+                          />
+                        </div>
                       </td>
                       <td className="px-5 py-3 w-36">
                         {row.type === 'charge' || row.type === 'payment' ? (
@@ -1867,19 +1992,31 @@ export default function SpreadsheetPage() {
                           />
                         )}
                       </td>
-                      <td className="px-5 py-3 w-48 max-w-[12rem]">
-                        <EditableCell
-                          value={row.description}
-                          type="text"
-                          isEditing={editingCell?.rowId === row.id && editingCell?.column === 'description'}
-                          onEdit={() => setEditingCell({ rowId: row.id, column: 'description' })}
-                          onSave={(v) => handleSaveCell(row, 'description', v)}
-                          onCancel={() => setEditingCell(null)}
-                          onNavigate={(dir) => handleCellNavigate(row.id, 'description', dir)}
-                          isAdmin={isAdmin}
-                          rowType={row.type}
-                          column="description"
-                        />
+                      <td className={cn("px-5 py-3 w-48 max-w-[12rem]", row.isChild && "pl-10")}>
+                        <div className="flex items-center gap-2 min-w-0">
+                          {row.isParent && (
+                            <Badge variant="outline" className="text-[10px] shrink-0 bg-primary/10 text-primary border-primary/30">
+                              {row.type === 'charge' ? 'Multi' : 'Multi'}
+                            </Badge>
+                          )}
+                          {row.isChild && !isAdmin && (
+                            <span className="text-muted-foreground/50 shrink-0">&mdash;</span>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <EditableCell
+                              value={row.description}
+                              type="text"
+                              isEditing={editingCell?.rowId === row.id && editingCell?.column === 'description'}
+                              onEdit={() => setEditingCell({ rowId: row.id, column: 'description' })}
+                              onSave={(v) => handleSaveCell(row, 'description', v)}
+                              onCancel={() => setEditingCell(null)}
+                              onNavigate={(dir) => handleCellNavigate(row.id, 'description', dir)}
+                              isAdmin={isAdmin}
+                              rowType={row.type}
+                              column="description"
+                            />
+                          </div>
+                        </div>
                       </td>
                       <td className="px-5 py-3 text-right w-24">
                         {row.incomeCents > 0 ? (
@@ -2011,7 +2148,7 @@ export default function SpreadsheetPage() {
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Label>Type</Label>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Button
                   variant={newRowType === 'charge' ? 'default' : 'outline'}
                   size="sm"
@@ -2022,6 +2159,15 @@ export default function SpreadsheetPage() {
                   Charge
                 </Button>
                 <Button
+                  variant={'outline'}
+                  size="sm"
+                  onClick={() => { setShowAddDialog(false); setShowMultiChargeDialog(true); }}
+                  className="flex-1"
+                >
+                  <Layers className="w-4 h-4 mr-1" />
+                  Multi-charge
+                </Button>
+                <Button
                   variant={newRowType === 'expense' ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => setNewRowType('expense')}
@@ -2029,6 +2175,15 @@ export default function SpreadsheetPage() {
                 >
                   <ArrowDownRight className="w-4 h-4 mr-1" />
                   Expense
+                </Button>
+                <Button
+                  variant={'outline'}
+                  size="sm"
+                  onClick={() => { setShowAddDialog(false); setShowMultiExpenseDialog(true); }}
+                  className="flex-1"
+                >
+                  <Layers className="w-4 h-4 mr-1" />
+                  Multi-expense
                 </Button>
                 <Button
                   variant={newRowType === 'payment' ? 'default' : 'outline'}
@@ -2074,7 +2229,7 @@ export default function SpreadsheetPage() {
             )}
 
             <div className="grid gap-2">
-              <Label>{newRowType === 'payment' ? 'Memo' : 'Description'}</Label>
+              <Label>{newRowType === 'payment' ? 'Memo' : 'Title'}</Label>
               <Input
                 value={newRowType === 'payment' ? newRowData.memo : newRowData.description}
                 onChange={(e) =>
@@ -2083,7 +2238,7 @@ export default function SpreadsheetPage() {
                     [newRowType === 'payment' ? 'memo' : 'description']: e.target.value,
                   })
                 }
-                placeholder={newRowType === 'payment' ? 'Payment note' : 'Description'}
+                placeholder={newRowType === 'payment' ? 'Payment note' : 'Title'}
               />
             </div>
 
@@ -2191,6 +2346,68 @@ export default function SpreadsheetPage() {
         description={`Upload a CSV file to bulk import ${importType === 'charge' ? 'charges' : importType === 'expense' ? 'expenses' : 'payments'}.${importType === 'charge' ? ' Member names will be fuzzy-matched to existing members.' : importType === 'payment' ? ' Payer names will be matched to existing members.' : ''}`}
         fields={importFieldsByType[importType]}
         onImport={handleImportRecords}
+      />
+
+      {/* Multi-charge Create Dialog */}
+      <ChargeCreateDialog
+        open={showMultiChargeDialog}
+        onClose={() => setShowMultiChargeDialog(false)}
+        onCreate={async (data) => {
+          if (!currentOrgId) return;
+          try {
+            await createMultiCharge.mutateAsync({
+              orgId: currentOrgId,
+              data: {
+                membershipIds: data.membershipIds,
+                category: data.category,
+                title: data.title,
+                amountCents: Math.round(parseFloat(data.amount) * 100),
+                dueDate: data.dueDate ? new Date(data.dueDate).toISOString() : undefined,
+              },
+            });
+            toast({ title: 'Multi-charge created' });
+            setShowMultiChargeDialog(false);
+          } catch (error: any) {
+            toast({ title: 'Error creating multi-charge', description: error.message, variant: 'destructive' });
+          }
+        }}
+        members={members.filter(m => m.id).map(m => ({
+          id: m.id,
+          displayName: (m as any).displayName || (m as any).name || (m as any).user?.name || 'Unknown',
+        }))}
+        loadingMembers={!membersData}
+        isPending={createMultiCharge.isPending}
+        onAddMember={async (name) => {
+          const id = await handleAddMember(name);
+          return id ? { id, displayName: name } : null;
+        }}
+        isAddingMember={createMembers.isPending}
+      />
+
+      {/* Multi-expense Create Dialog */}
+      <MultiExpenseCreateDialog
+        open={showMultiExpenseDialog}
+        onClose={() => setShowMultiExpenseDialog(false)}
+        onCreate={async (data) => {
+          if (!currentOrgId) return;
+          try {
+            await createMultiExpense.mutateAsync({
+              orgId: currentOrgId,
+              data: {
+                category: data.category,
+                title: data.title,
+                date: data.date,
+                vendor: data.vendor,
+                children: data.children,
+              },
+            });
+            toast({ title: 'Multi-expense created' });
+            setShowMultiExpenseDialog(false);
+          } catch (error: any) {
+            toast({ title: 'Error creating multi-expense', description: error.message, variant: 'destructive' });
+          }
+        }}
+        isPending={createMultiExpense.isPending}
       />
     </div>
   );

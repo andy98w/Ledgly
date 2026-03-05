@@ -56,6 +56,7 @@ import { BatchActionsBar } from '@/components/ui/batch-actions-bar';
 import { ExportDropdown } from '@/components/export-dropdown';
 import { CSVImportDialog, type ImportField } from '@/components/import/csv-import-dialog';
 import { exportCSV, exportPDF } from '@/lib/export';
+import { ExpenseGroupCard } from '@/components/expenses/expense-group-card';
 
 const EXPENSE_IMPORT_FIELDS: ImportField[] = [
   { key: 'title', label: 'Title', required: true, aliases: ['name', 'expense', 'description'] },
@@ -766,16 +767,27 @@ export default function ExpensesPage() {
               items={paginatedExpenses}
               getKey={(e) => e.id}
               className="space-y-3"
-              renderItem={(expense) => (
-                <ExpenseCard
-                  expense={expense}
-                  onEdit={handleEdit}
-                  onDelete={handleDelete}
-                  isAdmin={isAdmin}
-                  isSelected={selectedExpenses.has(expense.id)}
-                  onToggleSelect={() => toggleExpenseSelection(expense.id)}
-                />
-              )}
+              renderItem={(expense) =>
+                expense.children && expense.children.length > 0 ? (
+                  <ExpenseGroupCard
+                    expense={expense}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                    isAdmin={isAdmin}
+                    isSelected={selectedExpenses.has(expense.id)}
+                    onToggleSelect={() => toggleExpenseSelection(expense.id)}
+                  />
+                ) : (
+                  <ExpenseCard
+                    expense={expense}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                    isAdmin={isAdmin}
+                    isSelected={selectedExpenses.has(expense.id)}
+                    onToggleSelect={() => toggleExpenseSelection(expense.id)}
+                  />
+                )
+              }
             />
           </div>
 

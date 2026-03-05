@@ -2,8 +2,8 @@ import { agentTools, toolDefinitions, toolMap } from './agent-tools';
 
 describe('Agent tool definitions', () => {
   it('exports correct number of tools', () => {
-    expect(agentTools.length).toBe(16);
-    expect(toolDefinitions.length).toBe(16);
+    expect(agentTools.length).toBe(18);
+    expect(toolDefinitions.length).toBe(18);
   });
 
   it('every tool has a unique name', () => {
@@ -37,6 +37,7 @@ describe('Agent tool definitions', () => {
     const writeNames = [
       'update_member', 'update_charge', 'update_expense',
       'add_members', 'create_charges', 'create_expense',
+      'create_multi_charge', 'create_multi_expense',
       'record_payments', 'void_charges', 'remove_members',
       'delete_expenses', 'import_csv',
     ];

@@ -66,6 +66,31 @@ export function useCreateCharge() {
   });
 }
 
+export function useCreateMultiCharge() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      orgId,
+      data,
+    }: {
+      orgId: string;
+      data: {
+        membershipIds: string[];
+        category: ChargeCategory;
+        title: string;
+        amountCents: number;
+        dueDate?: string;
+      };
+    }) => api.post(`/organizations/${orgId}/charges/multi`, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.charges.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all(variables.orgId) });
+    },
+  });
+}
+
 export function useUpdateCharge() {
   const queryClient = useQueryClient();
 

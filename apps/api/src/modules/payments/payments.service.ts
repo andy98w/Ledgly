@@ -202,10 +202,10 @@ export class PaymentsService {
           title: a.charge.title,
           category: a.charge.category,
           amountCents: a.charge.amountCents,
-          membership: {
+          membership: a.charge.membership ? {
             id: a.charge.membership.id,
             displayName: a.charge.membership.name || a.charge.membership.user?.name || a.charge.membership.user?.email || 'Unknown',
-          },
+          } : null,
         },
       })),
     };
@@ -887,7 +887,7 @@ export class PaymentsService {
       }
 
       // Get unallocated payments for this member (inside tx)
-      const { payments } = await this.getUnallocatedForMember(orgId, charge.membershipId, tx);
+      const { payments } = await this.getUnallocatedForMember(orgId, charge.membershipId!, tx);
 
       if (payments.length === 0) {
         return { allocatedCents: 0, message: 'No unallocated payments for this member', chargeTitle: charge.title };

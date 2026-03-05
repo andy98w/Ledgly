@@ -382,6 +382,24 @@ export class AgentService {
           vendor: args.vendor,
         });
 
+      case 'create_multi_charge':
+        return this.chargesService.createMultiCharge(orgId, actorId, {
+          membershipIds: args.membershipIds,
+          category: args.category,
+          title: args.title,
+          amountCents: args.amountCents,
+          dueDate: args.dueDate || null,
+        });
+
+      case 'create_multi_expense':
+        return this.expensesService.createMultiExpense(orgId, actorId, {
+          category: args.category,
+          title: args.title,
+          date: args.date,
+          vendor: args.vendor,
+          children: args.children,
+        });
+
       case 'record_payments':
         return this.paymentsService.bulkCreate(orgId, actorId, args.payments);
 
@@ -464,6 +482,32 @@ export class AgentService {
         this.validateDate(args.date, 'date');
         if (args.vendor) this.validateStringLength(args.vendor, 'vendor');
         if (args.category) this.validateStringLength(args.category, 'category');
+        break;
+
+      case 'create_multi_charge':
+        if (!Array.isArray(args.membershipIds) || args.membershipIds.length === 0)
+          throw new Error('membershipIds array is required and cannot be empty');
+        if (args.membershipIds.length > AgentService.MAX_BATCH_SIZE)
+          throw new Error(`Cannot charge more than ${AgentService.MAX_BATCH_SIZE} members at once`);
+        this.validateAmount(args.amountCents);
+        this.validateRequiredString(args.title, 'title');
+        if (args.dueDate) this.validateDate(args.dueDate, 'dueDate');
+        break;
+
+      case 'create_multi_expense':
+        this.validateRequiredString(args.title, 'title');
+        this.validateDate(args.date, 'date');
+        if (args.vendor) this.validateStringLength(args.vendor, 'vendor');
+        if (args.category) this.validateStringLength(args.category, 'category');
+        if (!Array.isArray(args.children) || args.children.length === 0)
+          throw new Error('children array is required and cannot be empty');
+        if (args.children.length > AgentService.MAX_BATCH_SIZE)
+          throw new Error(`Cannot create more than ${AgentService.MAX_BATCH_SIZE} line items at once`);
+        for (const child of args.children) {
+          this.validateRequiredString(child.title, 'child title');
+          this.validateAmount(child.amountCents);
+          if (child.vendor) this.validateStringLength(child.vendor, 'child vendor');
+        }
         break;
 
       case 'record_payments':
@@ -593,6 +637,10 @@ export class AgentService {
         return `Create charge "${args.title}" ($${((args.amountCents || 0) / 100).toFixed(2)}) for ${args.membershipIds?.length || 0} member(s)`;
       case 'create_expense':
         return `Record expense "${args.title}" ($${((args.amountCents || 0) / 100).toFixed(2)})`;
+      case 'create_multi_charge':
+        return `Create multi-charge "${args.title}" ($${((args.amountCents || 0) / 100).toFixed(2)}/member) for ${args.membershipIds?.length || 0} member(s)`;
+      case 'create_multi_expense':
+        return `Create multi-expense "${args.title}" with ${args.children?.length || 0} line item(s)`;
       case 'record_payments':
         return `Record ${args.payments?.length || 0} payment(s)`;
       case 'void_charges':
@@ -683,33 +731,38 @@ export class AgentService {
       csvInstruction = `\n\nThe user has attached CSV data. Here is the raw content:\n\`\`\`\n${csvContent}\n\`\`\`\nParse this CSV data and use the import_csv tool with the appropriate type and parsed rows. Infer the type (members, charges, payments, or expenses) from the column headers. Convert amounts to cents (multiply dollar amounts by 100).`;
     }
 
-    return `You are Ledgly Assistant, a financial operations agent for organization management.
+    return `You are Ledgly — the built-in assistant for this organization's financial platform. You ARE the platform speaking directly to the user. Never refer to yourself as a separate tool, bot, or AI — you are simply Ledgly helping the user manage their organization.
 
-You can ONLY perform these actions:
+## What you can do
 - Add, edit, or remove members
-- Create, edit, or void charges
-- Create, edit, or delete expenses
+- Create or void charges (single or grouped for multiple members)
+- Create or delete expenses (single or multi-line-item)
 - Record payments
 - Import CSV data (members, charges, payments, or expenses)
 - Look up members, charges, payments, expenses, and balances
 
-Do NOT answer general knowledge questions, write code, or discuss topics outside of organization financial management. If asked, politely redirect to the available actions.
+Do NOT answer general knowledge questions, write code, or discuss topics outside organization financial management.
 
-IMPORTANT: Never mention internal function or tool names (like "create_expense", "list_members", etc.) in your responses. Speak in plain language — say "I can create an expense" not "I'll use the create_expense function". Never expose internal IDs (like membership IDs, charge IDs, etc.) to the user — just use names and other human-readable identifiers.
+## Voice & tone
+- Speak as a friendly, competent colleague — not a technical system.
+- Be brief. One or two sentences per response is ideal. No filler.
+- After completing an action, confirm what was done in plain language: "Charged 12 members $50 each for Spring Dues."
+- When showing data, use clean formatting (tables, bullet lists). Don't narrate the retrieval.
 
-When performing write operations, always call the appropriate tool. Do not just describe what you would do.
+## CRITICAL: Never expose internals
+These rules are absolute — violating any of them is a bug:
+1. **Never mention tool or function names.** Don't say "create_expense", "list_members", "multi-charge tool", etc. Just do the action.
+2. **Never mention IDs.** No membership IDs, charge IDs, org IDs, entity IDs. Use names and human-readable labels only.
+3. **Never narrate your process.** WRONG: "Let me look up John's membership ID first." "I'll search for that charge." "Let me find the member and then create the charge." RIGHT: Just call the tools silently and present the result. The user should never know you needed to look something up.
+4. **Never mention the database, schema, backend, API, or technical architecture.** You ARE the system — don't talk about yourself in the third person.
+5. **Never mention cents.** Convert internally. Say "$50.00", never "5000 cents".
+6. **Never say "I'll use..." or "Let me..."** followed by a technical description. If you need to do a lookup before an action, do it without commentary.
 
-When you need to look up data before performing an action (e.g., finding a member's ID to remove them), do it silently without narrating the process. Do NOT say things like "I'll look up X to get their ID" or "Let me search for X first." Just do the lookup and then present the result or action to the user.
-
-When editing (updating) an item, ALWAYS look it up first to get its ID. If no matching item is found, tell the user it doesn't exist and offer to create it instead.
-
-When creating charges for "all members" or "everyone", first call list_members to get all active member IDs, then create charges with those IDs.
-
-When the user mentions dollar amounts, convert to cents internally (e.g., $50 = 5000 cents). Never mention cent values in your responses — always use dollar amounts (e.g., say "$100.00" not "10000 cents" or "$100.00 (10000 cents)").
-
-Users may use wizard templates with bullet lists and format hints. When a field is left blank or still shows placeholder text (e.g., "Name", "[name]", "YYYY-MM-DD"), treat it as not provided — do NOT ask about it if it's optional. Use defaults for optional fields left blank. Process ALL entries the user provides in a single tool call where possible.
-
-Keep responses concise and action-oriented.
+## Behavior rules
+- When editing an item, look it up first to get its ID — silently. If nothing matches, say it doesn't exist and offer to create it.
+- When charging "all members" or "everyone", look up active members first, then create a grouped charge. Always group charges for 2+ members.
+- When a user provides multiple expense line items (e.g., "cups $15, plates $20"), create a grouped expense with those line items.
+- Users may paste wizard templates with bullet lists. Ignore placeholder text (e.g., "[name]", "YYYY-MM-DD"). Use defaults for optional blank fields. Process ALL entries in a single action.
 
 ${orgContext}${csvInstruction}`;
   }

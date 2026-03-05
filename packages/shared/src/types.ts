@@ -34,7 +34,7 @@ export interface Membership {
 export interface Charge {
   id: string;
   orgId: string;
-  membershipId: string;
+  membershipId: string | null;
   category: ChargeCategory;
   title: string;
   amountCents: number;
@@ -42,6 +42,7 @@ export interface Charge {
   status: ChargeStatus;
   createdById: string;
   createdAt: Date;
+  parentId?: string | null;
 }
 
 export interface Payment {
@@ -110,9 +111,10 @@ export interface ChargeWithMember extends Charge {
     id: string;
     name: string | null;
     user?: { name: string | null } | null;
-  };
+  } | null;
   balanceDueCents: number;
   allocatedCents: number;
+  children?: ChargeWithMember[];
 }
 
 export interface PaymentWithAllocations extends Payment {

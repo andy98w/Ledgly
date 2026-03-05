@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { IsString, IsOptional, IsInt, Min, Max, IsArray, ArrayMinSize, ArrayMaxSize } from 'class-validator';
+import { IsString, IsOptional, IsInt, Min, Max, IsArray, ArrayMinSize, ArrayMaxSize, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ExpensesService } from './expenses.service';
 import { Roles } from '../../common/decorators';
 import { RolesGuard } from '../../common/guards';
@@ -65,6 +66,50 @@ class UpdateExpenseDto {
   receiptUrl?: string;
 }
 
+class MultiExpenseChildDto {
+  @IsString()
+  title: string;
+
+  @IsInt()
+  @Min(1)
+  @Max(99_999_999)
+  amountCents: number;
+
+  @IsString()
+  @IsOptional()
+  vendor?: string;
+
+  @IsString()
+  @IsOptional()
+  description?: string;
+}
+
+class CreateMultiExpenseDto {
+  @IsString()
+  category: string;
+
+  @IsString()
+  title: string;
+
+  @IsString()
+  @IsOptional()
+  description?: string;
+
+  @IsString()
+  date: string;
+
+  @IsString()
+  @IsOptional()
+  vendor?: string;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => MultiExpenseChildDto)
+  children: MultiExpenseChildDto[];
+}
+
 class BulkExpenseIdsDto {
   @IsArray()
   @ArrayMinSize(1)
@@ -113,6 +158,13 @@ export class ExpensesController {
     @Query('endDate') endDate?: string,
   ) {
     return this.expensesService.getSummary(orgId, startDate, endDate);
+  }
+
+  @Post('multi')
+  @Roles('ADMIN', 'TREASURER')
+  async createMulti(@Param('orgId') orgId: string, @Body() dto: CreateMultiExpenseDto, @Req() req: any) {
+    const membershipId = req.membership.id;
+    return this.expensesService.createMultiExpense(orgId, membershipId, dto);
   }
 
   @Get(':id')

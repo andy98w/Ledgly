@@ -120,7 +120,7 @@ model Membership {
 model Charge {
   id           String              @id @default(cuid())
   orgId        String              @map("org_id")
-  membershipId String              @map("membership_id")
+  membershipId String?             @map("membership_id")
   category     ChargeCategory
   title        String
   amountCents  Int                 @map("amount_cents")
@@ -128,13 +128,17 @@ model Charge {
   status       ChargeStatus        @default(OPEN)
   createdById  String              @map("created_by_id")
   createdAt    DateTime            @default(now()) @map("created_at")
+  parentId     String?             @map("parent_id")
   createdBy    Membership          @relation("ChargeCreatedBy", fields: [createdById], references: [id])
-  membership   Membership          @relation("ChargeAssignedTo", fields: [membershipId], references: [id], onDelete: Cascade)
+  membership   Membership?         @relation("ChargeAssignedTo", fields: [membershipId], references: [id], onDelete: Cascade)
   org          Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  parent       Charge?             @relation("ChargeParentChild", fields: [parentId], references: [id], onDelete: Cascade)
+  children     Charge[]            @relation("ChargeParentChild")
   allocations  PaymentAllocation[]
 
   @@index([orgId, status])
   @@index([membershipId])
+  @@index([parentId])
   @@map("charges")
 }
 
@@ -270,11 +274,15 @@ model Expense {
   createdAt   DateTime        @default(now()) @map("created_at")
   updatedAt   DateTime        @updatedAt @map("updated_at")
   deletedAt   DateTime?       @map("deleted_at")
+  parentId    String?         @map("parent_id")
   createdBy   Membership?     @relation("ExpenseCreatedBy", fields: [createdById], references: [id])
   org         Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  parent      Expense?        @relation("ExpenseParentChild", fields: [parentId], references: [id], onDelete: Cascade)
+  children    Expense[]       @relation("ExpenseParentChild")
 
   @@index([orgId])
   @@index([orgId, date])
+  @@index([parentId])
   @@map("expenses")
 }
 

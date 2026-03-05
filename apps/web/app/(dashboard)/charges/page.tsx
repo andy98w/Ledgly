@@ -364,10 +364,16 @@ export default function ChargesPage() {
   const handleConfirmDeleteGroup = async () => {
     if (!deletingGroup || !currentOrgId) return;
     try {
-      await Promise.all(
-        deletingGroup.charges.map((c) => voidCharge.mutateAsync({ orgId: currentOrgId, chargeId: c.id })),
-      );
-      toast({ title: `Deleted ${deletingGroup.memberCount} charges`, description: 'You can undo individual charges from the list.' });
+      if (deletingGroup.isMultiCharge && deletingGroup.parentId) {
+        // Multi-charge: void the parent (cascades to children via API)
+        await voidCharge.mutateAsync({ orgId: currentOrgId, chargeId: deletingGroup.parentId });
+      } else {
+        // Legacy group: void each charge individually
+        await Promise.all(
+          deletingGroup.charges.map((c) => voidCharge.mutateAsync({ orgId: currentOrgId, chargeId: c.id })),
+        );
+      }
+      toast({ title: `Deleted ${deletingGroup.memberCount} charges` });
       setDeletingGroup(null);
     } catch (error: any) {
       toast({ title: 'Error deleting charges', description: error.message || 'Please try again', variant: 'destructive' });
@@ -757,7 +763,7 @@ export default function ChargesPage() {
         onSave={handleSaveGroupEdit}
         isPending={updateCharge.isPending || voidCharge.isPending || createCharge.isPending}
         members={members.map((m: any) => ({ id: m.id, displayName: m.displayName || m.name || 'Unknown' }))}
-        currentMemberIds={editingGroup?.charges.map((c: any) => c.membershipId) || []}
+        currentMemberIds={editingGroup?.charges.map((c: any) => c.membershipId).filter(Boolean) || []}
       />
       <ChargeGroupDeleteDialog group={deletingGroup} onClose={() => setDeletingGroup(null)} onConfirm={handleConfirmDeleteGroup} isPending={voidCharge.isPending} />
       <ChargeCreateDialog open={showCreateDialog} onClose={() => setShowCreateDialog(false)} onCreate={handleCreateCharge} members={members} loadingMembers={loadingMembers} isPending={createCharge.isPending} onAddMember={handleAddMember} isAddingMember={createMembers.isPending} />

@@ -106,6 +106,11 @@ export const ChargeGroupCard = memo(function ChargeGroupCard({
               <div className="min-w-0 space-y-1">
                 <div className="flex items-center gap-2 min-w-0">
                   <p className="font-medium truncate" title={group.title}>{group.title}</p>
+                  {group.isMultiCharge && (
+                    <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/30">
+                      Multi-charge
+                    </Badge>
+                  )}
                   <Badge variant="secondary" className="text-xs">
                     {group.memberCount} members
                   </Badge>
