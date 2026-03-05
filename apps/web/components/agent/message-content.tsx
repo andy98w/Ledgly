@@ -567,21 +567,6 @@ export function ConfirmationCard({
                         })}
                     </ul>
                   )}
-                  {(action.toolName === 'void_charges') && (
-                    <p className="text-muted-foreground mt-0.5">
-                      {action.args.chargeIds?.length} charge(s) will be voided
-                    </p>
-                  )}
-                  {(action.toolName === 'delete_expenses') && (
-                    <p className="text-muted-foreground mt-0.5">
-                      {action.args.expenseIds?.length} expense(s) will be permanently deleted
-                    </p>
-                  )}
-                  {(action.toolName === 'remove_members') && (
-                    <p className="text-muted-foreground mt-0.5">
-                      {action.args.memberIds?.length} member(s) will be removed
-                    </p>
-                  )}
                 </>
               )}
             </div>
