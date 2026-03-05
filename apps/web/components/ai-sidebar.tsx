@@ -436,7 +436,7 @@ export function AISidebar() {
                 </div>
               )}
 
-              <div className={cn('max-w-[85%]', 'text-left')}>
+              <div className={cn('max-w-[85%]', msg.role === 'user' ? 'text-right' : 'text-left')}>
                 <div className={cn('flex items-center gap-2 mb-0.5', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
                   <span className="text-xs font-medium text-muted-foreground">
                     {msg.role === 'user' ? userName : 'LedgelyAI'}
@@ -673,7 +673,7 @@ export function AISidebar() {
                     </div>
                   </div>
                 )}
-                <div className={cn('max-w-[85%]', 'text-left')}>
+                <div className={cn('max-w-[85%]', msg.role === 'user' ? 'text-right' : 'text-left')}>
                   <div className={cn('flex items-center gap-2 mb-0.5', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
                     <span className="text-xs font-medium text-muted-foreground">
                       {msg.role === 'user' ? userName : 'LedgelyAI'}

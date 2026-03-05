@@ -340,7 +340,7 @@ function EditableCell({
           onChange={(e) => setEditValue(e.target.value)}
           onKeyDown={handleKeyDown}
           onBlur={handleSave}
-          className="h-6 text-xs bg-transparent shadow-none ring-0 outline-none focus:ring-0 focus:outline-none border border-border/40 rounded px-1 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          className="h-6 text-sm bg-transparent shadow-none !ring-0 !outline-none !border !border-border/40 rounded px-1"
           type="date"
           style={{ colorScheme: 'dark' }}
         />
@@ -355,7 +355,7 @@ function EditableCell({
         onKeyDown={handleKeyDown}
         onBlur={handleSave}
         className={cn(
-          'h-6 text-xs bg-transparent shadow-none ring-0 outline-none focus:ring-0 focus:outline-none border border-border/40 rounded px-1 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none',
+          'h-6 text-sm bg-transparent shadow-none !ring-0 !outline-none !border !border-border/40 rounded px-1 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none',
           type === 'money' ? 'w-16 text-right tabular-nums' : 'w-full'
         )}
         type={type === 'money' ? 'number' : 'text'}

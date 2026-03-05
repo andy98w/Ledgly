@@ -494,7 +494,7 @@ export default function AgentPage() {
                 )}
 
                 {/* Bubble + meta */}
-                <div className="max-w-[90%] md:max-w-[80%] text-left">
+                <div className={cn("max-w-[90%] md:max-w-[80%]", msg.role === 'user' ? 'text-right' : 'text-left')}>
 
                   {/* Name + timestamp */}
                   <div className="flex items-center gap-2 mb-1">
