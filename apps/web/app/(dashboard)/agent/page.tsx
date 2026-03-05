@@ -70,6 +70,7 @@ export default function AgentPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isMutatingRef = useRef(false);
 
   // Session queries
   const { data: sessions } = useAgentSessions(currentOrgId);
@@ -93,7 +94,7 @@ export default function AgentPage() {
 
   // Load session messages when switching sessions
   useEffect(() => {
-    if (loadedSession?.messages && activeSessionId) {
+    if (loadedSession?.messages && activeSessionId && !isMutatingRef.current) {
       const saved = Array.isArray(loadedSession.messages) ? loadedSession.messages : [];
       setMessages(saved as DisplayMessage[]);
     }
@@ -119,17 +120,27 @@ export default function AgentPage() {
 
   const saveMessages = useCallback(
     (msgs: DisplayMessage[], sessionId: string | null) => {
-      if (!currentOrgId || !sessionId) return;
+      if (!currentOrgId || !sessionId) {
+        isMutatingRef.current = false;
+        return;
+      }
       // Derive title from first user message
       const firstUserMsg = msgs.find((m) => m.role === 'user');
       const title = firstUserMsg
         ? firstUserMsg.content.slice(0, 50) + (firstUserMsg.content.length > 50 ? '...' : '')
         : 'New conversation';
-      updateSession.mutate({
-        orgId: currentOrgId,
-        sessionId,
-        data: { messages: msgs, title },
-      });
+      updateSession.mutate(
+        {
+          orgId: currentOrgId,
+          sessionId,
+          data: { messages: msgs, title },
+        },
+        {
+          onSettled: () => {
+            isMutatingRef.current = false;
+          },
+        },
+      );
     },
     [currentOrgId, updateSession],
   );
@@ -155,6 +166,7 @@ export default function AgentPage() {
 
   const handleSend = useCallback(async () => {
     if ((!input.trim() && !csvFile) || isStreaming || !currentOrgId) return;
+    isMutatingRef.current = true;
 
     const userContent = csvFile
       ? `${input.trim() || 'Please import this CSV data.'}\n\n[Attached: ${csvFile.name}]`
@@ -209,57 +221,45 @@ export default function AgentPage() {
 
     let finalMessages = newMessages;
 
-    await streamAgentChat(
-      currentOrgId,
-      chatHistory,
-      csvContent,
-      // onTextChunk
-      (text) => {
-        setMessages((prev) => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last?.role === 'assistant') {
-            updated[updated.length - 1] = { ...last, content: last.content + text };
-          }
-          finalMessages = updated;
-          return updated;
-        });
-      },
-      // onToolCalls
-      (actions) => {
-        setMessages((prev) => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last?.role === 'assistant') {
-            updated[updated.length - 1] = { ...last, actions, actionStatus: 'pending' };
-          }
-          finalMessages = updated;
-          return updated;
-        });
-      },
-      // onDone
-      () => {
-        setIsStreaming(false);
-        saveMessages(finalMessages, sessionId);
-      },
-      // onError
-      (error) => {
-        setMessages((prev) => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last?.role === 'assistant') {
-            updated[updated.length - 1] = {
-              ...last,
-              content: last.content || `Something went wrong: ${error}`,
-            };
-          }
-          finalMessages = updated;
-          return updated;
-        });
-        setIsStreaming(false);
-        saveMessages(finalMessages, sessionId);
-      },
-    );
+    const updateLastAssistant = (patch: Partial<DisplayMessage>) => {
+      const updated = [...finalMessages];
+      const last = updated[updated.length - 1];
+      if (last?.role === 'assistant') {
+        updated[updated.length - 1] = { ...last, ...patch };
+      }
+      finalMessages = updated;
+      setMessages(updated);
+    };
+
+    try {
+      await streamAgentChat(
+        currentOrgId,
+        chatHistory,
+        csvContent,
+        (text) => {
+          const last = finalMessages[finalMessages.length - 1];
+          updateLastAssistant({ content: (last?.content || '') + text });
+        },
+        (actions) => {
+          updateLastAssistant({ actions, actionStatus: 'pending' });
+        },
+        () => {
+          setIsStreaming(false);
+          saveMessages(finalMessages, sessionId);
+        },
+        (error) => {
+          const last = finalMessages[finalMessages.length - 1];
+          updateLastAssistant({
+            content: last?.content || `Something went wrong: ${error}`,
+          });
+          setIsStreaming(false);
+          saveMessages(finalMessages, sessionId);
+        },
+      );
+    } catch {
+      isMutatingRef.current = false;
+      setIsStreaming(false);
+    }
   }, [input, csvFile, isStreaming, currentOrgId, messages, activeSessionId, createSession, saveMessages]);
 
   const handleConfirm = async (messageId: string, modifiedActions?: ProposedAction[]) => {

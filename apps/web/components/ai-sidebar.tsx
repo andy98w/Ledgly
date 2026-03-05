@@ -113,16 +113,26 @@ export function AISidebar() {
 
   const saveMessages = useCallback(
     (msgs: DisplayMessage[], sid: string | null) => {
-      if (!currentOrgId || !sid) return;
+      if (!currentOrgId || !sid) {
+        isMutatingRef.current = false;
+        return;
+      }
       const firstUserMsg = msgs.find((m) => m.role === 'user');
       const title = firstUserMsg
         ? firstUserMsg.content.slice(0, 50) + (firstUserMsg.content.length > 50 ? '...' : '')
         : 'New conversation';
-      updateSession.mutate({
-        orgId: currentOrgId,
-        sessionId: sid,
-        data: { messages: msgs, title },
-      });
+      updateSession.mutate(
+        {
+          orgId: currentOrgId,
+          sessionId: sid,
+          data: { messages: msgs, title },
+        },
+        {
+          onSettled: () => {
+            isMutatingRef.current = false;
+          },
+        },
+      );
     },
     [currentOrgId, updateSession],
   );
@@ -207,52 +217,37 @@ export function AISidebar() {
 
     let finalMessages = newMessages;
 
+    const updateLastAssistant = (patch: Partial<DisplayMessage>) => {
+      const updated = [...finalMessages];
+      const last = updated[updated.length - 1];
+      if (last?.role === 'assistant') {
+        updated[updated.length - 1] = { ...last, ...patch };
+      }
+      finalMessages = updated;
+      setMessages(updated);
+    };
+
     try {
       await streamAgentChat(
         currentOrgId,
         chatHistory,
         csvContent,
         (text) => {
-          setMessages((prev) => {
-            const updated = [...prev];
-            const last = updated[updated.length - 1];
-            if (last?.role === 'assistant') {
-              updated[updated.length - 1] = { ...last, content: last.content + text };
-            }
-            finalMessages = updated;
-            return updated;
-          });
+          const last = finalMessages[finalMessages.length - 1];
+          updateLastAssistant({ content: (last?.content || '') + text });
         },
         (actions) => {
-          setMessages((prev) => {
-            const updated = [...prev];
-            const last = updated[updated.length - 1];
-            if (last?.role === 'assistant') {
-              updated[updated.length - 1] = { ...last, actions, actionStatus: 'pending' };
-            }
-            finalMessages = updated;
-            return updated;
-          });
+          updateLastAssistant({ actions, actionStatus: 'pending' });
         },
         () => {
-          isMutatingRef.current = false;
           setIsStreaming(false);
           saveMessages(finalMessages, sid);
         },
         (error) => {
-          setMessages((prev) => {
-            const updated = [...prev];
-            const last = updated[updated.length - 1];
-            if (last?.role === 'assistant') {
-              updated[updated.length - 1] = {
-                ...last,
-                content: last.content || `Something went wrong: ${error}`,
-              };
-            }
-            finalMessages = updated;
-            return updated;
+          const last = finalMessages[finalMessages.length - 1];
+          updateLastAssistant({
+            content: last?.content || `Something went wrong: ${error}`,
           });
-          isMutatingRef.current = false;
           setIsStreaming(false);
           saveMessages(finalMessages, sid);
         },
@@ -301,8 +296,6 @@ export function AISidebar() {
         saveMessages(updated, sessionId);
         return updated;
       });
-    } finally {
-      isMutatingRef.current = false;
     }
   };
 

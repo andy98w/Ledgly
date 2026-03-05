@@ -344,24 +344,23 @@ export class AgentService {
           search: args.search,
           limit: 200,
         });
-        const mapped = result.data.map((e: any) => ({
+        const mapExpense = (e: any) => ({
           id: e.id,
           title: e.title,
+          description: e.description,
           amountCents: e.amountCents,
           category: e.category,
           date: e.date,
           vendor: e.vendor,
-        }));
+        });
+        const mapped = result.data.map(mapExpense);
         if (mapped.length === 0 && args.search) {
           const all = await this.expensesService.findAll(orgId, {
             category: args.category, limit: 200,
           });
           return {
             _hint: `No exact match for "${args.search}". Showing all results — only pick one if it is a close match, otherwise tell the user nothing was found.`,
-            data: all.data.map((e: any) => ({
-              id: e.id, title: e.title, amountCents: e.amountCents,
-              category: e.category, date: e.date, vendor: e.vendor,
-            })),
+            data: all.data.map(mapExpense),
           };
         }
         return mapped;
