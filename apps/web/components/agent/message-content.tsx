@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { Check, X, XCircle, Loader2, AlertCircle, XIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { formatCents } from '@/lib/utils';
+import { cn, formatCents } from '@/lib/utils';
 import { useMembers } from '@/lib/queries/members';
 import type { ProposedAction, ActionResult } from '@/lib/queries/agent';
 
@@ -480,7 +480,20 @@ export function ConfirmationCard({
       <div className="space-y-2">
         {displayActions.map((action, index) => (
           <div key={action.id} className="flex items-start gap-2 text-sm">
-            <span className="text-primary font-medium shrink-0">+</span>
+            <span className={cn(
+              'font-medium shrink-0',
+              action.toolName.startsWith('delete') || action.toolName.startsWith('remove') || action.toolName.startsWith('void')
+                ? 'text-destructive'
+                : action.toolName.startsWith('update')
+                  ? 'text-amber-500'
+                  : 'text-primary',
+            )}>
+              {action.toolName.startsWith('delete') || action.toolName.startsWith('remove') || action.toolName.startsWith('void')
+                ? '−'
+                : action.toolName.startsWith('update')
+                  ? '~'
+                  : '+'}
+            </span>
             <div className="flex-1 min-w-0">
               {(action.toolName === 'create_charges' || action.toolName === 'create_multi_charge') && status === 'pending' ? (
                 <ChargeActionEditor
@@ -534,15 +547,24 @@ export function ConfirmationCard({
                       )}
                     </ul>
                   )}
-                  {(action.toolName === 'update_member' || action.toolName === 'update_charge' || action.toolName === 'update_expense') && (
-                    <ul className="mt-1 space-y-0.5 text-muted-foreground">
+                  {(action.toolName === 'update_member' || action.toolName === 'update_charge' || action.toolName === 'update_expense') && action.args._old && (
+                    <ul className="mt-1 space-y-1 text-sm">
                       {Object.entries(action.args)
-                        .filter(([k]) => !k.endsWith('Id'))
-                        .map(([k, v]) => (
-                          <li key={k}>
-                            {k}: {k.includes('amountCents') ? formatCents(v as number) : String(v)}
-                          </li>
-                        ))}
+                        .filter(([k]) => !k.endsWith('Id') && k !== '_old')
+                        .map(([k, v]) => {
+                          const oldVal = action.args._old[k];
+                          const fmt = (val: any) => k === 'amountCents' ? formatCents(val as number) : k === 'date' || k === 'dueDate' ? new Date(val).toLocaleDateString() : String(val);
+                          return (
+                            <li key={k} className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-xs text-muted-foreground w-16 shrink-0">{k}</span>
+                              {oldVal !== undefined && (
+                                <span className="line-through text-muted-foreground/60">{fmt(oldVal)}</span>
+                              )}
+                              {oldVal !== undefined && <span className="text-muted-foreground">→</span>}
+                              <span className="font-medium">{fmt(v)}</span>
+                            </li>
+                          );
+                        })}
                     </ul>
                   )}
                   {(action.toolName === 'void_charges') && (

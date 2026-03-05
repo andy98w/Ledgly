@@ -144,12 +144,14 @@ export class AgentService {
 
         if (writeTools.length > 0) {
           // Return proposed actions to frontend for confirmation
-          const actions: ProposedAction[] = writeTools.map((b) => ({
-            id: b.id,
-            toolName: b.name,
-            args: b.input as Record<string, any>,
-            description: this.describeAction(b.name, b.input as Record<string, any>),
-          }));
+          const actions: ProposedAction[] = await Promise.all(
+            writeTools.map(async (b) => ({
+              id: b.id,
+              toolName: b.name,
+              args: b.input as Record<string, any>,
+              description: await this.describeAction(orgId, b.name, b.input as Record<string, any>),
+            })),
+          );
           yield { type: 'tool_calls', actions };
           continueLoop = false;
           break;
@@ -214,7 +216,7 @@ export class AgentService {
     for (const action of actions) {
       try {
         const result = await this.executeWriteTool(orgId, actorId, action.toolName, action.args, batch);
-        let message = this.describeAction(action.toolName, action.args);
+        let message = await this.describeAction(orgId, action.toolName, action.args);
 
         // Surface partial failures (e.g. bulkRemove skipped items)
         const skipped = result?.skipped;
@@ -706,14 +708,33 @@ export class AgentService {
     }
   }
 
-  private describeAction(toolName: string, args: Record<string, any>): string {
+  private async describeAction(orgId: string, toolName: string, args: Record<string, any>): Promise<string> {
     switch (toolName) {
-      case 'update_member':
-        return `Update member${args.name ? ` "${args.name}"` : ''}`;
-      case 'update_charge':
-        return `Update charge${args.title ? ` "${args.title}"` : ''}`;
-      case 'update_expense':
-        return `Update expense${args.title ? ` "${args.title}"` : ''}`;
+      case 'update_member': {
+        const member = await this.prisma.membership.findFirst({
+          where: { id: args.membershipId, orgId },
+          select: { name: true, role: true, status: true, user: { select: { name: true } } },
+        });
+        const name = member?.name || member?.user?.name || 'Unknown';
+        args._old = { name, role: member?.role, status: member?.status };
+        return `Update member "${name}"`;
+      }
+      case 'update_charge': {
+        const charge = await this.prisma.charge.findFirst({
+          where: { id: args.chargeId, orgId },
+          select: { title: true, amountCents: true, dueDate: true },
+        });
+        args._old = { title: charge?.title, amountCents: charge?.amountCents, dueDate: charge?.dueDate };
+        return `Update charge "${charge?.title || 'Unknown'}"`;
+      }
+      case 'update_expense': {
+        const expense = await this.prisma.expense.findFirst({
+          where: { id: args.expenseId, orgId },
+          select: { title: true, amountCents: true, category: true, vendor: true, date: true },
+        });
+        args._old = { title: expense?.title, amountCents: expense?.amountCents, category: expense?.category, vendor: expense?.vendor, date: expense?.date };
+        return `Update expense "${expense?.title || expense?.vendor || 'Unknown'}"`;
+      }
       case 'add_members':
         return `Add ${args.members?.length || 0} member(s): ${(args.members || []).slice(0, 3).map((m: any) => m.name).join(', ')}${(args.members?.length || 0) > 3 ? '...' : ''}`;
       case 'create_charges':
@@ -726,12 +747,30 @@ export class AgentService {
         return `Record "${args.title}" with ${args.children?.length || 0} line item(s)`;
       case 'record_payments':
         return `Record ${args.payments?.length || 0} payment(s)`;
-      case 'void_charges':
-        return `Void ${args.chargeIds?.length || 0} charge(s)`;
-      case 'remove_members':
-        return `Remove ${args.memberIds?.length || 0} member(s)`;
-      case 'delete_expenses':
-        return `Delete ${args.expenseIds?.length || 0} expense(s)`;
+      case 'void_charges': {
+        const charges = await this.prisma.charge.findMany({
+          where: { id: { in: args.chargeIds || [] }, orgId },
+          select: { title: true, amountCents: true },
+        });
+        const names = charges.map((c) => `"${c.title}" ($${(c.amountCents / 100).toFixed(2)})`);
+        return `Void ${names.length} charge(s): ${names.slice(0, 3).join(', ')}${names.length > 3 ? '...' : ''}`;
+      }
+      case 'remove_members': {
+        const members = await this.prisma.membership.findMany({
+          where: { id: { in: args.memberIds || [] }, orgId },
+          select: { name: true, user: { select: { name: true } } },
+        });
+        const names = members.map((m) => m.name || m.user?.name || 'Unknown');
+        return `Remove ${names.length} member(s): ${names.slice(0, 3).join(', ')}${names.length > 3 ? '...' : ''}`;
+      }
+      case 'delete_expenses': {
+        const expenses = await this.prisma.expense.findMany({
+          where: { id: { in: args.expenseIds || [] }, orgId },
+          select: { title: true, amountCents: true, vendor: true },
+        });
+        const names = expenses.map((e) => `"${e.title}"${e.vendor ? ` (${e.vendor})` : ''} $${(e.amountCents / 100).toFixed(2)}`);
+        return `Delete ${names.length} expense(s): ${names.slice(0, 3).join(', ')}${names.length > 3 ? '...' : ''}`;
+      }
       case 'allocate_payment':
         return `Allocate payment to ${args.allocations?.length || 0} charge(s)`;
       case 'auto_allocate_payment':
