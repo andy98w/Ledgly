@@ -419,6 +419,289 @@ function ExpenseActionEditor({
   );
 }
 
+const EXPENSE_CATEGORIES = ['EVENT', 'SUPPLIES', 'FOOD', 'VENUE', 'MARKETING', 'SERVICES', 'OTHER'] as const;
+const CHARGE_CATEGORIES = ['DUES', 'EVENT', 'FINE', 'MERCH', 'OTHER'] as const;
+const MEMBER_ROLES = ['MEMBER', 'ADMIN', 'TREASURER'] as const;
+
+/** Shared editable field row */
+function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-muted-foreground w-16 shrink-0">{label}</span>
+      {children}
+    </div>
+  );
+}
+
+/** Editable editor for a single create_expense action */
+function SingleExpenseEditor({
+  action,
+  onChange,
+}: {
+  action: ProposedAction;
+  onChange: (updated: ProposedAction) => void;
+}) {
+  const update = (field: string, value: any) => {
+    onChange({ ...action, args: { ...action.args, [field]: value } });
+  };
+  const updateAmount = (raw: string) => {
+    const cleaned = raw.replace(/[^0-9.]/g, '');
+    const cents = Math.round(parseFloat(cleaned || '0') * 100);
+    if (!isNaN(cents)) update('amountCents', cents);
+  };
+
+  return (
+    <div className="space-y-2">
+      <span className="font-medium text-sm">{action.description}</span>
+      <div className="rounded-lg border border-border/60 bg-secondary/20 p-3 space-y-2">
+        <FieldRow label="Title">
+          <input type="text" value={action.args.title || ''} onChange={(e) => update('title', e.target.value)}
+            className="font-medium text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors w-full py-0.5" />
+        </FieldRow>
+        <FieldRow label="Amount">
+          <span className="text-muted-foreground text-xs">$</span>
+          <input type="text" value={((action.args.amountCents || 0) / 100).toFixed(2)} onChange={(e) => updateAmount(e.target.value)}
+            className="w-24 text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors tabular-nums py-0.5" />
+        </FieldRow>
+        <FieldRow label="Category">
+          <select value={action.args.category || 'OTHER'} onChange={(e) => update('category', e.target.value)}
+            className="text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5 cursor-pointer">
+            {EXPENSE_CATEGORIES.map((c) => <option key={c} value={c}>{c.charAt(0) + c.slice(1).toLowerCase()}</option>)}
+          </select>
+        </FieldRow>
+        <FieldRow label="Date">
+          <input type="date" value={action.args.date?.slice(0, 10) || ''} onChange={(e) => update('date', e.target.value)}
+            className="text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5" />
+        </FieldRow>
+        <FieldRow label="Vendor">
+          <input type="text" value={action.args.vendor || ''} onChange={(e) => update('vendor', e.target.value)} placeholder="Optional"
+            className="text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors w-full py-0.5 placeholder:text-muted-foreground/40" />
+        </FieldRow>
+      </div>
+    </div>
+  );
+}
+
+/** Editable editor for update_expense / update_charge / update_member */
+function UpdateFieldsEditor({
+  action,
+  onChange,
+}: {
+  action: ProposedAction;
+  onChange: (updated: ProposedAction) => void;
+}) {
+  const old = action.args._old || {};
+  const isExpense = action.toolName === 'update_expense';
+  const isCharge = action.toolName === 'update_charge';
+  const categories = isExpense ? EXPENSE_CATEGORIES : isCharge ? CHARGE_CATEGORIES : null;
+
+  const update = (field: string, value: any) => {
+    onChange({ ...action, args: { ...action.args, [field]: value } });
+  };
+  const updateAmount = (raw: string) => {
+    const cleaned = raw.replace(/[^0-9.]/g, '');
+    const cents = Math.round(parseFloat(cleaned || '0') * 100);
+    if (!isNaN(cents)) update('amountCents', cents);
+  };
+
+  // Determine which fields to show: everything the LLM proposed + key fields from _old
+  const fields = new Set<string>();
+  for (const k of Object.keys(action.args)) {
+    if (!k.startsWith('_') && !k.endsWith('Id')) fields.add(k);
+  }
+  // Always show key fields from old values so user can see context
+  for (const k of Object.keys(old)) {
+    if (!k.startsWith('_') && !k.endsWith('Id')) fields.add(k);
+  }
+
+  const getFieldValue = (field: string) => action.args[field] ?? old[field] ?? '';
+  const formatDisplay = (field: string, val: any) => {
+    if (val == null || val === '') return '—';
+    if (field === 'amountCents') return formatCents(val as number);
+    if (field === 'date' || field === 'dueDate') return new Date(val).toLocaleDateString();
+    return String(val);
+  };
+
+  return (
+    <div className="space-y-2">
+      <span className="font-medium text-sm">{action.description}</span>
+      <div className="rounded-lg border border-border/60 bg-secondary/20 p-3 space-y-2">
+        {Array.from(fields).map((field) => {
+          const oldVal = old[field];
+          const newVal = action.args[field];
+          const isChanged = newVal !== undefined && newVal !== oldVal;
+          const label = field === 'amountCents' ? 'Amount' : field === 'dueDate' ? 'Due date' : field.charAt(0).toUpperCase() + field.slice(1);
+
+          // Amount field
+          if (field === 'amountCents') {
+            return (
+              <FieldRow key={field} label={label}>
+                {oldVal !== undefined && isChanged && (
+                  <><span className="line-through text-muted-foreground/60 text-sm">{formatCents(oldVal)}</span><span className="text-muted-foreground text-xs">→</span></>
+                )}
+                <span className="text-muted-foreground text-xs">$</span>
+                <input type="text" value={((getFieldValue(field) || 0) / 100).toFixed(2)} onChange={(e) => updateAmount(e.target.value)}
+                  className="w-24 text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors tabular-nums py-0.5" />
+              </FieldRow>
+            );
+          }
+
+          // Category field (select)
+          if (field === 'category' && categories) {
+            return (
+              <FieldRow key={field} label={label}>
+                {oldVal !== undefined && isChanged && (
+                  <><span className="line-through text-muted-foreground/60 text-sm">{oldVal}</span><span className="text-muted-foreground text-xs">→</span></>
+                )}
+                <select value={getFieldValue(field) || 'OTHER'} onChange={(e) => update(field, e.target.value)}
+                  className="text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5 cursor-pointer">
+                  {categories.map((c) => <option key={c} value={c}>{c.charAt(0) + c.slice(1).toLowerCase()}</option>)}
+                </select>
+              </FieldRow>
+            );
+          }
+
+          // Role field (select)
+          if (field === 'role') {
+            return (
+              <FieldRow key={field} label={label}>
+                {oldVal !== undefined && isChanged && (
+                  <><span className="line-through text-muted-foreground/60 text-sm">{oldVal}</span><span className="text-muted-foreground text-xs">→</span></>
+                )}
+                <select value={getFieldValue(field) || 'MEMBER'} onChange={(e) => update(field, e.target.value)}
+                  className="text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5 cursor-pointer">
+                  {MEMBER_ROLES.map((r) => <option key={r} value={r}>{r.charAt(0) + r.slice(1).toLowerCase()}</option>)}
+                </select>
+              </FieldRow>
+            );
+          }
+
+          // Date field
+          if (field === 'date' || field === 'dueDate') {
+            return (
+              <FieldRow key={field} label={label}>
+                {oldVal !== undefined && isChanged && (
+                  <><span className="line-through text-muted-foreground/60 text-sm">{formatDisplay(field, oldVal)}</span><span className="text-muted-foreground text-xs">→</span></>
+                )}
+                <input type="date" value={String(getFieldValue(field) || '').slice(0, 10)} onChange={(e) => update(field, e.target.value)}
+                  className="text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5" />
+              </FieldRow>
+            );
+          }
+
+          // Text field (title, name, email, vendor, etc.)
+          return (
+            <FieldRow key={field} label={label}>
+              {oldVal !== undefined && isChanged && (
+                <><span className="line-through text-muted-foreground/60 text-sm">{oldVal}</span><span className="text-muted-foreground text-xs">→</span></>
+              )}
+              <input type="text" value={getFieldValue(field)} onChange={(e) => update(field, e.target.value)}
+                className="text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors w-full py-0.5" />
+            </FieldRow>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Editable editor for add_members */
+function MembersEditor({
+  action,
+  onChange,
+}: {
+  action: ProposedAction;
+  onChange: (updated: ProposedAction) => void;
+}) {
+  const members: Array<{ name: string; email?: string; role?: string }> = action.args.members || [];
+
+  const updateMember = (idx: number, field: string, value: string) => {
+    const updated = [...members];
+    updated[idx] = { ...updated[idx], [field]: value };
+    onChange({ ...action, args: { ...action.args, members: updated } });
+  };
+
+  const removeMember = (idx: number) => {
+    onChange({ ...action, args: { ...action.args, members: members.filter((_, i) => i !== idx) } });
+  };
+
+  return (
+    <div className="space-y-2">
+      <span className="font-medium text-sm">{action.description}</span>
+      <div className="rounded-lg border border-border/60 bg-secondary/20 p-3 space-y-2">
+        {members.map((m, idx) => (
+          <div key={idx} className="flex items-center gap-2">
+            <input type="text" value={m.name} onChange={(e) => updateMember(idx, 'name', e.target.value)} placeholder="Name"
+              className="flex-1 text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5" />
+            <input type="text" value={m.email || ''} onChange={(e) => updateMember(idx, 'email', e.target.value)} placeholder="Email"
+              className="flex-1 text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5 placeholder:text-muted-foreground/40" />
+            <select value={m.role || 'MEMBER'} onChange={(e) => updateMember(idx, 'role', e.target.value)}
+              className="text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5 cursor-pointer">
+              {MEMBER_ROLES.map((r) => <option key={r} value={r}>{r.charAt(0) + r.slice(1).toLowerCase()}</option>)}
+            </select>
+            {members.length > 1 && (
+              <button type="button" onClick={() => removeMember(idx)} className="text-muted-foreground hover:text-destructive transition-colors">
+                <XIcon className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Editable editor for record_payments */
+function PaymentsEditor({
+  action,
+  onChange,
+}: {
+  action: ProposedAction;
+  onChange: (updated: ProposedAction) => void;
+}) {
+  const payments: Array<{ rawPayerName: string; amountCents: number; date?: string; method?: string }> = action.args.payments || [];
+
+  const updatePayment = (idx: number, field: string, value: any) => {
+    const updated = [...payments];
+    updated[idx] = { ...updated[idx], [field]: value };
+    onChange({ ...action, args: { ...action.args, payments: updated } });
+  };
+
+  const updatePaymentAmount = (idx: number, raw: string) => {
+    const cleaned = raw.replace(/[^0-9.]/g, '');
+    const cents = Math.round(parseFloat(cleaned || '0') * 100);
+    if (!isNaN(cents)) updatePayment(idx, 'amountCents', cents);
+  };
+
+  const removePayment = (idx: number) => {
+    onChange({ ...action, args: { ...action.args, payments: payments.filter((_, i) => i !== idx) } });
+  };
+
+  return (
+    <div className="space-y-2">
+      <span className="font-medium text-sm">{action.description}</span>
+      <div className="rounded-lg border border-border/60 bg-secondary/20 p-3 space-y-2">
+        {payments.map((p, idx) => (
+          <div key={idx} className="flex items-center gap-2">
+            <input type="text" value={p.rawPayerName || ''} onChange={(e) => updatePayment(idx, 'rawPayerName', e.target.value)} placeholder="Payer"
+              className="flex-1 text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5" />
+            <span className="text-muted-foreground text-xs">$</span>
+            <input type="text" value={(p.amountCents / 100).toFixed(2)} onChange={(e) => updatePaymentAmount(idx, e.target.value)}
+              className="w-20 text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors tabular-nums py-0.5" />
+            <input type="date" value={p.date?.slice(0, 10) || ''} onChange={(e) => updatePayment(idx, 'date', e.target.value)}
+              className="text-sm bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none transition-colors py-0.5" />
+            {payments.length > 1 && (
+              <button type="button" onClick={() => removePayment(idx)} className="text-muted-foreground hover:text-destructive transition-colors">
+                <XIcon className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function ConfirmationCard({
   actions,
   status,
@@ -495,78 +778,21 @@ export function ConfirmationCard({
                   : '+'}
             </span>
             <div className="flex-1 min-w-0">
-              {(action.toolName === 'create_charges' || action.toolName === 'create_multi_charge') && status === 'pending' ? (
-                <ChargeActionEditor
-                  action={action}
-                  memberNameMap={memberNameMap}
-                  onChange={(updated) => updateAction(index, updated)}
-                />
-              ) : action.toolName === 'create_multi_expense' && status === 'pending' ? (
-                <ExpenseActionEditor
-                  action={action}
-                  onChange={(updated) => updateAction(index, updated)}
-                />
+              {status === 'pending' && (action.toolName === 'create_charges' || action.toolName === 'create_multi_charge') ? (
+                <ChargeActionEditor action={action} memberNameMap={memberNameMap} onChange={(updated) => updateAction(index, updated)} />
+              ) : status === 'pending' && action.toolName === 'create_multi_expense' ? (
+                <ExpenseActionEditor action={action} onChange={(updated) => updateAction(index, updated)} />
+              ) : status === 'pending' && action.toolName === 'create_expense' ? (
+                <SingleExpenseEditor action={action} onChange={(updated) => updateAction(index, updated)} />
+              ) : status === 'pending' && (action.toolName === 'update_expense' || action.toolName === 'update_charge' || action.toolName === 'update_member') ? (
+                <UpdateFieldsEditor action={action} onChange={(updated) => updateAction(index, updated)} />
+              ) : status === 'pending' && action.toolName === 'add_members' ? (
+                <MembersEditor action={action} onChange={(updated) => updateAction(index, updated)} />
+              ) : status === 'pending' && action.toolName === 'record_payments' ? (
+                <PaymentsEditor action={action} onChange={(updated) => updateAction(index, updated)} />
               ) : (
                 <>
                   <span className="font-medium">{action.description}</span>
-                  {action.toolName === 'add_members' && action.args.members && (
-                    <ul className="mt-1 space-y-0.5 text-muted-foreground">
-                      {action.args.members.slice(0, 10).map((m: any, i: number) => (
-                        <li key={i}>
-                          {m.name}
-                          {m.email ? ` (${m.email})` : ''}
-                          {m.role && m.role !== 'MEMBER' ? ` — ${m.role}` : ''}
-                        </li>
-                      ))}
-                      {action.args.members.length > 10 && (
-                        <li>...and {action.args.members.length - 10} more</li>
-                      )}
-                    </ul>
-                  )}
-                  {action.toolName === 'create_charges' && (
-                    <p className="text-muted-foreground mt-0.5">
-                      {formatCents(action.args.amountCents)} each for {action.args.membershipIds?.length} member(s)
-                    </p>
-                  )}
-                  {action.toolName === 'create_expense' && (
-                    <p className="text-muted-foreground mt-0.5">
-                      {formatCents(action.args.amountCents)}
-                      {action.args.vendor ? ` — ${action.args.vendor}` : ''}
-                      {action.args.date ? ` on ${new Date(action.args.date).toLocaleDateString()}` : ''}
-                    </p>
-                  )}
-                  {action.toolName === 'record_payments' && action.args.payments && (
-                    <ul className="mt-1 space-y-0.5 text-muted-foreground">
-                      {action.args.payments.slice(0, 5).map((p: any, i: number) => (
-                        <li key={i}>
-                          {formatCents(p.amountCents)} from {p.rawPayerName || 'Unknown'}
-                        </li>
-                      ))}
-                      {action.args.payments.length > 5 && (
-                        <li>...and {action.args.payments.length - 5} more</li>
-                      )}
-                    </ul>
-                  )}
-                  {(action.toolName === 'update_member' || action.toolName === 'update_charge' || action.toolName === 'update_expense') && action.args._old && (
-                    <ul className="mt-1 space-y-1 text-sm">
-                      {Object.entries(action.args)
-                        .filter(([k]) => !k.endsWith('Id') && k !== '_old' && k !== '_items')
-                        .map(([k, v]) => {
-                          const oldVal = action.args._old[k];
-                          const fmt = (val: any) => k === 'amountCents' ? formatCents(val as number) : k === 'date' || k === 'dueDate' ? new Date(val).toLocaleDateString() : String(val);
-                          return (
-                            <li key={k} className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-xs text-muted-foreground w-16 shrink-0">{k}</span>
-                              {oldVal !== undefined && (
-                                <span className="line-through text-muted-foreground/60">{fmt(oldVal)}</span>
-                              )}
-                              {oldVal !== undefined && <span className="text-muted-foreground">→</span>}
-                              <span className="font-medium">{fmt(v)}</span>
-                            </li>
-                          );
-                        })}
-                    </ul>
-                  )}
                   {action.args._items && action.args._items.length > 0 && (
                     <ul className="mt-1.5 space-y-1.5">
                       {action.args._items.slice(0, 10).map((item: any, i: number) => (
