@@ -515,6 +515,13 @@ export function ConfirmationCard({
                       {formatCents(action.args.amountCents)} each for {action.args.membershipIds?.length} member(s)
                     </p>
                   )}
+                  {action.toolName === 'create_expense' && (
+                    <p className="text-muted-foreground mt-0.5">
+                      {formatCents(action.args.amountCents)}
+                      {action.args.vendor ? ` — ${action.args.vendor}` : ''}
+                      {action.args.date ? ` on ${new Date(action.args.date).toLocaleDateString()}` : ''}
+                    </p>
+                  )}
                   {action.toolName === 'record_payments' && action.args.payments && (
                     <ul className="mt-1 space-y-0.5 text-muted-foreground">
                       {action.args.payments.slice(0, 5).map((p: any, i: number) => (
@@ -526,6 +533,32 @@ export function ConfirmationCard({
                         <li>...and {action.args.payments.length - 5} more</li>
                       )}
                     </ul>
+                  )}
+                  {(action.toolName === 'update_member' || action.toolName === 'update_charge' || action.toolName === 'update_expense') && (
+                    <ul className="mt-1 space-y-0.5 text-muted-foreground">
+                      {Object.entries(action.args)
+                        .filter(([k]) => !k.endsWith('Id'))
+                        .map(([k, v]) => (
+                          <li key={k}>
+                            {k}: {k.includes('amountCents') ? formatCents(v as number) : String(v)}
+                          </li>
+                        ))}
+                    </ul>
+                  )}
+                  {(action.toolName === 'void_charges') && (
+                    <p className="text-muted-foreground mt-0.5">
+                      {action.args.chargeIds?.length} charge(s) will be voided
+                    </p>
+                  )}
+                  {(action.toolName === 'delete_expenses') && (
+                    <p className="text-muted-foreground mt-0.5">
+                      {action.args.expenseIds?.length} expense(s) will be permanently deleted
+                    </p>
+                  )}
+                  {(action.toolName === 'remove_members') && (
+                    <p className="text-muted-foreground mt-0.5">
+                      {action.args.memberIds?.length} member(s) will be removed
+                    </p>
                   )}
                 </>
               )}

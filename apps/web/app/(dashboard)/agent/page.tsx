@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Send, Paperclip, X, Loader2, Sparkles, Plus, MessageSquare, Trash2, PanelLeftClose, PanelLeft, Wand2 } from 'lucide-react';
 import { useAuthStore } from '@/lib/stores/auth';
 import { useSidebarStore } from '@/lib/stores/sidebar';
@@ -33,6 +34,7 @@ import {
   type ChatMessage,
   type ProposedAction,
 } from '@/lib/queries/agent';
+import { queryKeys } from '@/lib/query-keys';
 
 // Strip wizard hint text before sending to LLM
 function stripWizardHints(text: string): string {
@@ -73,6 +75,7 @@ export default function AgentPage() {
   const isMutatingRef = useRef(false);
 
   // Session queries
+  const queryClient = useQueryClient();
   const { data: sessions } = useAgentSessions(currentOrgId);
   const createSession = useCreateAgentSession();
   const updateSession = useUpdateAgentSession();
@@ -129,6 +132,17 @@ export default function AgentPage() {
       const title = firstUserMsg
         ? firstUserMsg.content.slice(0, 50) + (firstUserMsg.content.length > 50 ? '...' : '')
         : 'New conversation';
+
+      // Cancel any in-flight session refetches to prevent stale data overwriting local state
+      queryClient.cancelQueries({
+        queryKey: queryKeys.agentSessions.detail(currentOrgId, sessionId),
+      });
+      // Optimistically update the cache so any subsequent refetch sees correct data
+      queryClient.setQueryData(
+        queryKeys.agentSessions.detail(currentOrgId, sessionId),
+        (old: any) => old ? { ...old, messages: msgs, title } : { messages: msgs, title },
+      );
+
       updateSession.mutate(
         {
           orgId: currentOrgId,
@@ -142,7 +156,7 @@ export default function AgentPage() {
         },
       );
     },
-    [currentOrgId, updateSession],
+    [currentOrgId, updateSession, queryClient],
   );
 
   const handleNewChat = async () => {

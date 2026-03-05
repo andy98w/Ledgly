@@ -709,21 +709,21 @@ export class AgentService {
   private describeAction(toolName: string, args: Record<string, any>): string {
     switch (toolName) {
       case 'update_member':
-        return `Update member`;
+        return `Update member${args.name ? ` "${args.name}"` : ''}`;
       case 'update_charge':
         return `Update charge${args.title ? ` "${args.title}"` : ''}`;
       case 'update_expense':
         return `Update expense${args.title ? ` "${args.title}"` : ''}`;
       case 'add_members':
-        return `Add ${args.members?.length || 0} member(s)`;
+        return `Add ${args.members?.length || 0} member(s): ${(args.members || []).slice(0, 3).map((m: any) => m.name).join(', ')}${(args.members?.length || 0) > 3 ? '...' : ''}`;
       case 'create_charges':
-        return `Create charge "${args.title}" ($${((args.amountCents || 0) / 100).toFixed(2)}) for ${args.membershipIds?.length || 0} member(s)`;
+        return `Charge "${args.title}" ($${((args.amountCents || 0) / 100).toFixed(2)}) to ${args.membershipIds?.length || 0} member(s)`;
       case 'create_expense':
         return `Record expense "${args.title}" ($${((args.amountCents || 0) / 100).toFixed(2)})`;
       case 'create_multi_charge':
-        return `Create multi-charge "${args.title}" ($${((args.amountCents || 0) / 100).toFixed(2)}/member) for ${args.membershipIds?.length || 0} member(s)`;
+        return `Charge "${args.title}" ($${((args.amountCents || 0) / 100).toFixed(2)}/each) to ${args.membershipIds?.length || 0} member(s)`;
       case 'create_multi_expense':
-        return `Create multi-expense "${args.title}" with ${args.children?.length || 0} line item(s)`;
+        return `Record "${args.title}" with ${args.children?.length || 0} line item(s)`;
       case 'record_payments':
         return `Record ${args.payments?.length || 0} payment(s)`;
       case 'void_charges':

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { usePathname } from 'next/navigation';
 import { Send, X, Loader2, Sparkles, RotateCcw, Wand2, Paperclip } from 'lucide-react';
 import { useAuthStore, useIsAdminOrTreasurer } from '@/lib/stores/auth';
@@ -30,6 +31,7 @@ import {
   type ChatMessage,
   type ProposedAction,
 } from '@/lib/queries/agent';
+import { queryKeys } from '@/lib/query-keys';
 
 function getStorageKey(orgId: string) {
   return `ai-sidebar-${orgId}`;
@@ -73,6 +75,7 @@ export function AISidebar() {
   const isMutatingRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const queryClient = useQueryClient();
   const createSession = useCreateAgentSession();
   const updateSession = useUpdateAgentSession();
   const confirmActions = useConfirmAgentActions();
@@ -121,6 +124,17 @@ export function AISidebar() {
       const title = firstUserMsg
         ? firstUserMsg.content.slice(0, 50) + (firstUserMsg.content.length > 50 ? '...' : '')
         : 'New conversation';
+
+      // Cancel any in-flight session refetches to prevent stale data overwriting local state
+      queryClient.cancelQueries({
+        queryKey: queryKeys.agentSessions.detail(currentOrgId, sid),
+      });
+      // Optimistically update the cache so any subsequent refetch sees correct data
+      queryClient.setQueryData(
+        queryKeys.agentSessions.detail(currentOrgId, sid),
+        (old: any) => old ? { ...old, messages: msgs, title } : { messages: msgs, title },
+      );
+
       updateSession.mutate(
         {
           orgId: currentOrgId,
@@ -134,7 +148,7 @@ export function AISidebar() {
         },
       );
     },
-    [currentOrgId, updateSession],
+    [currentOrgId, updateSession, queryClient],
   );
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
