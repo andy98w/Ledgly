@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { randomBytes } from 'crypto';
+import { AsyncLocalStorage } from 'async_hooks';
+
+const auditSourceContext = new AsyncLocalStorage<{ source: string }>();
 
 export interface CreateAuditLogDto {
   orgId: string;
@@ -24,7 +27,13 @@ export interface BatchContext {
 export class AuditService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** Run a callback with a source tag that automatically applies to all audit entries created within. */
+  runWithSource<T>(source: string, fn: () => Promise<T>): Promise<T> {
+    return auditSourceContext.run({ source }, fn);
+  }
+
   async create(data: CreateAuditLogDto) {
+    const ctx = auditSourceContext.getStore();
     return this.prisma.auditLog.create({
       data: {
         orgId: data.orgId,
@@ -35,7 +44,7 @@ export class AuditService {
         diffJson: data.diffJson,
         batchId: data.batchId,
         batchDescription: data.batchDescription,
-        source: data.source,
+        source: data.source || ctx?.source,
       },
     });
   }
@@ -71,7 +80,7 @@ export class AuditService {
     const whereClause = {
       orgId,
       ...(entityType && { entityType }),
-      ...(source === 'AI_AGENT' && { source: 'AI_AGENT' }),
+      ...(source === 'LEDGLY_AI' && { source: 'LEDGLY_AI' }),
       ...(source === 'MANUAL' && { source: null }),
     };
 

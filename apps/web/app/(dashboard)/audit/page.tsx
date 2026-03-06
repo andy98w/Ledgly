@@ -134,6 +134,12 @@ function buildEntityDetail(data: Record<string, any>, entityType: string): React
     parts.push(<span key="charge" className="font-medium text-foreground/80">→ "{data.chargeTitle}"</span>);
   }
 
+  // Multi-item indicators
+  if (data.isMultiCharge || data.childCount || data.childrenVoided || data.childrenDeleted || data.childrenRestored) {
+    const count = data.childCount || data.childrenVoided || data.childrenDeleted || data.childrenRestored || 0;
+    parts.push(<span key="multi" className="text-primary/70 font-medium">Multi ({count} items)</span>);
+  }
+
   // Auto-allocated flag
   if (data.autoAllocated) {
     parts.push(<span key="auto" className="text-foreground/50">(auto)</span>);
@@ -306,10 +312,10 @@ function AuditLogCard({
                 <Badge variant="outline" className={cn('text-xs', actionColors[displayAction] || actionColors[log.action])}>
                   {displayAction}
                 </Badge>
-                {log.source === 'AI_AGENT' && (
+                {log.source === 'LEDGLY_AI' && (
                   <Badge variant="outline" className="text-xs bg-violet-500/10 text-violet-500 border-violet-500/30 gap-1">
                     <Sparkles className="h-3 w-3" />
-                    AI
+                    Ledgly AI
                   </Badge>
                 )}
                 {(log.diffJson?.new?.source === 'gmail_auto_import' || log.diffJson?.new?.source === 'auto_confirm') && (
@@ -401,10 +407,10 @@ function BatchAuditLogCard({
                 <Badge variant="secondary" className="text-xs">
                   {batch.itemCount} {(entityTypeLabels[batch.entityType] || batch.entityType).toLowerCase()}{batch.itemCount !== 1 ? 's' : ''}
                 </Badge>
-                {batch.source === 'AI_AGENT' && (
+                {batch.source === 'LEDGLY_AI' && (
                   <Badge variant="outline" className="text-xs bg-violet-500/10 text-violet-500 border-violet-500/30 gap-1">
                     <Sparkles className="h-3 w-3" />
-                    AI
+                    Ledgly AI
                   </Badge>
                 )}
                 {batch.batchDescription?.includes('auto-import') && (
@@ -713,7 +719,7 @@ export default function AuditLogPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Sources</SelectItem>
-                <SelectItem value="AI_AGENT">AI Agent</SelectItem>
+                <SelectItem value="LEDGLY_AI">Ledgly AI</SelectItem>
                 <SelectItem value="MANUAL">Manual</SelectItem>
               </SelectContent>
             </Select>

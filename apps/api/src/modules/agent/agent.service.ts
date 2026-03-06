@@ -210,35 +210,37 @@ export class AgentService {
     actorId: string,
     actions: Array<{ toolName: string; args: Record<string, any> }>,
   ): Promise<Array<{ toolName: string; success: boolean; message: string; details?: any }>> {
-    const batch = this.auditService.createBatchContext('AI Agent action', 'AI_AGENT');
     const results: Array<{ toolName: string; success: boolean; message: string; details?: any; skipped?: Array<{ id: string; reason: string }> }> = [];
 
-    for (const action of actions) {
-      try {
-        const result = await this.executeWriteTool(orgId, actorId, action.toolName, action.args, batch);
-        let message = await this.describeAction(orgId, action.toolName, action.args);
+    // Wrap all agent actions so every audit entry gets source: 'LEDGLY_AI'
+    await this.auditService.runWithSource('LEDGLY_AI', async () => {
+      for (const action of actions) {
+        try {
+          const result = await this.executeWriteTool(orgId, actorId, action.toolName, action.args);
+          let message = await this.describeAction(orgId, action.toolName, action.args);
 
-        // Surface partial failures (e.g. bulkRemove skipped items)
-        const skipped = result?.skipped;
-        if (Array.isArray(skipped) && skipped.length > 0) {
-          message += ` (${skipped.length} skipped: ${skipped.map((s: any) => s.reason).join(', ')})`;
+          // Surface partial failures (e.g. bulkRemove skipped items)
+          const skipped = result?.skipped;
+          if (Array.isArray(skipped) && skipped.length > 0) {
+            message += ` (${skipped.length} skipped: ${skipped.map((s: any) => s.reason).join(', ')})`;
+          }
+
+          results.push({
+            toolName: action.toolName,
+            success: true,
+            message,
+            details: result,
+            skipped,
+          });
+        } catch (err: any) {
+          results.push({
+            toolName: action.toolName,
+            success: false,
+            message: `Failed: ${err.message}`,
+          });
         }
-
-        results.push({
-          toolName: action.toolName,
-          success: true,
-          message,
-          details: result,
-          skipped,
-        });
-      } catch (err: any) {
-        results.push({
-          toolName: action.toolName,
-          success: false,
-          message: `Failed: ${err.message}`,
-        });
       }
-    }
+    });
 
     return results;
   }
@@ -391,7 +393,6 @@ export class AgentService {
     actorId: string,
     toolName: string,
     args: Record<string, any>,
-    batch?: { batchId: string; batchDescription: string },
   ): Promise<any> {
     // ── Input validation ────────────────────────────────────────
     this.validateWriteArgs(toolName, args);

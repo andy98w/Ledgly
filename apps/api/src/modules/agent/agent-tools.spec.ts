@@ -2,8 +2,8 @@ import { agentTools, toolDefinitions, toolMap } from './agent-tools';
 
 describe('Agent tool definitions', () => {
   it('exports correct number of tools', () => {
-    expect(agentTools.length).toBe(20);
-    expect(toolDefinitions.length).toBe(20);
+    expect(agentTools.length).toBe(25);
+    expect(toolDefinitions.length).toBe(25);
   });
 
   it('every tool has a unique name', () => {
@@ -41,6 +41,8 @@ describe('Agent tool definitions', () => {
       'record_payments', 'void_charges', 'remove_members',
       'delete_expenses', 'allocate_payment', 'auto_allocate_payment',
       'import_csv',
+      'restore_charges', 'restore_expenses', 'restore_members',
+      'delete_payments', 'restore_payments',
     ];
     for (const name of writeNames) {
       const tool = toolMap.get(name);
@@ -103,5 +105,30 @@ describe('Agent tool definitions', () => {
   it('list_expenses has no required fields', () => {
     const tool = toolDefinitions.find((t) => t.name === 'list_expenses')!;
     expect(tool.input_schema.required).toEqual([]);
+  });
+
+  it('restore_charges requires chargeIds', () => {
+    const tool = toolDefinitions.find((t) => t.name === 'restore_charges')!;
+    expect(tool.input_schema.required).toContain('chargeIds');
+  });
+
+  it('restore_expenses requires expenseIds', () => {
+    const tool = toolDefinitions.find((t) => t.name === 'restore_expenses')!;
+    expect(tool.input_schema.required).toContain('expenseIds');
+  });
+
+  it('restore_members requires memberIds', () => {
+    const tool = toolDefinitions.find((t) => t.name === 'restore_members')!;
+    expect(tool.input_schema.required).toContain('memberIds');
+  });
+
+  it('delete_payments requires paymentIds', () => {
+    const tool = toolDefinitions.find((t) => t.name === 'delete_payments')!;
+    expect(tool.input_schema.required).toContain('paymentIds');
+  });
+
+  it('restore_payments requires paymentIds', () => {
+    const tool = toolDefinitions.find((t) => t.name === 'restore_payments')!;
+    expect(tool.input_schema.required).toContain('paymentIds');
   });
 });

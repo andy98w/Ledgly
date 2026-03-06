@@ -288,4 +288,72 @@ describe('Audit batch grouping (integration)', () => {
     // Cleanup
     await prisma.auditLog.deleteMany({ where: { orgId, batchId: batch.batchId } });
   });
+
+  // ==================== runWithSource tags audit entries ====================
+
+  it('runWithSource automatically tags audit entries with source', async () => {
+    const { auditService, chargesService, prisma, orgId, membershipId } = ctx;
+
+    // Create a charge inside runWithSource context
+    const charges = await auditService.runWithSource('LEDGLY_AI', () =>
+      chargesService.create(orgId, membershipId, {
+        membershipIds: [membershipId],
+        category: 'DUES' as any,
+        title: 'Source Tag Test',
+        amountCents: 2500,
+      }),
+    );
+    expect(charges.length).toBe(1);
+
+    // Fetch the audit entry and verify source is set
+    const result = await auditService.findByOrg(orgId, { groupByBatch: false });
+    const entry = (result.data as any[]).find((e) => e.entityId === charges[0].id);
+
+    expect(entry).toBeDefined();
+    expect(entry.source).toBe('LEDGLY_AI');
+
+    // Cleanup
+    await prisma.auditLog.deleteMany({ where: { orgId, entityId: charges[0].id } });
+    await prisma.charge.delete({ where: { id: charges[0].id } });
+  });
+
+  it('entries without runWithSource have no source', async () => {
+    const { auditService, chargesService, prisma, orgId, membershipId } = ctx;
+
+    const charges = await chargesService.create(orgId, membershipId, {
+      membershipIds: [membershipId],
+      category: 'DUES' as any,
+      title: 'No Source Test',
+      amountCents: 1500,
+    });
+
+    const result = await auditService.findByOrg(orgId, { groupByBatch: false });
+    const entry = (result.data as any[]).find((e) => e.entityId === charges[0].id);
+
+    expect(entry).toBeDefined();
+    expect(entry.source).toBeNull();
+
+    // Cleanup
+    await prisma.auditLog.deleteMany({ where: { orgId, entityId: charges[0].id } });
+    await prisma.charge.delete({ where: { id: charges[0].id } });
+  });
+
+  it('source filter works for LEDGLY_AI', async () => {
+    const { auditService, prisma, orgId, membershipId } = ctx;
+
+    // Create two entries: one with source, one without
+    await auditService.runWithSource('LEDGLY_AI', () =>
+      auditService.logCreate(orgId, membershipId, 'CHARGE', 'src-ai', { title: 'AI entry' }),
+    );
+    await auditService.logCreate(orgId, membershipId, 'CHARGE', 'src-manual', { title: 'Manual entry' });
+
+    // Filter by LEDGLY_AI
+    const aiResult = await auditService.findByOrg(orgId, { source: 'LEDGLY_AI', groupByBatch: false });
+    const aiEntries = (aiResult.data as any[]).filter((e) => e.entityId === 'src-ai' || e.entityId === 'src-manual');
+    expect(aiEntries.some((e) => e.entityId === 'src-ai')).toBe(true);
+    expect(aiEntries.some((e) => e.entityId === 'src-manual')).toBe(false);
+
+    // Cleanup
+    await prisma.auditLog.deleteMany({ where: { orgId, entityId: { in: ['src-ai', 'src-manual'] } } });
+  });
 });
