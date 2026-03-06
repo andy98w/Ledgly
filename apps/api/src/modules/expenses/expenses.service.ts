@@ -339,17 +339,15 @@ export class ExpensesService {
 
     const now = new Date();
 
-    // Soft-delete the expense and any children
+    // Soft-delete the expense, any children, and parent if this is a child
     const childIds = expense.children.map((c) => c.id);
-    if (childIds.length > 0) {
-      await this.prisma.expense.updateMany({
-        where: { id: { in: childIds } },
-        data: { deletedAt: now },
-      });
+    const allIds = [expenseId, ...childIds];
+    if (expense.parentId) {
+      allIds.push(expense.parentId);
     }
 
-    await this.prisma.expense.update({
-      where: { id: expenseId },
+    await this.prisma.expense.updateMany({
+      where: { id: { in: allIds }, deletedAt: null },
       data: { deletedAt: now },
     });
 
@@ -397,9 +395,12 @@ export class ExpensesService {
       throw new NotFoundException('Expense not found or not deleted');
     }
 
-    // Restore this expense and any deleted children
+    // Restore this expense, any deleted children, and parent if child
     const childIds = expense.children.map((c) => c.id);
     const allIds = [expenseId, ...childIds];
+    if (expense.parentId) {
+      allIds.push(expense.parentId);
+    }
 
     await this.prisma.expense.updateMany({
       where: { id: { in: allIds } },

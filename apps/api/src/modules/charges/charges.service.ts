@@ -505,11 +505,14 @@ export class ChargesService {
       return { success: true };
     }
 
-    // Collect all charge IDs to void (parent + children)
+    // Collect all charge IDs to void (parent + children + parent if child)
     const childIds = charge.children.map((c) => c.id);
     const allIds = [chargeId, ...childIds];
+    if (charge.parentId) {
+      allIds.push(charge.parentId);
+    }
 
-    // Delete allocations and void the charge (and children if parent)
+    // Delete allocations and void the charge (and children if parent, parent if child)
     await this.prisma.$transaction([
       this.prisma.paymentAllocation.deleteMany({
         where: { chargeId: { in: allIds } },
@@ -536,17 +539,28 @@ export class ChargesService {
   async bulkVoid(orgId: string, chargeIds: string[], actorId: string) {
     if (chargeIds.length === 0) return { success: true, voidedCount: 0 };
 
-    // Fetch all target charges in one query, including children
+    // Fetch all target charges in one query, including children and parentId
     const charges = await this.prisma.charge.findMany({
       where: { id: { in: chargeIds }, orgId, status: { not: 'VOID' } },
-      select: { id: true, title: true, amountCents: true, category: true, children: { where: { status: { not: 'VOID' } }, select: { id: true } } },
+      select: { id: true, title: true, amountCents: true, category: true, parentId: true, children: { where: { status: { not: 'VOID' } }, select: { id: true } } },
     });
 
     if (charges.length === 0) return { success: true, voidedCount: 0 };
 
+    // If any are children of a parent, also void the parent (and siblings)
+    const parentIds = [...new Set(charges.map((c) => c.parentId).filter(Boolean))] as string[];
+    const missingParentIds = parentIds.filter((pid) => !chargeIds.includes(pid));
+    if (missingParentIds.length > 0) {
+      const parents = await this.prisma.charge.findMany({
+        where: { id: { in: missingParentIds }, orgId, status: { not: 'VOID' } },
+        select: { id: true, title: true, amountCents: true, category: true, parentId: true, children: { where: { status: { not: 'VOID' } }, select: { id: true } } },
+      });
+      charges.push(...parents);
+    }
+
     // Collect all IDs including children of any parent charges
     const childIds = charges.flatMap((c) => c.children.map((ch) => ch.id));
-    const validIds = [...charges.map((c) => c.id), ...childIds];
+    const validIds = [...new Set([...charges.map((c) => c.id), ...childIds])];
 
     // Batch: delete allocations, void charges + children, and log audit in one transaction
     await this.prisma.$transaction([
@@ -653,12 +667,16 @@ export class ChargesService {
       throw new NotFoundException('Voided charge not found');
     }
 
-    // Restore this charge and any voided children
+    // Restore this charge, any voided children, and parent if this is a child
     const childIds = charge.children.map((c) => c.id);
     const allIds = [chargeId, ...childIds];
 
+    if (charge.parentId) {
+      allIds.push(charge.parentId);
+    }
+
     await this.prisma.charge.updateMany({
-      where: { id: { in: allIds } },
+      where: { id: { in: allIds }, status: 'VOID' },
       data: { status: 'OPEN' },
     });
 
