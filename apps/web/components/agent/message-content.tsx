@@ -229,7 +229,7 @@ function ChargeActionEditor({
     <div className="space-y-2">
       <span className="font-medium text-sm">{action.description}</span>
 
-      <div className="pt-1 space-y-2">
+      <div className="pt-1 -ml-4 space-y-2">
         <FieldRow label="Title">
           <input type="text" value={action.args.title || ''} onChange={(e) => update('title', e.target.value)}
             className="font-medium text-sm bg-transparent border-b border-transparent hover:border-border/60 focus:border-border focus:outline-none transition-colors w-full py-0.5" />
@@ -332,7 +332,7 @@ function ExpenseActionEditor({
   return (
     <div className="space-y-2">
       <span className="font-medium text-sm">{action.description}</span>
-      <div className="pt-1 space-y-2">
+      <div className="pt-1 -ml-4 space-y-2">
         <FieldRow label="Title">
           <input type="text" value={action.args.title || ''} onChange={(e) => update('title', e.target.value)}
             className="font-medium text-sm bg-transparent border-b border-transparent hover:border-border/60 focus:border-border focus:outline-none transition-colors w-full py-0.5" />
@@ -458,7 +458,7 @@ function SingleExpenseEditor({
   return (
     <div className="space-y-2">
       <span className="font-medium text-sm">{action.description}</span>
-      <div className="pt-1 space-y-2">
+      <div className="pt-1 -ml-4 space-y-2">
         <FieldRow label="Title">
           <input type="text" value={action.args.title || ''} onChange={(e) => update('title', e.target.value)}
             className="font-medium text-sm bg-transparent border-b border-transparent hover:border-border/60 focus:border-border focus:outline-none transition-colors w-full py-0.5" />
@@ -526,7 +526,7 @@ function UpdateFieldsEditor({
   return (
     <div className="space-y-2">
       <span className="font-medium text-sm">{action.description}</span>
-      <div className="pt-1 space-y-2">
+      <div className="pt-1 -ml-4 space-y-2">
         {Array.from(fields).map((field) => {
           const oldVal = old[field];
           const newVal = action.args[field];
@@ -622,7 +622,7 @@ function MembersEditor({
   return (
     <div className="space-y-2">
       <span className="font-medium text-sm">{action.description}</span>
-      <div className="pt-1 space-y-2.5">
+      <div className="pt-1 -ml-4 space-y-2.5">
         {members.map((m, idx) => (
           <div key={idx} className="space-y-1">
             <div className="flex items-center gap-2">
@@ -680,7 +680,7 @@ function PaymentsEditor({
   return (
     <div className="space-y-2">
       <span className="font-medium text-sm">{action.description}</span>
-      <div className="pt-1 space-y-2.5">
+      <div className="pt-1 -ml-4 space-y-2.5">
         {payments.map((p, idx) => (
           <div key={idx} className="space-y-1">
             <div className="flex items-center gap-2">
@@ -804,7 +804,7 @@ export function ConfirmationCard({
                 <>
                   <span className="font-medium">{action.description}</span>
                   {action.args._items && action.args._items.length > 0 && (
-                    <div className="mt-1 space-y-2">
+                    <div className="mt-2 -ml-4 space-y-3">
                       {action.args._items.slice(0, 10).map((item: any, i: number) => {
                         const isBulk = action.args._items.length > 1;
                         const content = (
@@ -860,7 +860,7 @@ export function ConfirmationCard({
                           <div key={i}>
                             {content}
                             {isBulk && i < Math.min(action.args._items.length, 10) - 1 && (
-                              <div className="border-t border-border/30 mt-2" />
+                              <div className="border-t border-border/30 mt-3" />
                             )}
                           </div>
                         );
