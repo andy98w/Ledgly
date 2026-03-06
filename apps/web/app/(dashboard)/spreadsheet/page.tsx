@@ -1530,15 +1530,15 @@ export default function SpreadsheetPage() {
               <thead>
                 <tr className="border-b bg-secondary/30">
                   {isAdmin && (
-                    <th className="w-16 pl-5 pr-2 py-3">
-                      <div className="w-14 h-7 flex items-center gap-1">
+                    <th className="w-12 pl-3 pr-1 py-3">
+                      <div className="flex items-center gap-0.5">
                         {selectedRows.size > 0 && (
                           <button
                             onClick={handleDeleteSelected}
-                            className="w-7 h-7 shrink-0 flex items-center justify-center transition-colors hover:text-destructive"
+                            className="w-6 h-6 shrink-0 flex items-center justify-center transition-colors hover:text-destructive"
                             title={`Delete ${selectedRows.size} selected`}
                           >
-                            <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
+                            <Trash2 className="w-3.5 h-3.5 text-muted-foreground hover:text-destructive" />
                           </button>
                         )}
                         {selectedOutstandingCharges.length > 0 && (
@@ -1547,9 +1547,9 @@ export default function SpreadsheetPage() {
                               <TooltipTrigger asChild>
                                 <button
                                   onClick={() => setShowAllocateDialog(true)}
-                                  className="w-7 h-7 shrink-0 flex items-center justify-center transition-colors hover:text-primary"
+                                  className="w-6 h-6 shrink-0 flex items-center justify-center transition-colors hover:text-primary"
                                 >
-                                  <Link2 className="w-4 h-4 text-muted-foreground hover:text-primary" />
+                                  <Link2 className="w-3.5 h-3.5 text-muted-foreground hover:text-primary" />
                                 </button>
                               </TooltipTrigger>
                               <TooltipContent side="bottom">
@@ -1562,7 +1562,7 @@ export default function SpreadsheetPage() {
                     </th>
                   )}
                   <th
-                    className="text-left px-5 py-3 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none w-28"
+                    className="text-left px-3 py-3 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none w-24"
                     onClick={() => {
                       if (sortBy === 'date') {
                         setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -1580,7 +1580,7 @@ export default function SpreadsheetPage() {
                     </span>
                   </th>
                   <th
-                    className="text-left px-5 py-3 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none w-36"
+                    className="text-left px-3 py-3 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none w-32"
                     onClick={() => {
                       if (sortBy === 'member') {
                         setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -1598,7 +1598,7 @@ export default function SpreadsheetPage() {
                     </span>
                   </th>
                   <th
-                    className="text-left px-5 py-3 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none w-28"
+                    className="text-left px-3 py-3 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none w-24"
                     onClick={() => {
                       if (sortBy === 'category') {
                         setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -1615,9 +1615,9 @@ export default function SpreadsheetPage() {
                       )}
                     </span>
                   </th>
-                  <th className="text-left px-5 py-3 font-medium text-muted-foreground w-48 max-w-[12rem]">Title</th>
+                  <th className="text-left px-3 py-3 font-medium text-muted-foreground w-36">Title</th>
                   <th
-                    className="text-right px-5 py-3 font-medium text-success cursor-pointer hover:text-success/80 select-none w-24"
+                    className="text-right px-3 py-3 font-medium text-success cursor-pointer hover:text-success/80 select-none w-24"
                     onClick={() => {
                       if (sortBy === 'income') {
                         setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -1636,7 +1636,7 @@ export default function SpreadsheetPage() {
                     </span>
                   </th>
                   <th
-                    className="text-right px-5 py-3 font-medium text-warning cursor-pointer hover:text-warning/80 select-none w-24"
+                    className="text-right px-3 py-3 font-medium text-warning cursor-pointer hover:text-warning/80 select-none w-24"
                     onClick={() => {
                       if (sortBy === 'outstanding') {
                         setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -1655,7 +1655,7 @@ export default function SpreadsheetPage() {
                     </span>
                   </th>
                   <th
-                    className="text-right pl-5 pr-8 py-3 font-medium text-destructive cursor-pointer hover:text-destructive/80 select-none w-24"
+                    className="text-right pl-3 pr-5 py-3 font-medium text-destructive cursor-pointer hover:text-destructive/80 select-none w-24"
                     onClick={() => {
                       if (sortBy === 'expense') {
                         setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -1679,31 +1679,31 @@ export default function SpreadsheetPage() {
                 {/* Inline New Row */}
                 {isAdmin && inlineNewRow && (
                   <tr className="border-b border-border/50 bg-primary/5 animate-in fade-in slide-in-from-top-1 duration-200">
-                    <td className="pl-5 pr-2 py-2">
+                    <td className="pl-3 pr-1 py-2">
                       <div className="flex items-center gap-1">
                         <button
                           onClick={handleSaveInlineRow}
-                          className="w-7 h-7 flex items-center justify-center transition-colors hover:text-success text-success/70"
+                          className="w-6 h-6 flex items-center justify-center transition-colors hover:text-success text-success/70"
                           title="Save row"
                           disabled={createCharge.isPending || createExpense.isPending || createPayment.isPending}
                         >
                           {(createCharge.isPending || createExpense.isPending || createPayment.isPending) ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
                           ) : (
-                            <Check className="w-4 h-4" />
+                            <Check className="w-3.5 h-3.5" />
                           )}
                         </button>
                         <button
                           onClick={handleCancelInlineRow}
-                          className="w-7 h-7 flex items-center justify-center transition-colors text-muted-foreground hover:text-destructive"
+                          className="w-6 h-6 flex items-center justify-center transition-colors text-muted-foreground hover:text-destructive"
                           title="Cancel"
                         >
-                          <Minus className="w-4 h-4" />
+                          <Minus className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </td>
                     {/* Type selector */}
-                    <td className="px-5 py-2 w-28">
+                    <td className="px-3 py-2 w-24">
                       <Select value={newRowType} onValueChange={(v) => {
                         const val = v as typeof newRowType;
                         if (val === 'multi-charge') {
@@ -1720,7 +1720,7 @@ export default function SpreadsheetPage() {
                         setNewRowData(d => ({ ...d, category: '' }));
                         setInlineNewRowField('date');
                       }}>
-                        <SelectTrigger className="h-7 text-xs bg-transparent border-border/50 w-28">
+                        <SelectTrigger className="h-7 text-xs bg-transparent border-border/50 w-24">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -1733,7 +1733,7 @@ export default function SpreadsheetPage() {
                       </Select>
                     </td>
                     {/* Member */}
-                    <td className="px-5 py-2 w-36">
+                    <td className="px-3 py-2 w-32">
                       {newRowType === 'expense' ? (
                         <input
                           placeholder="Vendor..."
@@ -1765,7 +1765,7 @@ export default function SpreadsheetPage() {
                       )}
                     </td>
                     {/* Category */}
-                    <td className="px-5 py-2 w-28">
+                    <td className="px-3 py-2 w-24">
                       {newRowType === 'payment' ? (
                         <span className="text-xs text-muted-foreground">—</span>
                       ) : (
@@ -1785,7 +1785,7 @@ export default function SpreadsheetPage() {
                       )}
                     </td>
                     {/* Title */}
-                    <td className="px-5 py-2 w-48">
+                    <td className="px-3 py-2 w-36">
                       <input
                         placeholder={newRowType === 'payment' ? 'Memo...' : 'Title...'}
                         value={newRowType === 'payment' ? newRowData.memo : newRowData.description}
@@ -1804,7 +1804,7 @@ export default function SpreadsheetPage() {
                       />
                     </td>
                     {/* Amount cells (spans 3 columns) */}
-                    <td className="px-5 py-2 text-right w-24" colSpan={3}>
+                    <td className="px-3 py-2 text-right w-24" colSpan={3}>
                       <div className="flex items-center justify-end gap-1">
                         <span className="text-xs text-muted-foreground">$</span>
                         <input
@@ -1831,26 +1831,26 @@ export default function SpreadsheetPage() {
                 {/* Select All / Add Row */}
                 {isAdmin && !isLoading && (
                   <tr className="border-b border-border/50 bg-secondary/20 hover:bg-secondary/40 transition-colors">
-                    <td className="pl-5 pr-2 py-2">
+                    <td className="pl-3 pr-1 py-2">
                       <div className="flex items-center gap-1">
                         {!inlineNewRow && (
                           <button
                             onClick={handleStartInlineRow}
-                            className="w-7 h-7 flex items-center justify-center transition-colors hover:text-primary"
+                            className="w-6 h-6 flex items-center justify-center transition-colors hover:text-primary"
                             title="Add new row"
                           >
-                            <Plus className="w-4 h-4 text-muted-foreground hover:text-primary" />
+                            <Plus className="w-3.5 h-3.5 text-muted-foreground hover:text-primary" />
                           </button>
                         )}
                         <button
                           onClick={toggleSelectAll}
-                          className="w-7 h-7 flex items-center justify-center transition-colors hover:text-primary"
+                          className="w-6 h-6 flex items-center justify-center transition-colors hover:text-primary"
                           title={isAllSelected ? "Deselect all" : "Select all"}
                         >
                           {isAllSelected ? (
-                            <CheckCircle2 className="w-4 h-4 text-primary" />
+                            <CheckCircle2 className="w-3.5 h-3.5 text-primary" />
                           ) : (
-                            <Circle className="w-4 h-4 text-muted-foreground hover:text-primary" />
+                            <Circle className="w-3.5 h-3.5 text-muted-foreground hover:text-primary" />
                           )}
                         </button>
                       </div>
@@ -1861,14 +1861,14 @@ export default function SpreadsheetPage() {
                 {isLoading ? (
                   Array.from({ length: 5 }).map((_, i) => (
                     <tr key={i} className="border-b border-border/50">
-                      {isAdmin && <td className="pl-5 pr-2 py-3"><Skeleton className="h-7 w-14" /></td>}
-                      <td className="px-5 py-3"><Skeleton className="h-4 w-20" /></td>
-                      <td className="px-5 py-3"><Skeleton className="h-5 w-20" /></td>
-                      <td className="px-5 py-3"><Skeleton className="h-4 w-40" /></td>
-                      <td className="px-5 py-3"><Skeleton className="h-4 w-24" /></td>
-                      <td className="px-5 py-3"><Skeleton className="h-4 w-16 ml-auto" /></td>
-                      <td className="px-5 py-3"><Skeleton className="h-4 w-16 ml-auto" /></td>
-                      <td className="pl-5 pr-8 py-3"><Skeleton className="h-4 w-16 ml-auto" /></td>
+                      {isAdmin && <td className="pl-3 pr-1 py-3"><Skeleton className="h-7 w-14" /></td>}
+                      <td className="px-3 py-3"><Skeleton className="h-4 w-20" /></td>
+                      <td className="px-3 py-3"><Skeleton className="h-5 w-20" /></td>
+                      <td className="px-3 py-3"><Skeleton className="h-4 w-40" /></td>
+                      <td className="px-3 py-3"><Skeleton className="h-4 w-24" /></td>
+                      <td className="px-3 py-3"><Skeleton className="h-4 w-16 ml-auto" /></td>
+                      <td className="px-3 py-3"><Skeleton className="h-4 w-16 ml-auto" /></td>
+                      <td className="pl-3 pr-5 py-3"><Skeleton className="h-4 w-16 ml-auto" /></td>
                     </tr>
                   ))
                 ) : paginatedRows.length === 0 ? (
@@ -1891,41 +1891,41 @@ export default function SpreadsheetPage() {
                       )}
                     >
                       {isAdmin && (
-                        <td className="pl-5 pr-2 py-2">
+                        <td className="pl-3 pr-1 py-2">
                           <div className="flex items-center gap-1">
                             {row.isParent ? (
                               <button
                                 onClick={() => toggleParentExpand(row.id)}
-                                className="w-7 h-7 flex items-center justify-center transition-colors hover:text-primary"
+                                className="w-6 h-6 flex items-center justify-center transition-colors hover:text-primary"
                                 title={expandedParents.has(row.id) ? 'Collapse' : 'Expand'}
                               >
                                 {expandedParents.has(row.id) ? (
-                                  <ChevronDown className="w-4 h-4 text-primary" />
+                                  <ChevronDown className="w-3.5 h-3.5 text-primary" />
                                 ) : (
-                                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                                  <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
                                 )}
                               </button>
                             ) : (
-                              <div className="w-7 h-7" />
+                              <div className="w-6 h-6" />
                             )}
                             {!row.isChild && (
                               <>
                                 <button
                                   onClick={() => handleDeleteRow(row)}
-                                  className="w-7 h-7 flex items-center justify-center transition-colors hover:text-destructive"
+                                  className="w-6 h-6 flex items-center justify-center transition-colors hover:text-destructive"
                                   title="Delete row"
                                 >
-                                  <Minus className="w-4 h-4 text-muted-foreground hover:text-destructive" />
+                                  <Minus className="w-3.5 h-3.5 text-muted-foreground hover:text-destructive" />
                                 </button>
                                 <button
                                   onClick={() => toggleRowSelection(row.id)}
-                                  className="w-7 h-7 flex items-center justify-center transition-colors"
+                                  className="w-6 h-6 flex items-center justify-center transition-colors"
                                   title={selectedRows.has(row.id) ? "Deselect" : "Select"}
                                 >
                                   {selectedRows.has(row.id) ? (
-                                    <CheckCircle2 className="w-4 h-4 text-primary" />
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-primary" />
                                   ) : (
-                                    <Circle className="w-4 h-4 text-muted-foreground hover:text-primary" />
+                                    <Circle className="w-3.5 h-3.5 text-muted-foreground hover:text-primary" />
                                   )}
                                 </button>
                               </>
@@ -1933,7 +1933,7 @@ export default function SpreadsheetPage() {
                           </div>
                         </td>
                       )}
-                      <td className="px-5 py-3 w-28">
+                      <td className="px-3 py-3 w-24">
                         <div className="flex items-center gap-1">
                           {!isAdmin && row.isParent && (
                             <button
@@ -1961,7 +1961,7 @@ export default function SpreadsheetPage() {
                           />
                         </div>
                       </td>
-                      <td className="px-5 py-3 w-36">
+                      <td className="px-3 py-3 w-32">
                         {row.type === 'charge' || row.type === 'payment' ? (
                           <EditableCell
                             value={row.membershipId || ''}
@@ -1992,7 +1992,7 @@ export default function SpreadsheetPage() {
                           />
                         )}
                       </td>
-                      <td className="px-5 py-3 w-28">
+                      <td className="px-3 py-3 w-24">
                         {row.type === 'payment' ? (
                           <span className="text-xs text-muted-foreground">{row.category}</span>
                         ) : (
@@ -2010,7 +2010,7 @@ export default function SpreadsheetPage() {
                           />
                         )}
                       </td>
-                      <td className={cn("px-5 py-3 w-48 max-w-[12rem]", row.isChild && "pl-10")}>
+                      <td className={cn("px-3 py-3 w-36", row.isChild && "pl-10")}>
                         <div className="flex items-center gap-2 min-w-0">
                           {row.isParent && (
                             <Badge variant="outline" className="text-[10px] shrink-0 bg-primary/10 text-primary border-primary/30">
@@ -2036,7 +2036,7 @@ export default function SpreadsheetPage() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-5 py-3 text-right w-24">
+                      <td className="px-3 py-3 text-right w-24">
                         {row.incomeCents > 0 ? (
                           row.type === 'charge' ? (
                             // Charge income = allocated payments (not editable, show payer tooltip)
@@ -2083,7 +2083,7 @@ export default function SpreadsheetPage() {
                           <span className="text-muted-foreground/30">-</span>
                         )}
                       </td>
-                      <td className="px-5 py-3 text-right w-24">
+                      <td className="px-3 py-3 text-right w-24">
                         {row.outstandingCents > 0 ? (
                           <EditableCell
                             value={row.outstandingCents}
@@ -2101,7 +2101,7 @@ export default function SpreadsheetPage() {
                           <span className="text-muted-foreground/30">-</span>
                         )}
                       </td>
-                      <td className="pl-5 pr-8 py-3 text-right w-24">
+                      <td className="pl-3 pr-5 py-3 text-right w-24">
                         {row.expenseCents > 0 ? (
                           <EditableCell
                             value={row.expenseCents}
@@ -2127,16 +2127,16 @@ export default function SpreadsheetPage() {
               {!isLoading && rows.length > 0 && (
                 <tfoot>
                   <tr className="bg-secondary/50 font-medium">
-                    <td className="px-5 py-3" colSpan={isAdmin ? 5 : 4}>
+                    <td className="px-3 py-3" colSpan={isAdmin ? 5 : 4}>
                       <span className="text-muted-foreground">Total ({rows.length} transactions)</span>
                     </td>
-                    <td className="px-5 py-3 text-right">
+                    <td className="px-3 py-3 text-right">
                       <Money cents={totals.income} size="sm" className="text-success font-semibold" />
                     </td>
-                    <td className="px-5 py-3 text-right">
+                    <td className="px-3 py-3 text-right">
                       <Money cents={totals.outstanding} size="sm" className="text-warning font-semibold" />
                     </td>
-                    <td className="px-5 py-3 text-right">
+                    <td className="px-3 py-3 text-right">
                       <Money cents={totals.expenses} size="sm" className="text-destructive font-semibold" />
                     </td>
                   </tr>
