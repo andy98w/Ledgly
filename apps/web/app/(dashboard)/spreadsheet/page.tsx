@@ -1676,6 +1676,39 @@ export default function SpreadsheetPage() {
                 </tr>
               </thead>
               <tbody>
+                {/* Select All / Add Row */}
+                {isAdmin && !isLoading && (
+                  <tr className="border-b border-border/50 bg-secondary/20 hover:bg-secondary/40 transition-colors">
+                    <td className="pl-3 pr-1 py-2">
+                      <div className="flex items-center gap-1">
+                        <div className="w-6 h-6" />
+                        {!inlineNewRow ? (
+                          <button
+                            onClick={handleStartInlineRow}
+                            className="w-6 h-6 flex items-center justify-center transition-colors hover:text-primary"
+                            title="Add new row"
+                          >
+                            <Plus className="w-3.5 h-3.5 text-muted-foreground hover:text-primary" />
+                          </button>
+                        ) : (
+                          <div className="w-6 h-6" />
+                        )}
+                        <button
+                          onClick={toggleSelectAll}
+                          className="w-6 h-6 flex items-center justify-center transition-colors hover:text-primary"
+                          title={isAllSelected ? "Deselect all" : "Select all"}
+                        >
+                          {isAllSelected ? (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-primary" />
+                          ) : (
+                            <Circle className="w-3.5 h-3.5 text-muted-foreground hover:text-primary" />
+                          )}
+                        </button>
+                      </div>
+                    </td>
+                    <td colSpan={7}></td>
+                  </tr>
+                )}
                 {/* Inline New Row */}
                 {isAdmin && inlineNewRow && (
                   <tr className="border-b border-border/50 bg-primary/5 animate-in fade-in slide-in-from-top-1 duration-200">
@@ -1826,36 +1859,6 @@ export default function SpreadsheetPage() {
                         />
                       </div>
                     </td>
-                  </tr>
-                )}
-                {/* Select All / Add Row */}
-                {isAdmin && !isLoading && (
-                  <tr className="border-b border-border/50 bg-secondary/20 hover:bg-secondary/40 transition-colors">
-                    <td className="pl-3 pr-1 py-2">
-                      <div className="flex items-center gap-1">
-                        {!inlineNewRow && (
-                          <button
-                            onClick={handleStartInlineRow}
-                            className="w-6 h-6 flex items-center justify-center transition-colors hover:text-primary"
-                            title="Add new row"
-                          >
-                            <Plus className="w-3.5 h-3.5 text-muted-foreground hover:text-primary" />
-                          </button>
-                        )}
-                        <button
-                          onClick={toggleSelectAll}
-                          className="w-6 h-6 flex items-center justify-center transition-colors hover:text-primary"
-                          title={isAllSelected ? "Deselect all" : "Select all"}
-                        >
-                          {isAllSelected ? (
-                            <CheckCircle2 className="w-3.5 h-3.5 text-primary" />
-                          ) : (
-                            <Circle className="w-3.5 h-3.5 text-muted-foreground hover:text-primary" />
-                          )}
-                        </button>
-                      </div>
-                    </td>
-                    <td colSpan={7}></td>
                   </tr>
                 )}
                 {isLoading ? (
