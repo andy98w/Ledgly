@@ -390,14 +390,19 @@ export class ExpensesService {
   async restore(orgId: string, expenseId: string, actorId?: string) {
     const expense = await this.prisma.expense.findFirst({
       where: { id: expenseId, orgId, deletedAt: { not: null } },
+      include: { children: { where: { deletedAt: { not: null } }, select: { id: true } } },
     });
 
     if (!expense) {
       throw new NotFoundException('Expense not found or not deleted');
     }
 
-    await this.prisma.expense.update({
-      where: { id: expenseId },
+    // Restore this expense and any deleted children
+    const childIds = expense.children.map((c) => c.id);
+    const allIds = [expenseId, ...childIds];
+
+    await this.prisma.expense.updateMany({
+      where: { id: { in: allIds } },
       data: { deletedAt: null },
     });
 
@@ -409,6 +414,7 @@ export class ExpensesService {
         category: expense.category,
         vendor: expense.vendor,
         restored: true,
+        childrenRestored: childIds.length,
       });
     }
 

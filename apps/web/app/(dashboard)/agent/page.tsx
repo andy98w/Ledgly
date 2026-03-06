@@ -239,7 +239,9 @@ export default function AgentPage() {
                   if (!r.success || !r.details) continue;
                   const d = r.details;
                   if (r.toolName === 'create_charges' || r.toolName === 'create_multi_charge') {
-                    const ids = Array.isArray(d) ? d.map((c: any) => c.id) : d.children?.map((c: any) => c.id) || [];
+                    const ids = Array.isArray(d)
+                      ? d.map((c: any) => c.id)
+                      : [d.parent?.id, ...(d.children?.map((c: any) => c.id) || [])].filter(Boolean);
                     if (ids.length) parts.push(`created charges [${ids.join(', ')}]`);
                   } else if (r.toolName === 'create_expense') {
                     if (d.id) parts.push(`created expense [${d.id}]`);

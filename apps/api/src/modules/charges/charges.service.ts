@@ -646,14 +646,19 @@ export class ChargesService {
   async restore(orgId: string, chargeId: string, actorId?: string) {
     const charge = await this.prisma.charge.findFirst({
       where: { id: chargeId, orgId, status: 'VOID' },
+      include: { children: { where: { status: 'VOID' }, select: { id: true } } },
     });
 
     if (!charge) {
       throw new NotFoundException('Voided charge not found');
     }
 
-    await this.prisma.charge.update({
-      where: { id: chargeId },
+    // Restore this charge and any voided children
+    const childIds = charge.children.map((c) => c.id);
+    const allIds = [chargeId, ...childIds];
+
+    await this.prisma.charge.updateMany({
+      where: { id: { in: allIds } },
       data: { status: 'OPEN' },
     });
 
@@ -664,6 +669,7 @@ export class ChargesService {
         amountCents: charge.amountCents,
         category: charge.category,
         restored: true,
+        childrenRestored: childIds.length,
       });
     }
 
