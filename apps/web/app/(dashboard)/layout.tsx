@@ -36,6 +36,7 @@ export default function DashboardLayout({
   const startTutorial = useTutorialStore((s) => s.start);
   const isCollapsed = useSidebarStore((s) => s.isCollapsed);
   const isAISidebarOpen = useAISidebarStore((s) => s.isOpen);
+  const aiSidebarWidth = useAISidebarStore((s) => s.width);
   const isMutating = useIsMutating();
   const { showHelp, setShowHelp } = useKeyboardShortcuts();
 
@@ -96,7 +97,10 @@ export default function DashboardLayout({
       )}
       <Sidebar />
       <Header />
-      <main className={`pb-20 md:pb-0 transition-all duration-300 ${isCollapsed ? 'md:pl-[68px]' : 'md:pl-64'} ${isAISidebarOpen && pathname !== '/agent' && !pathname.startsWith('/settings') ? 'md:pr-[400px]' : ''}`}>
+      <main
+        className={`pb-20 md:pb-0 transition-all duration-300 ${isCollapsed ? 'md:pl-[68px]' : 'md:pl-64'}`}
+        style={{ paddingRight: isAISidebarOpen && pathname !== '/agent' && !pathname.startsWith('/settings') ? `${aiSidebarWidth}px` : undefined }}
+      >
         {pathname === '/agent' ? (
           <div className="h-screen pt-6 px-2 md:px-4">{children}</div>
         ) : (

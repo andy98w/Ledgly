@@ -5,7 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { usePathname } from 'next/navigation';
 import { Send, X, Loader2, Sparkles, RotateCcw, Wand2, Paperclip } from 'lucide-react';
 import { useAuthStore, useIsAdminOrTreasurer } from '@/lib/stores/auth';
-import { useAISidebarStore } from '@/lib/stores/ai-sidebar';
+import { useAISidebarStore, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH } from '@/lib/stores/ai-sidebar';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -52,7 +52,7 @@ export function AISidebar() {
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
   const user = useAuthStore((s) => s.user);
   const userName = user?.name || user?.email || 'You';
-  const { isOpen, close, toggle } = useAISidebarStore();
+  const { isOpen, close, toggle, width, setWidth } = useAISidebarStore();
 
   const hidden = !isAdmin || !currentOrgId || pathname === '/agent' || pathname.startsWith('/settings');
 
@@ -70,6 +70,7 @@ export function AISidebar() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const isMutatingRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isResizing = useRef(false);
 
   const queryClient = useQueryClient();
   const createSession = useCreateAgentSession();
@@ -109,6 +110,32 @@ export function AISidebar() {
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [isOpen]);
+
+  // Resize drag handler
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizing.current = true;
+    const startX = e.clientX;
+    const startWidth = width;
+
+    const onMove = (ev: MouseEvent) => {
+      if (!isResizing.current) return;
+      const delta = startX - ev.clientX;
+      setWidth(startWidth + delta);
+    };
+    const onUp = () => {
+      isResizing.current = false;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, [width, setWidth]);
 
   const saveMessages = useCallback(
     (msgs: DisplayMessage[], sid: string | null) => {
@@ -412,10 +439,16 @@ export function AISidebar() {
         className={cn(
           'fixed z-40 bg-background flex flex-col transition-[right] duration-300 ease-in-out',
           // Desktop
-          'max-md:hidden md:top-0 md:bottom-0 md:w-[400px] md:border-l md:border-border',
-          isOpen ? 'md:right-0' : 'md:-right-[400px]',
+          'max-md:hidden md:top-0 md:bottom-0 md:border-l md:border-border',
+          isOpen ? 'md:right-0' : 'md:-right-[var(--sidebar-w)]',
         )}
+        style={{ '--sidebar-w': `${width}px`, width: `${width}px` } as React.CSSProperties}
       >
+        {/* Resize handle */}
+        <div
+          onMouseDown={handleResizeStart}
+          className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors z-50 hidden md:block"
+        />
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card/50 shrink-0">
           <div className="flex items-center gap-2">
