@@ -256,8 +256,9 @@ export function useConfirmAgentActions() {
       actions: Array<{ toolName: string; args: Record<string, any> }>;
     }) => confirmAgentActions(orgId, actions),
     onSuccess: (_, { orgId, actions }) => {
-      // Always invalidate dashboard
+      // Always invalidate dashboard + audit
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all(orgId) });
       // Invalidate per-tool query keys
       const seen = new Set<string>();
       for (const action of actions) {

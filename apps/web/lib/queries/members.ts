@@ -53,6 +53,7 @@ export function useCreateMembers() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.members.all(variables.orgId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all(variables.orgId) });
     },
   });
 }
@@ -71,8 +72,8 @@ export function useUpdateMember() {
       data: { name?: string; role?: string; status?: string; paymentAliases?: string[] };
     }) => api.patch(`/organizations/${orgId}/members/${memberId}`, data),
     onSuccess: (_, variables) => {
-      // Only invalidate members — no need to refetch dashboard for member metadata changes
       queryClient.invalidateQueries({ queryKey: queryKeys.members.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all(variables.orgId) });
     },
   });
 }
@@ -86,6 +87,7 @@ export function useDeleteMember() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.members.all(variables.orgId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all(variables.orgId) });
     },
   });
 }
@@ -99,6 +101,7 @@ export function useRestoreMember() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.members.all(variables.orgId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all(variables.orgId) });
     },
   });
 }
@@ -115,6 +118,7 @@ export function useBulkDeleteMembers() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.members.all(variables.orgId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all(variables.orgId) });
     },
   });
 }
@@ -127,6 +131,7 @@ export function useApproveMember() {
       api.post(`/organizations/${orgId}/members/${memberId}/approve`),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.members.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all(variables.orgId) });
     },
   });
 }
