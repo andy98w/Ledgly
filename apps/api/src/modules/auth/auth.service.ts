@@ -84,11 +84,16 @@ export class AuthService {
       data: { usedAt: new Date() },
     });
 
-    // Reset lockout on successful magic link sign-in
-    if (magicToken.user.failedLoginAttempts > 0 || magicToken.user.lockedUntil) {
+    // Reset lockout on successful magic link sign-in + auto-verify email
+    const updateData: any = {};
+    if (magicToken.user.failedLoginAttempts > 0) updateData.failedLoginAttempts = 0;
+    if (magicToken.user.lockedUntil) updateData.lockedUntil = null;
+    if (!magicToken.user.emailVerifiedAt) updateData.emailVerifiedAt = new Date();
+
+    if (Object.keys(updateData).length > 0) {
       await this.prisma.user.update({
         where: { id: magicToken.user.id },
-        data: { failedLoginAttempts: 0, lockedUntil: null },
+        data: updateData,
       });
     }
 
@@ -263,7 +268,7 @@ export class AuthService {
     }
   }
 
-  async register(email: string, password: string, name: string, ip?: string, userAgent?: string): Promise<{ accessToken: string; refreshToken: string; user: any }> {
+  async register(email: string, password: string, name: string, ip?: string, userAgent?: string): Promise<{ pendingVerification: true; email: string }> {
     this.validatePasswordStrength(password);
 
     const normalizedEmail = email.toLowerCase().trim();
@@ -294,12 +299,95 @@ export class AuthService {
     // Link pending invitations
     await this.linkPendingInvitations(normalizedEmail, user.id);
 
-    const tokens = await this.generateTokenPair(user);
-    const authUser = await this.getAuthUser(user.id);
+    // Generate verification token (24h) and send email
+    const token = randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    await this.prisma.magicToken.create({
+      data: { token, userId: user.id, type: 'EMAIL_VERIFY', expiresAt },
+    });
+
+    await this.emailService.sendEmailVerification(normalizedEmail, name, token);
 
     this.authEvents.log({ userId: user.id, email: user.email, event: 'REGISTER', ipAddress: ip, userAgent });
 
+    return { pendingVerification: true, email: normalizedEmail };
+  }
+
+  async verifyEmail(token: string, ip?: string, userAgent?: string): Promise<{ accessToken: string; refreshToken: string; user: any }> {
+    const magicToken = await this.prisma.magicToken.findUnique({
+      where: { token },
+      include: { user: true },
+    });
+
+    if (!magicToken || magicToken.type !== 'EMAIL_VERIFY') {
+      throw new UnauthorizedException('Invalid or expired verification link');
+    }
+
+    if (magicToken.usedAt) {
+      throw new UnauthorizedException('This verification link has already been used');
+    }
+
+    if (magicToken.expiresAt < new Date()) {
+      throw new UnauthorizedException('This verification link has expired');
+    }
+
+    // Mark token as used and verify the user
+    await this.prisma.$transaction([
+      this.prisma.magicToken.update({
+        where: { id: magicToken.id },
+        data: { usedAt: new Date() },
+      }),
+      this.prisma.user.update({
+        where: { id: magicToken.user.id },
+        data: { emailVerifiedAt: new Date() },
+      }),
+    ]);
+
+    const tokens = await this.generateTokenPair(magicToken.user);
+    const authUser = await this.getAuthUser(magicToken.user.id);
+
+    this.authEvents.log({ userId: magicToken.user.id, email: magicToken.user.email, event: 'EMAIL_VERIFIED', ipAddress: ip, userAgent });
+
     return { ...tokens, user: authUser };
+  }
+
+  async resendVerification(email: string): Promise<{ message: string }> {
+    const normalizedEmail = email.toLowerCase().trim();
+
+    const user = await this.prisma.user.findUnique({
+      where: { email: normalizedEmail },
+    });
+
+    // Always return success to prevent email enumeration
+    if (!user || user.emailVerifiedAt) {
+      return { message: 'If an unverified account exists, a new verification email has been sent' };
+    }
+
+    // Rate limit: max 3 verification emails per hour
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const recentTokens = await this.prisma.magicToken.count({
+      where: {
+        userId: user.id,
+        type: 'EMAIL_VERIFY',
+        createdAt: { gte: oneHourAgo },
+      },
+    });
+
+    if (recentTokens >= 3) {
+      return { message: 'If an unverified account exists, a new verification email has been sent' };
+    }
+
+    const token = randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    await this.prisma.magicToken.create({
+      data: { token, userId: user.id, type: 'EMAIL_VERIFY', expiresAt },
+    });
+
+    await this.emailService.sendEmailVerification(normalizedEmail, user.name || '', token);
+
+    return { message: 'If an unverified account exists, a new verification email has been sent' };
   }
 
   private async linkPendingInvitations(email: string, userId: string) {
@@ -374,6 +462,12 @@ export class AuthService {
         where: { id: user.id },
         data: { failedLoginAttempts: 0, lockedUntil: null },
       });
+    }
+
+    // Block unverified users — resend verification email
+    if (!user.emailVerifiedAt) {
+      await this.resendVerification(normalizedEmail);
+      throw new UnauthorizedException('Please verify your email before signing in. A new verification link has been sent.');
     }
 
     const tokens = await this.generateTokenPair(user);

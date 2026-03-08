@@ -1,25 +1,21 @@
 'use client';
 
 import { useState, useEffect, useMemo, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { ArrowRight, Loader2, Mail, AlertCircle, Eye, EyeOff, Check, X, Users } from 'lucide-react';
-import { useRegister, useResolveInvite } from '@/lib/queries/auth';
-import { useJoinOrganization, useResolveJoinCode } from '@/lib/queries/organizations';
-import { useAuthStore } from '@/lib/stores/auth';
-import { getPostLoginRedirect } from '@/lib/utils/auth-redirect';
+import { useRegister, useResolveInvite, useResendVerification } from '@/lib/queries/auth';
+import { useResolveJoinCode } from '@/lib/queries/organizations';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
 
 function RegisterForm() {
-  const router = useRouter();
   const { toast } = useToast();
   const register = useRegister();
-  const joinOrg = useJoinOrganization();
-  const setCurrentOrgId = useAuthStore((s) => s.setCurrentOrgId);
+  const resendVerification = useResendVerification();
   const searchParams = useSearchParams();
 
   const inviteToken = searchParams.get('invite');
@@ -36,6 +32,7 @@ function RegisterForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
 
   const passwordChecks = useMemo(() => ({
     length: password.length >= 8,
@@ -75,20 +72,7 @@ function RegisterForm() {
         password,
       });
 
-      // Auto-join if joinCode param present
-      if (joinCode) {
-        try {
-          const result = await joinOrg.mutateAsync(joinCode);
-          setCurrentOrgId(result.orgId);
-          toast({ title: result.status === 'PENDING' ? 'Join request sent!' : `Joined ${result.orgName}!` });
-          window.location.href = '/portal';
-          return;
-        } catch {
-          // Join failed — continue with normal redirect
-        }
-      }
-
-      router.push(getPostLoginRedirect(data.user));
+      setPendingEmail(data.email);
     } catch (error: any) {
       toast({
         title: 'Registration failed',
@@ -97,6 +81,48 @@ function RegisterForm() {
       });
     }
   };
+
+  // Pending email verification screen
+  if (pendingEmail) {
+    return (
+      <div className="text-center animate-in-up">
+        <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-primary flex items-center justify-center shadow-lg">
+          <Mail className="w-10 h-10 text-primary-foreground" />
+        </div>
+        <h1 className="text-2xl font-bold mb-2">Check your email</h1>
+        <p className="text-muted-foreground mb-6">
+          We sent a verification link to{' '}
+          <span className="text-foreground font-medium">{pendingEmail}</span>
+        </p>
+        <p className="text-sm text-muted-foreground mb-8">
+          Click the link in your email to activate your account. The link expires in 24 hours.
+        </p>
+        <Button
+          variant="outline"
+          onClick={() => {
+            resendVerification.mutate(pendingEmail, {
+              onSuccess: () => toast({ title: 'Verification email resent' }),
+              onError: () => toast({ title: 'Could not resend', variant: 'destructive' }),
+            });
+          }}
+          disabled={resendVerification.isPending}
+          className="w-full mb-3"
+        >
+          {resendVerification.isPending ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Resending...
+            </>
+          ) : (
+            'Resend verification email'
+          )}
+        </Button>
+        <Link href="/login" className="text-sm text-primary font-medium hover:underline">
+          Back to sign in
+        </Link>
+      </div>
+    );
+  }
 
   // Loading state while resolving invite token
   if (inviteToken && inviteLoading) {

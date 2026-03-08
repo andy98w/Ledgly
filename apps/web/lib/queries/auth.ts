@@ -9,6 +9,11 @@ interface AuthResponse {
   user: AuthUser;
 }
 
+interface RegisterResponse {
+  pendingVerification: true;
+  email: string;
+}
+
 /** Only update currentOrgId if the persisted one is missing or stale */
 function ensureCurrentOrg(user: AuthUser) {
   const { currentOrgId, setCurrentOrgId } = useAuthStore.getState();
@@ -44,8 +49,22 @@ export function useMe() {
 export function useRegister() {
   return useMutation({
     mutationFn: (data: { email: string; password: string; name: string }) =>
-      api.post<AuthResponse>('/auth/register', data),
+      api.post<RegisterResponse>('/auth/register', data),
+  });
+}
+
+export function useVerifyEmail() {
+  return useMutation({
+    mutationFn: (token: string) =>
+      api.post<AuthResponse>('/auth/verify-email', { token }),
     onSuccess: handleAuthResponse,
+  });
+}
+
+export function useResendVerification() {
+  return useMutation({
+    mutationFn: (email: string) =>
+      api.post<{ message: string }>('/auth/resend-verification', { email }),
   });
 }
 

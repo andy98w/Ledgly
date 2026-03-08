@@ -147,6 +147,40 @@ export class EmailService {
     }
   }
 
+  async sendEmailVerification(email: string, name: string, token: string): Promise<void> {
+    const from = this.configService.get<string>('EMAIL_FROM', 'Ledgly <noreply@ledgly.app>');
+    const webUrl = this.configService.get<string>('WEB_URL');
+    const verifyLink = `${webUrl}/verify-email?token=${token}`;
+
+    if (!this.resend) {
+      this.logger.warn(`Resend not configured — skipping verification email to ${email}`);
+      return;
+    }
+
+    try {
+      await this.resend.emails.send({
+        from,
+        to: email,
+        subject: 'Verify your email — Ledgly',
+        html: this.wrapTemplate(`
+          <h1 style="margin: 0 0 24px; font-size: 24px; color: #111;">Verify your email</h1>
+          <p style="margin: 0 0 24px; color: #666; line-height: 1.5;">
+            Hi${name ? ` ${name}` : ''}, click the button below to verify your email address and activate your account. This link expires in 24 hours.
+          </p>
+          <a href="${verifyLink}" style="display: inline-block; background: #111; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500;">
+            Verify Email
+          </a>
+          <p style="margin: 24px 0 0; color: #999; font-size: 14px;">
+            If you didn't create an account on Ledgly, you can safely ignore this email.
+          </p>
+        `),
+      });
+    } catch (error) {
+      this.logger.error('Failed to send verification email', error);
+      throw error;
+    }
+  }
+
   async sendPaymentReceipt(email: string, payerName: string, amount: string, orgName: string): Promise<void> {
     const from = this.configService.get<string>('EMAIL_FROM', 'Ledgly <noreply@ledgly.app>');
 

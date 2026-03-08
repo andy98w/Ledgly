@@ -1,6 +1,4 @@
-import { env } from './env';
-
-const API_URL = env.NEXT_PUBLIC_API_URL;
+const API_URL = '/api/v1';
 
 class ApiError extends Error {
   constructor(

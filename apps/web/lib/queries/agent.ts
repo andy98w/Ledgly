@@ -1,9 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys';
-import { env } from '../env';
-
-const API_URL = env.NEXT_PUBLIC_API_URL;
+const API_URL = '/api/v1';
 
 export interface ChatMessage {
   role: 'user' | 'assistant';

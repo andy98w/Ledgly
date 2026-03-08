@@ -49,6 +49,16 @@ class ChangePasswordDto {
   newPassword: string;
 }
 
+class VerifyEmailDto {
+  @IsString()
+  token: string;
+}
+
+class ResendVerificationDto {
+  @IsEmail()
+  email: string;
+}
+
 class ForgotPasswordDto {
   @IsEmail()
   email: string;
@@ -93,10 +103,24 @@ export class AuthController {
   @Public()
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('register')
-  async register(@Body() dto: RegisterDto, @Req() req: any, @Res({ passthrough: true }) res: Response) {
-    const result = await this.authService.register(dto.email, dto.password, dto.name, req.ip, req.headers['user-agent']);
+  async register(@Body() dto: RegisterDto, @Req() req: any) {
+    return this.authService.register(dto.email, dto.password, dto.name, req.ip, req.headers['user-agent']);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @Post('verify-email')
+  async verifyEmail(@Body() dto: VerifyEmailDto, @Req() req: any, @Res({ passthrough: true }) res: Response) {
+    const result = await this.authService.verifyEmail(dto.token, req.ip, req.headers['user-agent']);
     setAuthCookies(res, result.accessToken, result.refreshToken);
     return result;
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  @Post('resend-verification')
+  async resendVerification(@Body() dto: ResendVerificationDto) {
+    return this.authService.resendVerification(dto.email);
   }
 
   @Public()
