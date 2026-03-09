@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, Users, Receipt, CreditCard, MoreHorizontal, TrendingDown, Table2, History, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAISidebarStore } from '@/lib/stores/ai-sidebar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,7 +15,6 @@ import {
 
 const primaryItems = [
   { href: '/dashboard', label: 'Home', icon: LayoutDashboard },
-  { href: '/agent', label: 'AI', icon: Sparkles },
   { href: '/members', label: 'Members', icon: Users },
   { href: '/charges', label: 'Charges', icon: Receipt },
 ];
@@ -29,6 +29,8 @@ const moreItems = [
 export function MobileNav() {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
+  const openAI = useAISidebarStore((s) => s.open);
+  const isAIOpen = useAISidebarStore((s) => s.isOpen);
 
   const isMoreActive = moreItems.some((item) => pathname.startsWith(item.href));
 
@@ -54,6 +56,21 @@ export function MobileNav() {
             </Link>
           );
         })}
+
+        {/* AI toggle button */}
+        <button
+          onClick={openAI}
+          className={cn(
+            'relative flex flex-col items-center justify-center flex-1 h-full touch-target transition-colors',
+            isAIOpen ? 'text-primary' : 'text-muted-foreground',
+          )}
+        >
+          <Sparkles className={cn('h-5 w-5 transition-transform duration-150', isAIOpen && 'scale-110')} />
+          <span className="text-xs mt-1">AI</span>
+          {isAIOpen && (
+            <span className="absolute bottom-1.5 w-1 h-1 rounded-full bg-primary" />
+          )}
+        </button>
 
         {/* More dropdown */}
         <DropdownMenu open={moreOpen} onOpenChange={setMoreOpen}>
