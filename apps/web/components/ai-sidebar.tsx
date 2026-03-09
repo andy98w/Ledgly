@@ -531,7 +531,8 @@ export function AISidebar() {
                       <button
                         key={s}
                         onClick={() => handleSend(s)}
-                        className="w-full text-left text-xs px-3 py-2 rounded-lg border border-border/50 bg-secondary/30 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+                        disabled={isStreaming}
+                        className="w-full text-left text-xs px-3 py-2 rounded-lg border border-border/50 bg-secondary/30 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors disabled:opacity-50"
                       >
                         {s}
                       </button>

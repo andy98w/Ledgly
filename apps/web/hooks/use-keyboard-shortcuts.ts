@@ -12,7 +12,7 @@ const GO_SHORTCUTS: Record<string, string> = {
   c: '/charges',
   p: '/payments',
   e: '/expenses',
-  i: '/payments?tab=review',
+  r: '/payments?tab=review',
   s: '/spreadsheet',
   a: '/audit',
 };

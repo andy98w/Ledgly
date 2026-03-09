@@ -148,22 +148,23 @@ function ImportCard({
       : 'border-l-4 border-l-success/30 bg-success/5'
     }>
       <MotionCardContent className="p-3">
-        <div className="flex items-start justify-between gap-3">
-          {onToggleSelect && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onToggleSelect(); }}
-              className="mt-1 flex items-center justify-center transition-colors"
-              title={isSelected ? "Deselect" : "Select"}
-            >
-              {isSelected ? (
-                <CheckCircle2 className="w-5 h-5 text-primary" />
-              ) : (
-                <Circle className="w-5 h-5 text-muted-foreground hover:text-primary" />
-              )}
-            </button>
-          )}
-          <div className="flex items-start gap-3 flex-1 min-w-0">
-            <AvatarGradient name={item.parsedPayerName || 'Unknown'} size="md" />
+        <div className="space-y-2">
+          {/* Top row: checkbox + avatar + info + actions (desktop) */}
+          <div className="flex items-start gap-3">
+            {onToggleSelect && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onToggleSelect(); }}
+                className="mt-1 flex items-center justify-center transition-colors shrink-0"
+                title={isSelected ? "Deselect" : "Select"}
+              >
+                {isSelected ? (
+                  <CheckCircle2 className="w-5 h-5 text-primary" />
+                ) : (
+                  <Circle className="w-5 h-5 text-muted-foreground hover:text-primary" />
+                )}
+              </button>
+            )}
+            <AvatarGradient name={item.parsedPayerName || 'Unknown'} size="md" className="shrink-0" />
             <div className="space-y-1 flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap min-w-0">
                 <p className="font-medium text-sm truncate" title={isOutgoing ? `To: ${item.parsedPayerName || 'Unknown'}` : item.parsedPayerName || 'Unknown Payer'}>
@@ -176,25 +177,89 @@ function ImportCard({
                   {item.parsedSource}
                 </Badge>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 {item.parsedAmount && <Money cents={item.parsedAmount} size="md" />}
                 <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                   <span>{new Date(item.emailDate).toLocaleDateString()}</span>
-                  {item.parsedMemo && (<><span className="opacity-30">•</span><span>"{item.parsedMemo}"</span></>)}
+                  {item.parsedMemo && (<><span className="opacity-30">•</span><span className="truncate max-w-[150px] sm:max-w-none">"{item.parsedMemo}"</span></>)}
                 </div>
               </div>
               {item.needsReviewReason && (
                 <div className="flex items-center gap-1.5">
-                  <AlertCircle className="w-3 h-3 text-warning" />
+                  <AlertCircle className="w-3 h-3 text-warning shrink-0" />
                   <p className="text-xs text-warning">{item.needsReviewReason}</p>
                 </div>
               )}
             </div>
+            {/* Desktop-only actions */}
+            <div className="hidden sm:flex items-center gap-2 shrink-0">
+              {!isOutgoing && (
+                <Select value={selectedMemberId} onValueChange={(v) => { setSelectedMemberId(v); setMemberSearch(''); }}>
+                  <SelectTrigger className="h-8 w-40 text-xs bg-secondary/30 border-border/50">
+                    <SelectValue placeholder="Member" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <div className="px-2 pb-2">
+                      <div className="relative">
+                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                        <Input
+                          placeholder="Search or create..."
+                          value={memberSearch}
+                          onChange={(e) => setMemberSearch(e.target.value)}
+                          className="h-7 pl-7 text-xs"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                    </div>
+                    <SelectItem value="none">Unassigned</SelectItem>
+                    {canCreateNew && (
+                      <div
+                        className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-xs outline-none hover:bg-accent hover:text-accent-foreground text-primary font-medium"
+                        onClick={(e) => { e.stopPropagation(); handleCreateAndSelect(); }}
+                      >
+                        <Plus className="w-3 h-3 mr-2" />
+                        {isCreatingMember ? 'Creating...' : `Create "${createName}"`}
+                      </div>
+                    )}
+                    {filteredMembers.map((member) => (
+                      <SelectItem key={member.id} value={member.id}>
+                        <div className="flex items-center gap-2">
+                          <AvatarGradient name={member.displayName} size="xs" />
+                          {member.displayName}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                className={isOutgoing
+                  ? 'border-destructive/30 text-destructive hover:bg-destructive/10'
+                  : 'border-success/30 text-success hover:bg-success/10'
+                }
+                onClick={() => onConfirm(isOutgoing ? undefined : (selectedMemberId === 'none' ? undefined : selectedMemberId))}
+                disabled={isConfirming || isIgnoring || !item.parsedAmount}
+              >
+                {isConfirming ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-muted-foreground hover:text-foreground"
+                onClick={onIgnore}
+                disabled={isConfirming || isIgnoring}
+              >
+                {isIgnoring ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
+          {/* Mobile-only actions row */}
+          <div className="flex sm:hidden items-center gap-2 pl-8">
             {!isOutgoing && (
               <Select value={selectedMemberId} onValueChange={(v) => { setSelectedMemberId(v); setMemberSearch(''); }}>
-                <SelectTrigger className="h-8 w-40 text-xs bg-secondary/30 border-border/50">
+                <SelectTrigger className="h-8 flex-1 text-xs bg-secondary/30 border-border/50">
                   <SelectValue placeholder="Member" />
                 </SelectTrigger>
                 <SelectContent>
@@ -358,7 +423,7 @@ const PaymentCard = memo(function PaymentCard({
                 {payment.memo && (
                   <>
                     <span className="opacity-30">•</span>
-                    <span className="truncate max-w-[40vw] sm:max-w-[200px]">"{payment.memo}"</span>
+                    <span className="truncate max-w-[120px] sm:max-w-[200px]">"{payment.memo}"</span>
                   </>
                 )}
               </div>
