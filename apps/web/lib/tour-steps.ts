@@ -22,7 +22,7 @@ export const tourSteps: TourStep[] = [
     target: '[data-tour="dashboard-stats"]',
     title: 'Financial Overview',
     description:
-      'Your financial overview at a glance — outstanding charges, collections, members, and overdue items.',
+      'Your financial overview at a glance — unpaid dues, collections, members, and overdue items.',
     placement: 'bottom',
     page: '/dashboard',
   },
@@ -47,9 +47,9 @@ export const tourSteps: TourStep[] = [
   {
     id: 'charges-list',
     target: '[data-tour="charges-list"]',
-    title: 'Charges',
+    title: 'Dues',
     description:
-      'Create charges for dues, events, fines, or fees. Assign to one or multiple members at once.',
+      'Create dues for events, fines, or fees. Assign to one or multiple members at once.',
     placement: 'top',
     page: '/charges',
   },
@@ -58,7 +58,7 @@ export const tourSteps: TourStep[] = [
     target: '[data-tour="payments-list"]',
     title: 'Payments',
     description:
-      'Record payments manually or import from Gmail. Allocate payments to charges to track what\'s been paid.',
+      'Record payments manually or import from Gmail. Payments auto-match to dues to track what\'s been paid.',
     placement: 'left',
     page: '/payments',
   },
@@ -83,7 +83,7 @@ export const tourSteps: TourStep[] = [
   {
     id: 'audit-list',
     target: '[data-tour="audit-list"]',
-    title: 'Audit Log',
+    title: 'Activity',
     description:
       'Every action is tracked here. See who did what, and undo or redo any change with one click.',
     placement: 'left',

@@ -21,26 +21,11 @@ export const CHARGE_CATEGORY_LABELS: Record<ChargeCategory, string> = {
   OTHER: 'Other',
 };
 
-export const CHARGE_STATUS_LABELS: Record<ChargeStatus, string> = {
-  OPEN: 'Open',
-  PARTIALLY_PAID: 'Partial',
-  PAID: 'Paid',
-  VOID: 'Void',
-};
-
 export const MEMBERSHIP_ROLE_LABELS: Record<MembershipRole, string> = {
   OWNER: 'Owner',
   ADMIN: 'Admin',
   TREASURER: 'Treasurer',
   MEMBER: 'Member',
-};
-
-export const MEMBERSHIP_STATUS_LABELS: Record<MembershipStatus, string> = {
-  ACTIVE: 'Active',
-  INACTIVE: 'Inactive',
-  LEFT: 'Left',
-  INVITED: 'Invited',
-  PENDING: 'Pending',
 };
 
 export const EXPENSE_CATEGORIES = ['EVENT', 'SUPPLIES', 'FOOD', 'VENUE', 'MARKETING', 'SERVICES', 'OTHER'] as const;
