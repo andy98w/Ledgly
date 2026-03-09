@@ -299,6 +299,11 @@ export function AISidebar() {
                   } else if (r.toolName === 'restore_payments') {
                     const ids = m.actions!.find((a) => a.toolName === 'restore_payments')?.args?.paymentIds || [];
                     if (ids.length) parts.push(`restored payments [${ids.join(', ')}]`);
+                  } else if (r.toolName === 'deallocate_payment') {
+                    const count = d.removedCount ?? m.actions!.find((a) => a.toolName === 'deallocate_payment')?.args?.allocationIds?.length ?? 0;
+                    parts.push(`deallocated ${count} match(es)`);
+                  } else if (r.toolName === 'send_reminders') {
+                    parts.push(`sent ${d.sent ?? 0} reminder(s)`);
                   }
                 }
                 if (parts.length) suffix += ` Results: ${parts.join(', ')}.`;

@@ -370,6 +370,54 @@ export class AgentService {
         return mapped;
       }
 
+      case 'get_dashboard_stats': {
+        const [chargeTotal, paidTotal, collected, overdue, memberCount, openChargeCount] = await Promise.all([
+          this.prisma.charge.aggregate({
+            where: { orgId, status: { in: ['OPEN', 'PARTIALLY_PAID'] } },
+            _sum: { amountCents: true },
+          }),
+          this.prisma.paymentAllocation.aggregate({
+            where: { charge: { orgId, status: { in: ['OPEN', 'PARTIALLY_PAID'] } } },
+            _sum: { amountCents: true },
+          }),
+          this.prisma.payment.aggregate({
+            where: { orgId, deletedAt: null },
+            _sum: { amountCents: true },
+          }),
+          this.prisma.charge.count({
+            where: { orgId, status: { in: ['OPEN', 'PARTIALLY_PAID'] }, dueDate: { lt: new Date() } },
+          }),
+          this.prisma.membership.count({ where: { orgId, status: 'ACTIVE' } }),
+          this.prisma.charge.count({ where: { orgId, status: { in: ['OPEN', 'PARTIALLY_PAID'] } } }),
+        ]);
+        const outstandingCents = (chargeTotal._sum.amountCents || 0) - (paidTotal._sum.amountCents || 0);
+        return {
+          outstandingCents,
+          collectedCents: collected._sum.amountCents || 0,
+          overdueCharges: overdue,
+          activeMembers: memberCount,
+          openCharges: openChargeCount,
+        };
+      }
+
+      case 'get_expense_summary': {
+        return this.expensesService.getSummary(orgId, args.startDate, args.endDate);
+      }
+
+      case 'query_activity': {
+        const result = await this.auditService.findByOrg(orgId, {
+          entityType: args.entityType,
+          limit: args.limit || 20,
+        });
+        return result.data.map((log: any) => ({
+          action: log.action,
+          entityType: log.entityType,
+          description: log.description,
+          actorName: log.actor?.name || log.actor?.user?.name || 'System',
+          createdAt: log.createdAt,
+        }));
+      }
+
       case 'get_balances': {
         const members = await this.membersService.findAll(orgId, { status: 'ACTIVE', limit: 500 });
         return members.data
@@ -521,6 +569,23 @@ export class AgentService {
 
       case 'import_csv':
         return this.executeImport(orgId, actorId, args.type, args.rows);
+
+      case 'deallocate_payment':
+        return this.paymentsService.bulkRemoveAllocations(orgId, args.allocationIds, actorId);
+
+      case 'send_reminders': {
+        // If no chargeIds specified, find all unpaid charges
+        let chargeIds = args.chargeIds;
+        if (!chargeIds || chargeIds.length === 0) {
+          const unpaid = await this.prisma.charge.findMany({
+            where: { orgId, status: { in: ['OPEN', 'PARTIALLY_PAID'] } },
+            select: { id: true },
+          });
+          chargeIds = unpaid.map((c: any) => c.id);
+        }
+        if (chargeIds.length === 0) return { sent: 0, skipped: 0 };
+        return this.chargesService.sendReminders(orgId, chargeIds);
+      }
 
       default:
         throw new Error(`Unknown write tool: ${toolName}`);
@@ -711,6 +776,19 @@ export class AgentService {
           throw new Error('rows array is required and cannot be empty');
         if (args.rows.length > AgentService.MAX_CSV_ROWS)
           throw new Error(`CSV import limited to ${AgentService.MAX_CSV_ROWS} rows at a time`);
+        break;
+
+      case 'deallocate_payment':
+        if (!Array.isArray(args.allocationIds) || args.allocationIds.length === 0)
+          throw new Error('allocationIds array is required and cannot be empty');
+        if (args.allocationIds.length > AgentService.MAX_BATCH_SIZE)
+          throw new Error(`Cannot deallocate more than ${AgentService.MAX_BATCH_SIZE} at once`);
+        break;
+
+      case 'send_reminders':
+        // chargeIds is optional; if provided, validate
+        if (args.chargeIds && !Array.isArray(args.chargeIds))
+          throw new Error('chargeIds must be an array if provided');
         break;
     }
   }
@@ -953,6 +1031,12 @@ export class AgentService {
         return `Auto-allocate payment to matching charges`;
       case 'import_csv':
         return `Import ${args.rows?.length || 0} ${args.type} row(s) from CSV`;
+      case 'deallocate_payment':
+        return `Remove ${args.allocationIds?.length || 0} payment-charge match(es)`;
+      case 'send_reminders':
+        return args.chargeIds?.length
+          ? `Send reminders for ${args.chargeIds.length} charge(s)`
+          : 'Send reminders for all unpaid charges';
       default:
         return toolName;
     }
@@ -1043,7 +1127,10 @@ Today's date is ${today}.
 - Add, edit, or remove members
 - Create or void charges (single or grouped for multiple members)
 - Create or delete expenses (single or multi-line-item)
-- Record payments and allocate them to charges
+- Record payments and allocate/deallocate them to charges
+- Send payment reminders for unpaid charges
+- Get financial dashboard stats and expense summaries
+- Query the activity/audit log
 - Import CSV data (members, charges, payments, or expenses)
 - Look up members, charges, payments, expenses, and balances
 

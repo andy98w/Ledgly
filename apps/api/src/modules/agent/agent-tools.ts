@@ -584,6 +584,103 @@ export const agentTools: AgentTool[] = [
       },
     },
   },
+
+  // ── New tools ───────────────────────────────────────────────
+  {
+    requiresConfirmation: false,
+    definition: {
+      name: 'get_dashboard_stats',
+      description:
+        'Get a financial overview: outstanding amount, collected amount, overdue charges, member count, and open charge count.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {},
+        required: [],
+      },
+    },
+  },
+  {
+    requiresConfirmation: false,
+    definition: {
+      name: 'get_expense_summary',
+      description:
+        'Get expense totals grouped by category, optionally filtered by date range.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          startDate: {
+            type: 'string',
+            description: 'Start date filter (YYYY-MM-DD, optional)',
+          },
+          endDate: {
+            type: 'string',
+            description: 'End date filter (YYYY-MM-DD, optional)',
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    requiresConfirmation: false,
+    definition: {
+      name: 'query_activity',
+      description:
+        'Query the activity/audit log. Returns recent actions taken in the organization.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          limit: {
+            type: 'number',
+            description: 'Max number of entries to return (default 20)',
+          },
+          entityType: {
+            type: 'string',
+            description: 'Filter by entity type (e.g., CHARGE, PAYMENT, MEMBER, EXPENSE)',
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    requiresConfirmation: true,
+    definition: {
+      name: 'deallocate_payment',
+      description:
+        'Remove payment-charge matches (deallocate). Use when a user wants to unmatch or remove allocations.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          allocationIds: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Array of allocation IDs to remove',
+          },
+        },
+        required: ['allocationIds'],
+      },
+    },
+  },
+  {
+    requiresConfirmation: true,
+    definition: {
+      name: 'send_reminders',
+      description:
+        'Send payment reminder emails for unpaid charges.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          chargeIds: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Array of charge IDs to send reminders for. If omitted, sends reminders for all unpaid charges.',
+          },
+        },
+        required: [],
+      },
+    },
+  },
 ];
 
 export const toolDefinitions = agentTools.map((t) => t.definition);
