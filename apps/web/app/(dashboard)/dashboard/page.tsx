@@ -106,7 +106,7 @@ export default function DashboardPage() {
                 <div>
                   <p className="font-semibold">Get started with LedgelyAI</p>
                   <p className="text-sm text-muted-foreground">
-                    Add members, create dues, and import data using natural language
+                    Add members, create charges, and import data using natural language
                   </p>
                 </div>
               </div>

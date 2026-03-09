@@ -519,7 +519,7 @@ export default function AgentPage() {
                   {(isNewOrg
                     ? [
                         'Add my members',
-                        'Create dues for all members',
+                        'Create charges for all members',
                         'Import members from CSV',
                         'How does Ledgly work?',
                       ]

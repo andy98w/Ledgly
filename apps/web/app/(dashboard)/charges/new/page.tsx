@@ -171,7 +171,7 @@ export default function NewChargePage() {
   return (
     <div className="space-y-8">
       {/* Breadcrumb */}
-      <Breadcrumb items={[{ label: 'Dues', href: '/charges' }, { label: 'New Due' }]} />
+      <Breadcrumb items={[{ label: 'Charges', href: '/charges' }, { label: 'New Charge' }]} />
 
       {/* Header */}
       <FadeIn>
@@ -189,8 +189,8 @@ export default function NewChargePage() {
               <Receipt className="h-6 w-6 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-xl font-bold tracking-tight">Create Due</h1>
-              <p className="text-muted-foreground">Charge dues, fees, or fines to members</p>
+              <h1 className="text-xl font-bold tracking-tight">Create Charge</h1>
+              <p className="text-muted-foreground">Charge fees, dues, or fines to members</p>
             </div>
           </div>
         </div>

@@ -16,7 +16,7 @@ const primaryItems = [
   { href: '/dashboard', label: 'Home', icon: LayoutDashboard },
   { href: '/agent', label: 'AI', icon: Sparkles },
   { href: '/members', label: 'Members', icon: Users },
-  { href: '/charges', label: 'Dues', icon: Receipt },
+  { href: '/charges', label: 'Charges', icon: Receipt },
 ];
 
 const moreItems = [

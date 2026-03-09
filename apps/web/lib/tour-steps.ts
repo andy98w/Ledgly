@@ -47,9 +47,9 @@ export const tourSteps: TourStep[] = [
   {
     id: 'charges-list',
     target: '[data-tour="charges-list"]',
-    title: 'Dues',
+    title: 'Charges',
     description:
-      'Create dues for events, fines, or fees. Assign to one or multiple members at once.',
+      'Create charges for events, fines, or fees. Assign to one or multiple members at once.',
     placement: 'top',
     page: '/charges',
   },

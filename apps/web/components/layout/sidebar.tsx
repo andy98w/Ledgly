@@ -64,7 +64,7 @@ const primaryNavItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/agent', label: 'LedgelyAI', icon: Sparkles },
   { href: '/members', label: 'Members', icon: Users },
-  { href: '/charges', label: 'Dues', icon: Receipt },
+  { href: '/charges', label: 'Charges', icon: Receipt },
   { href: '/payments', label: 'Payments', icon: CreditCard },
   { href: '/expenses', label: 'Expenses', icon: TrendingDown },
   { href: '/inbox', label: 'Inbox', icon: Inbox },
