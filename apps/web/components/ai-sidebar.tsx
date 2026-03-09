@@ -726,9 +726,9 @@ export function AISidebar() {
         </div>
       </div>
 
-      {/* Mobile overlay */}
+      {/* Mobile overlay — z-[60] to sit above mobile nav (z-50) */}
       {isOpen && (
-        <div className="fixed inset-0 z-50 bg-background flex flex-col md:hidden">
+        <div className="fixed inset-0 z-[60] bg-background flex flex-col md:hidden">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card/50 shrink-0">
             <div className="flex items-center gap-2">
@@ -973,15 +973,6 @@ export function AISidebar() {
         </button>
       )}
 
-      {/* Mobile FAB — bottom of screen */}
-      {!hidden && !isOpen && (
-        <button
-          onClick={toggle}
-          className="fixed bottom-24 right-4 z-30 md:hidden h-12 w-12 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center transition-all hover:scale-105 hover:shadow-xl active:scale-95"
-        >
-          <Sparkles className="h-5 w-5" />
-        </button>
-      )}
     </>
   );
 }
