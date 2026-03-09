@@ -76,8 +76,11 @@ export default function NewPaymentPage() {
         },
       });
       const createdId = created?.id;
+      const matchResult = created?.allocationResult;
       toast({
-        title: 'Payment recorded',
+        title: matchResult?.allocated
+          ? `Payment matched to ${matchResult.chargeCount} ${matchResult.chargeCount === 1 ? 'charge' : 'charges'}`
+          : 'Payment recorded',
         action: createdId ? (
           <ToastUndoButton
             onClick={() => deletePayment.mutate(
@@ -168,7 +171,7 @@ export default function NewPaymentPage() {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  If you don't know the member yet, leave blank and allocate later
+                  If you don't know the member yet, leave blank and match later
                 </p>
               </div>
 

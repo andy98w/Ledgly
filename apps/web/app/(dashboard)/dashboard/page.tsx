@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, Users, Receipt, AlertTriangle, AlertCircle, Check, TrendingUp } from 'lucide-react';
+import { ArrowRight, Users, Receipt, AlertTriangle, AlertCircle, Circle, Check, TrendingUp, Sparkles } from 'lucide-react';
 import { useDashboard } from '@/lib/queries/organizations';
 import { useAuthStore } from '@/lib/stores/auth';
 import { formatCents, formatRelativeDate } from '@/lib/utils';
@@ -90,17 +90,44 @@ export default function DashboardPage() {
       <FadeIn>
         <PageHeader
           title="Dashboard"
-          helpText="Overview of your organization finances — outstanding charges, collections, member count, and overdue items."
+          helpText="Overview of your organization finances — unpaid dues, collections, member count, and overdue items."
         />
       </FadeIn>
+
+      {/* AI Getting Started Banner (new orgs only) */}
+      {stats.openChargesCount === 0 && stats.memberCount <= 1 && (
+        <FadeIn delay={0.05}>
+          <MotionCard hover={false} className="border-primary/20 bg-primary/5">
+            <MotionCardContent className="flex items-center justify-between p-5">
+              <div className="flex items-center gap-4">
+                <div className="p-3 rounded-xl bg-primary/10">
+                  <Sparkles className="h-6 w-6 text-primary" />
+                </div>
+                <div>
+                  <p className="font-semibold">Get started with LedgelyAI</p>
+                  <p className="text-sm text-muted-foreground">
+                    Add members, create dues, and import data using natural language
+                  </p>
+                </div>
+              </div>
+              <Button asChild>
+                <Link href="/agent">
+                  Try LedgelyAI
+                  <ArrowRight className="ml-1 h-4 w-4" />
+                </Link>
+              </Button>
+            </MotionCardContent>
+          </MotionCard>
+        </FadeIn>
+      )}
 
       {/* Stats Grid */}
       <div data-tour="dashboard-stats" className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          title="Outstanding"
+          title="Unpaid"
           value={stats.totalOutstandingCents}
           isMoney
-          description={`${stats.openChargesCount} open charges`}
+          description={`${stats.openChargesCount} unpaid dues`}
           icon={Receipt}
           color="amber"
         />
@@ -171,13 +198,13 @@ export default function DashboardPage() {
                         <TooltipTrigger asChild>
                           <span>
                             {payment.unallocatedCents > 0 ? (
-                              <AlertCircle className="w-4 h-4 text-warning" />
+                              <Circle className="w-4 h-4 text-muted-foreground" />
                             ) : (
                               <Check className="w-4 h-4 text-success" />
                             )}
                           </span>
                         </TooltipTrigger>
-                        <TooltipContent>{payment.unallocatedCents > 0 ? 'Unallocated' : 'Allocated'}</TooltipContent>
+                        <TooltipContent>{payment.unallocatedCents > 0 ? 'Unmatched' : 'Matched'}</TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
                   </div>

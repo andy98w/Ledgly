@@ -999,7 +999,7 @@ export default function SettingsPage() {
                 Warning: You are about to delete &quot;{currentOrg?.orgName}&quot;
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                All members, charges, payments, expenses, and audit logs will be permanently deleted.
+                All members, charges, payments, expenses, and activity history will be permanently deleted.
               </p>
             </div>
             <div className="space-y-2">

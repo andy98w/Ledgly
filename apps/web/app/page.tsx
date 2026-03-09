@@ -11,9 +11,13 @@ import {
   Sparkles,
   TrendingDown,
   History,
-  Shield,
-  Lock,
-  Users,
+  Check,
+  DollarSign,
+  Zap,
+  Clock,
+  CreditCard,
+  Smartphone,
+  Bot,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScrollReveal } from '@/components/ui/scroll-reveal';
@@ -23,23 +27,23 @@ import { ScrollReveal } from '@/components/ui/scroll-reveal';
 const howItWorks = [
   {
     step: 1,
-    title: 'Create & Invite',
+    title: 'Create Your Org',
     description:
-      'Set up your organization and share your join code. Members request access — you approve them in one click.',
+      'Sign up free, name your org, and invite members with a join code.',
     color: 'from-primary to-violet-500',
   },
   {
     step: 2,
     title: 'Connect Gmail',
     description:
-      'Auto-import payment notifications from Venmo, Zelle, CashApp, and PayPal. Outgoing expenses are detected too.',
+      'Link your Gmail — we auto-detect payment notifications from Venmo, Zelle, CashApp & PayPal.',
     color: 'from-violet-500 to-cyan-400',
   },
   {
     step: 3,
-    title: 'Sit Back & Track',
+    title: 'Track Everything',
     description:
-      'Payments reconcile automatically against outstanding charges. Your books stay balanced without lifting a finger.',
+      'Payments auto-match to dues. See who\u2019s paid, who hasn\u2019t, and let AI handle follow-ups.',
     color: 'from-cyan-400 to-emerald-400',
   },
 ];
@@ -47,54 +51,54 @@ const howItWorks = [
 const featureCards = [
   {
     icon: Receipt,
-    title: 'Track Dues & Charges',
+    title: 'Know Who Owes What — Instantly',
     description:
-      'Create charges for dues, events, fees, or fines. See who owes what at a glance.',
+      'Create charges for dues, events, or fines. One glance shows every balance across your whole org.',
     iconBg: 'bg-amber-500/10',
     iconText: 'text-amber-500',
     hoverBorder: 'hover:border-amber-500/30',
   },
   {
     icon: RefreshCw,
-    title: 'Auto-Reconcile Payments',
+    title: 'Payments Match Themselves',
     description:
-      'Payments are automatically matched to outstanding charges — no manual bookkeeping.',
+      'Incoming payments auto-match against unpaid charges. No manual bookkeeping ever again.',
     iconBg: 'bg-emerald-500/10',
     iconText: 'text-emerald-500',
     hoverBorder: 'hover:border-emerald-500/30',
   },
   {
     icon: Mail,
-    title: 'Gmail Import',
+    title: 'Keep Using Venmo & Zelle',
     description:
-      'Connect Gmail to auto-import Venmo, Zelle, CashApp, and PayPal notifications.',
+      'Members pay how they already pay. We read the receipts from your Gmail — no new app for anyone.',
     iconBg: 'bg-cyan-500/10',
     iconText: 'text-cyan-500',
     hoverBorder: 'hover:border-cyan-500/30',
   },
   {
     icon: Sparkles,
-    title: 'AI Financial Assistant',
+    title: 'Just Tell AI What You Need',
     description:
-      'Manage your org with natural language. Add members, create charges, and record payments — just ask.',
+      'Add members, create charges, record payments — type what you want in plain English and it\u2019s done.',
     iconBg: 'bg-primary/10',
     iconText: 'text-primary',
     hoverBorder: 'hover:border-primary/30',
   },
   {
     icon: TrendingDown,
-    title: 'Expense Tracking',
+    title: 'Track Where Money Goes',
     description:
-      'Track outgoing money by category and vendor. Gmail auto-detects outgoing payment notifications.',
+      'Categorize expenses by vendor and type. Gmail auto-detects outgoing payments too.',
     iconBg: 'bg-rose-500/10',
     iconText: 'text-rose-500',
     hoverBorder: 'hover:border-rose-500/30',
   },
   {
     icon: History,
-    title: 'Full Audit Trail',
+    title: 'Every Action Logged & Undoable',
     description:
-      'Every action is tracked — who did what and when. Undo or redo any change with one click.',
+      'Full audit trail of who did what and when. Undo or redo any change with one click.',
     iconBg: 'bg-violet-500/10',
     iconText: 'text-violet-500',
     hoverBorder: 'hover:border-violet-500/30',
@@ -106,38 +110,58 @@ const showcaseTabs = [
     label: 'Dashboard',
     slug: 'dashboard',
     description:
-      'Your financial overview at a glance — outstanding dues, collected payments, member count, and overdue balances. Quick actions let you add members, create charges, or record payments instantly.',
+      'Your full financial picture at a glance — unpaid dues, collected payments, overdue balances, and quick actions to manage everything.',
   },
   {
     label: 'Members & Charges',
     slug: 'members',
     description:
-      'Manage your full roster with payment history, outstanding balances, and contact info. Create charges for dues, events, or fines and assign them to one or all members at once.',
+      'See every member\u2019s payment history and balance. Create charges for dues, events, or fines and assign them instantly.',
   },
   {
     label: 'Gmail Inbox',
     slug: 'inbox',
     description:
-      'Connect your Gmail to auto-import Venmo, Zelle, CashApp, and PayPal notifications. Payments are parsed and matched to members automatically — just review and confirm.',
+      'Venmo, Zelle, CashApp, and PayPal notifications auto-imported. Payments parsed and matched — just review and confirm.',
   },
   {
     label: 'AI Agent',
-    slug: null, // placeholder — no screenshot yet
+    slug: null,
     description:
-      'Chat with LedgelyAI to manage your organization using natural language. Add members, create charges, record payments, run reports — all from a single conversation.',
+      'Manage your org in plain English. Add members, create charges, run reports — all from a single conversation.',
   },
   {
     label: 'Audit Log',
     slug: 'audit-log',
     description:
-      'Every action is tracked — who created a charge, who recorded a payment, who made changes. Undo and redo any action with one click for full transparency.',
+      'Every action tracked with full context. Undo and redo any change with one click for complete transparency.',
   },
 ];
 
-const trustIndicators = [
-  { icon: History, label: 'Every action logged & undoable', iconColor: 'text-amber-500', iconBg: 'bg-amber-500/10' },
-  { icon: Lock, label: 'Bank-grade encryption', iconColor: 'text-emerald-500', iconBg: 'bg-emerald-500/10' },
-  { icon: Shield, label: 'Role-based access control', iconColor: 'text-violet-500', iconBg: 'bg-violet-500/10' },
+const whyLedgly = [
+  {
+    icon: DollarSign,
+    title: 'No fees — ever',
+    description: 'Crowded charges 2.99% per transaction. Ledgly is 100% free.',
+    iconBg: 'bg-emerald-500/10',
+    iconText: 'text-emerald-500',
+  },
+  {
+    icon: Smartphone,
+    title: 'Works with your existing apps',
+    description:
+      'Members keep paying through Venmo, Zelle, or CashApp. No one downloads anything new.',
+    iconBg: 'bg-cyan-500/10',
+    iconText: 'text-cyan-500',
+  },
+  {
+    icon: Bot,
+    title: 'AI-powered',
+    description:
+      'Natural language commands to manage your entire treasury. No competitor offers this.',
+    iconBg: 'bg-primary/10',
+    iconText: 'text-primary',
+  },
 ];
 
 /* ─── Component ──────────────────────────────────────────────── */
@@ -181,7 +205,19 @@ export default function LandingPage() {
             <Image src="/logo.png" alt="Ledgly" width={36} height={36} />
             <span className="font-bold text-xl tracking-tight">Ledgly</span>
           </Link>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 sm:gap-3">
+            <a
+              href="#how-it-works"
+              className="hidden sm:inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              How It Works
+            </a>
+            <a
+              href="#features"
+              className="hidden sm:inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Features
+            </a>
             <Link
               href="/login"
               className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
@@ -199,9 +235,9 @@ export default function LandingPage() {
       </header>
 
       {/* ── Hero ──────────────────────────────────────────────── */}
-      <section className="min-h-dvh relative flex items-center justify-center px-6 noise-overlay">
+      <section className="relative pt-32 pb-16 md:pt-40 md:pb-24 px-6 noise-overlay">
         {/* Animated gradient orbs */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] pointer-events-none">
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] pointer-events-none">
           <div className="absolute inset-0 rounded-full bg-gradient-to-br from-primary/20 via-blue-400/15 to-purple-500/10 blur-[120px] animate-float" />
           <div className="absolute inset-8 rounded-full bg-gradient-to-tr from-blue-400/10 via-primary/15 to-cyan-400/10 blur-[100px] animate-gradient-rotate" />
           <div className="absolute inset-4 rounded-full bg-gradient-to-bl from-violet-500/15 via-purple-400/10 to-fuchsia-500/10 blur-[110px] animate-float" style={{ animationDelay: '-3s' }} />
@@ -209,17 +245,25 @@ export default function LandingPage() {
         </div>
 
         <div className="max-w-3xl mx-auto text-center relative z-10">
+          {/* Free badge */}
+          <div className="animate-reveal-up" style={{ animationDelay: '0ms' }}>
+            <span className="inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium bg-emerald-500/10 text-emerald-500 mb-6">
+              <Check className="h-3.5 w-3.5" />
+              Free forever — no fees, no credit card
+            </span>
+          </div>
+
           <h1 className="text-fluid-5xl font-bold tracking-tight leading-[1.1] animate-reveal-up" style={{ animationDelay: '100ms' }}>
-            Club Finance,
+            Stop Chasing Venmo Payments
             <br />
             <span className="bg-gradient-to-r from-primary via-violet-500 to-cyan-400 bg-clip-text text-transparent">
-              Fully Automated
+              in a Spreadsheet
             </span>
           </h1>
           <p className="mt-6 text-lg text-muted-foreground max-w-xl mx-auto leading-relaxed animate-reveal-up" style={{ animationDelay: '200ms' }}>
-            Import from Venmo, Zelle, CashApp &amp; PayPal. Reconcile payments automatically. Let AI handle the rest.
+            Connect your Gmail. We auto-import Venmo, Zelle, CashApp &amp; PayPal payments and match them to dues — for free.
           </p>
-          <div className="mt-10 animate-reveal-up" style={{ animationDelay: '300ms' }}>
+          <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4 animate-reveal-up" style={{ animationDelay: '300ms' }}>
             <Link
               href="/register"
               className="inline-flex items-center justify-center rounded-xl px-8 py-3.5 text-sm font-medium bg-gradient-to-r from-primary via-violet-500 to-cyan-400 text-primary-foreground hover:opacity-90 transition-all duration-150 shadow-layered-lg active:scale-[0.98]"
@@ -227,12 +271,71 @@ export default function LandingPage() {
               Get Started Free
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
+            <a
+              href="#how-it-works"
+              className="inline-flex items-center justify-center rounded-xl px-8 py-3.5 text-sm font-medium border border-border/50 bg-secondary/50 text-foreground hover:bg-secondary transition-all duration-150 active:scale-[0.98]"
+            >
+              See How It Works
+            </a>
+          </div>
+          <p className="mt-6 text-sm text-muted-foreground animate-reveal-up" style={{ animationDelay: '400ms' }}>
+            For fraternities, clubs, and student orgs
+          </p>
+        </div>
+
+        {/* Hero screenshot */}
+        <div className="max-w-5xl mx-auto mt-16 relative z-10 animate-reveal-up" style={{ animationDelay: '500ms' }}>
+          <div className="rounded-xl border border-border/50 overflow-hidden shadow-layered-lg bg-card/30 backdrop-blur-sm">
+            <Image
+              src="/screenshots/light/dashboard.png"
+              alt="Ledgly dashboard"
+              width={1230}
+              height={790}
+              className="w-full h-auto block dark:hidden"
+              priority
+            />
+            <Image
+              src="/screenshots/dark/dashboard.png"
+              alt="Ledgly dashboard"
+              width={1230}
+              height={790}
+              className="w-full h-auto hidden dark:block"
+              priority
+            />
           </div>
         </div>
       </section>
 
+      {/* ── Social Proof Bar ──────────────────────────────────── */}
+      <section className="relative py-12 px-6 border-y border-border/30">
+        <div className="max-w-4xl mx-auto">
+          <ScrollReveal>
+            <p className="text-center text-sm text-muted-foreground mb-8">
+              Trusted by student organizations across the country
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8">
+              {[
+                { icon: DollarSign, label: '100% Free', sublabel: 'No fees, no catches', iconBg: 'bg-emerald-500/10', iconText: 'text-emerald-500' },
+                { icon: CreditCard, label: 'Works with Venmo, Zelle, CashApp & PayPal', sublabel: 'Keep your existing apps', iconBg: 'bg-cyan-500/10', iconText: 'text-cyan-500' },
+                { icon: Clock, label: 'Setup in under 5 minutes', sublabel: 'From signup to tracking', iconBg: 'bg-violet-500/10', iconText: 'text-violet-500' },
+              ].map((item) => (
+                <div key={item.label} className="flex items-center gap-3 justify-center">
+                  <div className={cn('p-2 rounded-lg shrink-0', item.iconBg)}>
+                    <item.icon className={cn('h-4 w-4', item.iconText)} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">{item.label}</p>
+                    <p className="text-xs text-muted-foreground">{item.sublabel}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ScrollReveal>
+        </div>
+      </section>
+
       {/* ── How It Works ──────────────────────────────────────── */}
-      <section className="relative py-32 px-6">
+      <section id="how-it-works" className="relative py-32 px-6 scroll-mt-20">
         <div className="max-w-5xl mx-auto">
           <ScrollReveal>
             <h2 className="text-center text-fluid-2xl font-bold tracking-tight mb-16">
@@ -266,14 +369,14 @@ export default function LandingPage() {
       </section>
 
       {/* ── Feature Grid ──────────────────────────────────────── */}
-      <section className="relative py-32 px-6">
+      <section id="features" className="relative py-32 px-6 scroll-mt-20">
         <div className="max-w-5xl mx-auto">
           <ScrollReveal>
             <h2 className="text-center text-fluid-2xl font-bold tracking-tight mb-4">
               Everything You Need
             </h2>
             <p className="text-center text-muted-foreground mb-16 max-w-xl mx-auto">
-              From dues collection to expense tracking, Ledgly handles every aspect of your organization&apos;s finances.
+              Stop juggling spreadsheets, Venmo screenshots, and group chats. Ledgly handles it all.
             </p>
           </ScrollReveal>
 
@@ -309,7 +412,7 @@ export default function LandingPage() {
               See It in Action
             </h2>
             <p className="text-center text-muted-foreground mb-12 max-w-xl mx-auto">
-              Click through to explore Ledgly&apos;s core views.
+              Click through to explore every view.
             </p>
           </ScrollReveal>
 
@@ -396,30 +499,33 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Trust + Pricing ───────────────────────────────────── */}
+      {/* ── Why Ledgly ─────────────────────────────────────────── */}
       <section className="relative py-32 px-6">
-        <div className="max-w-3xl mx-auto text-center">
+        <div className="max-w-5xl mx-auto">
           <ScrollReveal>
-            <span className="inline-flex items-center rounded-full px-4 py-1.5 text-sm font-medium bg-emerald-500/10 text-emerald-500 mb-8">
-              Free for all organizations
-            </span>
-            <p className="text-fluid-lg font-medium text-muted-foreground mb-10">
-              Built for student organizations, Greek life, and campus clubs
+            <h2 className="text-center text-fluid-2xl font-bold tracking-tight mb-4">
+              Why Ledgly
+            </h2>
+            <p className="text-center text-muted-foreground mb-16 max-w-xl mx-auto">
+              Other tools charge fees, force members onto new platforms, or lack modern features. We don&apos;t.
             </p>
           </ScrollReveal>
 
-          <ScrollReveal delay={100}>
-            <div className="flex flex-wrap items-center justify-center gap-8">
-              {trustIndicators.map((item) => (
-                <div key={item.label} className="flex items-center gap-2.5 text-sm text-muted-foreground">
-                  <div className={cn('p-2 rounded-lg', item.iconBg)}>
-                    <item.icon className={cn('h-4 w-4', item.iconColor)} />
+          <div className="grid gap-6 sm:grid-cols-3">
+            {whyLedgly.map((item, i) => (
+              <ScrollReveal key={item.title} delay={i * 100}>
+                <div className="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm p-8 text-center hover:bg-card/80 hover:-translate-y-1 hover:shadow-layered-lg transition-all duration-200 h-full">
+                  <div className={cn('p-3 rounded-xl w-fit mx-auto mb-5', item.iconBg)}>
+                    <item.icon className={cn('h-6 w-6', item.iconText)} />
                   </div>
-                  <span className="font-medium">{item.label}</span>
+                  <h3 className="font-semibold mb-2">{item.title}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    {item.description}
+                  </p>
                 </div>
-              ))}
-            </div>
-          </ScrollReveal>
+              </ScrollReveal>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -428,10 +534,10 @@ export default function LandingPage() {
         <div className="max-w-3xl mx-auto text-center pb-32">
           <ScrollReveal>
             <h2 className="text-fluid-3xl font-bold tracking-tight mb-4">
-              Ready to simplify your finances?
+              Ready to ditch the spreadsheet?
             </h2>
             <p className="text-muted-foreground mb-8">
-              No credit card required. Set up your org in minutes.
+              Free forever. Set up in 5 minutes.
             </p>
             <Link
               href="/register"

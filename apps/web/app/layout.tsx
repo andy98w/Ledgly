@@ -8,7 +8,7 @@ const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: 'Ledgly - Club Finance Made Simple',
-  description: 'Track dues, reconcile payments, and manage your organization finances with ease.',
+  description: 'Track dues, match payments, and manage your organization finances with ease.',
   icons: {
     icon: '/logo.png',
     apple: '/logo.png',

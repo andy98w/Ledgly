@@ -669,7 +669,7 @@ export default function AuditLogPage() {
         </div>
         <h3 className="text-lg font-semibold mb-2">Access Denied</h3>
         <p className="text-muted-foreground">
-          Only admins and treasurers can view the audit log.
+          Only admins and treasurers can view activity.
         </p>
       </div>
     );
@@ -680,7 +680,7 @@ export default function AuditLogPage() {
       {/* Header */}
       <FadeIn>
         <PageHeader
-          title="Audit Log"
+          title="Activity"
           helpText="Track all changes made in your organization. You can undo and redo actions directly from here."
         />
       </FadeIn>
@@ -691,8 +691,8 @@ export default function AuditLogPage() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
             <Input
-              placeholder="Search audit logs..."
-              aria-label="Search audit logs"
+              placeholder="Search activity..."
+              aria-label="Search activity"
               value={searchQuery}
               onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
               className="pl-9 h-9 bg-secondary/30 border-border/50"

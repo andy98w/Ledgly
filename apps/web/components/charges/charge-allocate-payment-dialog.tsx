@@ -71,9 +71,9 @@ export function ChargeAllocatePaymentDialog({
     <Dialog open={!!charge} onOpenChange={(open) => !open && handleClose()}>
       <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Allocate Payment</DialogTitle>
+          <DialogTitle>Match Payment</DialogTitle>
           <DialogDescription>
-            Choose a payment to allocate to this charge.
+            Choose a payment to match to this charge.
           </DialogDescription>
         </DialogHeader>
         {charge && (
@@ -112,7 +112,7 @@ export function ChargeAllocatePaymentDialog({
                   <div className="text-center py-8">
                     <CreditCard className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
                     <p className="text-sm text-muted-foreground">
-                      {searchQuery ? 'No matching payments found' : 'No unallocated payments available'}
+                      {searchQuery ? 'No matching payments found' : 'No unmatched payments available'}
                     </p>
                   </div>
                 ) : (
@@ -149,7 +149,7 @@ export function ChargeAllocatePaymentDialog({
             {/* Allocation amount input */}
             {selectedPaymentId && (
               <div className="space-y-2 pt-2 border-t border-border/30">
-                <Label htmlFor="allocation-amount">Amount to Allocate ($)</Label>
+                <Label htmlFor="allocation-amount">Amount to Match ($)</Label>
                 <Input
                   id="allocation-amount"
                   type="number"
@@ -176,10 +176,10 @@ export function ChargeAllocatePaymentDialog({
             {isPending ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Allocating...
+                Matching...
               </>
             ) : (
-              'Allocate'
+              'Match'
             )}
           </Button>
         </DialogFooter>

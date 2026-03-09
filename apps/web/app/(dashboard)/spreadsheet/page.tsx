@@ -1249,7 +1249,7 @@ export default function SpreadsheetPage() {
   );
 
   const handleExportCSV = () => {
-    const headers = ['Date', 'Type', 'Member/Vendor', 'Category', 'Title', 'Income', 'Outstanding', 'Expense'];
+    const headers = ['Date', 'Type', 'Member/Vendor', 'Category', 'Title', 'Income', 'Unpaid', 'Expense'];
     const csvRows = [
       headers.join(','),
       ...rows.map((row) => [
@@ -1468,7 +1468,7 @@ export default function SpreadsheetPage() {
             <div className="rounded-xl border bg-card p-4">
               <div className="flex items-center gap-2 text-warning mb-2">
                 <Wallet className="w-4 h-4" />
-                <span className="text-sm font-medium">Outstanding</span>
+                <span className="text-sm font-medium">Unpaid</span>
               </div>
               <Money cents={totals.outstanding} size="lg" className="text-warning" />
             </div>
@@ -1553,7 +1553,7 @@ export default function SpreadsheetPage() {
                                 </button>
                               </TooltipTrigger>
                               <TooltipContent side="bottom">
-                                Allocate {selectedOutstandingCharges.length} charge{selectedOutstandingCharges.length !== 1 ? 's' : ''}
+                                Match {selectedOutstandingCharges.length} charge{selectedOutstandingCharges.length !== 1 ? 's' : ''}
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
@@ -1648,7 +1648,7 @@ export default function SpreadsheetPage() {
                   >
                     <span className="flex items-center justify-end gap-1">
                       <Wallet className="h-3 w-3" />
-                      Outstanding
+                      Unpaid
                       {sortBy === 'outstanding' && (
                         sortOrder === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
                       )}
@@ -2054,7 +2054,7 @@ export default function SpreadsheetPage() {
                                   {(() => {
                                     const charge = chargesMap.get(row.id);
                                     const allocs = charge?.allocations || [];
-                                    if (allocs.length === 0) return <p className="text-xs">Allocated</p>;
+                                    if (allocs.length === 0) return <p className="text-xs">Matched</p>;
                                     return (
                                       <div className="space-y-1">
                                         {allocs.map((a: any) => (
@@ -2500,12 +2500,12 @@ function AllocatePaymentsDialog({
       .map((a) => ({ chargeId: a.chargeId, amountCents: a.allocateCents }));
     try {
       await allocatePayment.mutateAsync({ orgId, paymentId: selectedPaymentId, allocations });
-      toast({ title: `Allocated payment to ${allocations.length} charge${allocations.length !== 1 ? 's' : ''}` });
+      toast({ title: `Matched payment to ${allocations.length} charge${allocations.length !== 1 ? 's' : ''}` });
       setSelectedPaymentId('');
       setPaymentSearch('');
       onSuccess();
     } catch (error: any) {
-      toast({ title: 'Allocation failed', description: error.message || 'Please try again', variant: 'destructive' });
+      toast({ title: 'Match failed', description: error.message || 'Please try again', variant: 'destructive' });
     }
   };
 
@@ -2523,12 +2523,12 @@ function AllocatePaymentsDialog({
     }
     setIsAutoAllocating(false);
     if (successCount > 0) {
-      toast({ title: `Auto-allocated ${successCount} charge${successCount !== 1 ? 's' : ''}` });
+      toast({ title: `Auto-matched ${successCount} charge${successCount !== 1 ? 's' : ''}` });
       setSelectedPaymentId('');
       setPaymentSearch('');
       onSuccess();
     } else {
-      toast({ title: 'No payments could be auto-allocated', description: 'No matching unallocated payments found for these members', variant: 'destructive' });
+      toast({ title: 'No payments could be auto-matched', description: 'No matching unallocated payments found for these members', variant: 'destructive' });
     }
   };
 
@@ -2536,9 +2536,9 @@ function AllocatePaymentsDialog({
     <Dialog open={open} onOpenChange={(o) => !o ? handleClose() : onOpenChange(o)}>
       <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Allocate Payments</DialogTitle>
+          <DialogTitle>Match Payments</DialogTitle>
           <DialogDescription>
-            {charges.length} outstanding charge{charges.length !== 1 ? 's' : ''} selected
+            {charges.length} unpaid charge{charges.length !== 1 ? 's' : ''} selected
           </DialogDescription>
         </DialogHeader>
 
@@ -2610,7 +2610,7 @@ function AllocatePaymentsDialog({
         {/* Allocation preview */}
         {selectedPayment && (
           <div className="space-y-2 pt-2 border-t border-border/30">
-            <p className="text-xs font-medium text-muted-foreground">Allocation Preview</p>
+            <p className="text-xs font-medium text-muted-foreground">Match Preview</p>
             <div className="space-y-1 max-h-24 overflow-y-auto">
               {allocationPreview.map((a) => (
                 <div key={a.chargeId} className="flex items-center justify-between text-xs px-2 py-1 rounded bg-secondary/30">
@@ -2640,10 +2640,10 @@ function AllocatePaymentsDialog({
             {isAutoAllocating ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Auto-Allocating...
+                Auto-Matching...
               </>
             ) : (
-              'Auto-Allocate All'
+              'Auto-Match All'
             )}
           </Button>
           <div className="flex gap-2">
@@ -2658,10 +2658,10 @@ function AllocatePaymentsDialog({
               {allocatePayment.isPending ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Allocating...
+                  Matching...
                 </>
               ) : (
-                'Allocate'
+                'Match'
               )}
             </Button>
           </div>

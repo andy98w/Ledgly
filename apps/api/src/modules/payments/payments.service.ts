@@ -291,7 +291,15 @@ export class PaymentsService {
       memo: payment.memo,
     });
 
-    return payment;
+    // Auto-allocate to matching charges (best-effort)
+    let allocationResult: { allocated: boolean; allocatedCents?: number; chargeCount?: number } = { allocated: false };
+    try {
+      allocationResult = await this.autoAllocatePayment(orgId, payment.id, createdById);
+    } catch {
+      // Allocation failure must not block payment creation
+    }
+
+    return { ...payment, allocationResult };
   }
 
   async bulkCreate(orgId: string, createdById: string, items: CreatePaymentDto[]) {

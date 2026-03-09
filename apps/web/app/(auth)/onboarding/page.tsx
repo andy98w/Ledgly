@@ -200,7 +200,7 @@ function OnboardingWizard() {
           })),
         });
       }
-      router.push('/dashboard');
+      router.push('/agent');
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -611,7 +611,7 @@ function OnboardingWizard() {
               <Button
                 variant="outline"
                 className="flex-1"
-                onClick={() => router.push('/dashboard')}
+                onClick={() => router.push('/agent')}
               >
                 Skip
               </Button>

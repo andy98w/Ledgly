@@ -155,7 +155,7 @@ const PaymentCard = memo(function PaymentCard({
                       )}
                     </span>
                   </TooltipTrigger>
-                  <TooltipContent>{hasUnallocated ? 'Unallocated' : 'Allocated'}</TooltipContent>
+                  <TooltipContent>{hasUnallocated ? 'Unmatched' : 'Matched'}</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
               {isAdmin ? (
@@ -168,7 +168,7 @@ const PaymentCard = memo(function PaymentCard({
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={() => onApplyToCharge(payment)}>
                       <Link2 className="h-4 w-4 mr-2" />
-                      {hasUnallocated ? 'Apply to Charge' : 'Manage Allocations'}
+                      {hasUnallocated ? 'Apply to Charge' : 'Manage Matches'}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => onEdit(payment)}>
                       <Pencil className="h-4 w-4 mr-2" />
@@ -202,7 +202,7 @@ const PaymentCard = memo(function PaymentCard({
                           onUnallocate({ id: a.id, chargeId: a.chargeId, amountCents: a.amountCents }, payment.id);
                         }}
                         className="ml-0.5 rounded-full p-0.5 hover:bg-destructive/20 hover:text-destructive transition-colors"
-                        title="Remove allocation"
+                        title="Remove match"
                       >
                         <X className="w-3 h-3" />
                       </button>
@@ -549,7 +549,7 @@ export default function PaymentsPage() {
       {
         onSuccess: () => {
           toast({
-            title: 'Allocation removed',
+            title: 'Match removed',
             action: (
               <ToastUndoButton
                 onClick={() => {
@@ -559,19 +559,19 @@ export default function PaymentsPage() {
                       onSuccess: (result: any) => {
                         const newAllocId = result?.allocations?.[0]?.id;
                         toast({
-                          title: 'Allocation restored',
+                          title: 'Match restored',
                           action: newAllocId ? (
                             <ToastUndoButton
                               onClick={() => removeAllocation.mutate(
                                 { orgId: currentOrgId!, allocationId: newAllocId },
-                                { onSuccess: () => toast({ title: 'Allocation removed' }) },
+                                { onSuccess: () => toast({ title: 'Match removed' }) },
                               )}
                               label="Redo"
                             />
                           ) : undefined,
                         });
                       },
-                      onError: () => toast({ title: 'Failed to restore allocation', variant: 'destructive' }),
+                      onError: () => toast({ title: 'Failed to restore match', variant: 'destructive' }),
                     },
                   );
                 }}
@@ -579,7 +579,7 @@ export default function PaymentsPage() {
             ),
           });
         },
-        onError: (error: any) => toast({ title: 'Error removing allocation', description: error.message || 'Please try again', variant: 'destructive' }),
+        onError: (error: any) => toast({ title: 'Error removing match', description: error.message || 'Please try again', variant: 'destructive' }),
       },
     );
   }, [currentOrgId, removeAllocation, allocatePayment, toast]);
@@ -656,19 +656,19 @@ export default function PaymentsPage() {
           const redoChargeId = selectedChargeId;
           const redoAmount = allocationAmount;
           toast({
-            title: 'Payment allocated',
+            title: 'Payment matched',
             action: allocationId ? (
               <ToastUndoButton
                 onClick={() => removeAllocation.mutate(
                   { orgId: currentOrgId!, allocationId },
                   {
                     onSuccess: () => toast({
-                      title: 'Allocation removed',
+                      title: 'Match removed',
                       action: (
                         <ToastUndoButton
                           onClick={() => allocatePayment.mutate(
                             { orgId: currentOrgId!, paymentId: redoPaymentId, allocations: [{ chargeId: redoChargeId, amountCents: redoAmount }] },
-                            { onSuccess: () => toast({ title: 'Payment allocated' }) },
+                            { onSuccess: () => toast({ title: 'Payment matched' }) },
                           )}
                           label="Redo"
                         />
@@ -684,7 +684,7 @@ export default function PaymentsPage() {
         },
         onError: (error: any) => {
           toast({
-            title: 'Error allocating payment',
+            title: 'Error matching payment',
             description: error.message || 'Please try again',
             variant: 'destructive',
           });
@@ -775,7 +775,7 @@ export default function PaymentsPage() {
 
       toast({
         title: `Charge created`,
-        description: `Payment from ${sourcePayment.rawPayerName || 'Unknown'} has been allocated.`,
+        description: `Payment from ${sourcePayment.rawPayerName || 'Unknown'} has been matched.`,
       });
 
       closeChargeDialog();
@@ -835,14 +835,14 @@ export default function PaymentsPage() {
 
     if (allocatedCount > 0) {
       toast({
-        title: `Allocated ${allocatedCount} payment${allocatedCount > 1 ? 's' : ''}`,
-        description: `Total: $${(totalAllocated / 100).toFixed(2)} allocated to "${similarPaymentsDialog.chargeTitle}"`,
+        title: `Matched ${allocatedCount} payment${allocatedCount > 1 ? 's' : ''}`,
+        description: `Total: $${(totalAllocated / 100).toFixed(2)} matched to "${similarPaymentsDialog.chargeTitle}"`,
       });
     }
     if (failedCount > 0 && allocatedCount === 0) {
       toast({
-        title: 'Allocation failed',
-        description: 'No available charges remaining to allocate to.',
+        title: 'Matching failed',
+        description: 'No available charges remaining to match to.',
         variant: 'destructive',
       });
     }
@@ -936,19 +936,19 @@ export default function PaymentsPage() {
 
       if (result.successCount > 0) {
         toast({
-          title: `Auto-allocated ${result.successCount} payment${result.successCount !== 1 ? 's' : ''}`,
-          description: `$${(result.totalAllocatedCents / 100).toFixed(2)} allocated to matching charges.${result.skippedCount > 0 ? ` ${result.skippedCount} skipped (no match).` : ''}`,
+          title: `Auto-matched ${result.successCount} payment${result.successCount !== 1 ? 's' : ''}`,
+          description: `$${(result.totalAllocatedCents / 100).toFixed(2)} matched to charges.${result.skippedCount > 0 ? ` ${result.skippedCount} skipped (no match).` : ''}`,
         });
       } else {
         toast({
-          title: 'No payments allocated',
+          title: 'No payments matched',
           description: 'No matching members or open charges found for the selected payments.',
           variant: 'destructive',
         });
       }
     } catch {
       toast({
-        title: 'Auto-allocation failed',
+        title: 'Auto-matching failed',
         description: 'An error occurred. Please try again.',
         variant: 'destructive',
       });
@@ -1001,7 +1001,7 @@ export default function PaymentsPage() {
     );
 
     if (selectedList.length === 0) {
-      toast({ title: 'No unallocated payments selected' });
+      toast({ title: 'No unmatched payments selected' });
       return;
     }
 
@@ -1069,7 +1069,7 @@ export default function PaymentsPage() {
       setSelectedPayments(new Set());
       const parts: string[] = [`Created ${chargeArray.length} charge${chargeArray.length !== 1 ? 's' : ''}`];
       if (totalAllocatedCents > 0) {
-        parts.push(`allocated $${(totalAllocatedCents / 100).toFixed(2)}`);
+        parts.push(`matched $${(totalAllocatedCents / 100).toFixed(2)}`);
       }
       toast({
         title: parts.join(', '),
@@ -1090,7 +1090,7 @@ export default function PaymentsPage() {
   }, [allocationFilter, searchQuery, page]);
 
   const handleExportPayments = (format: 'csv' | 'pdf') => {
-    const headers = ['Payer', 'Amount', 'Date', 'Source', 'Allocated', 'Unallocated', 'Memo'];
+    const headers = ['Payer', 'Amount', 'Date', 'Source', 'Matched', 'Unmatched', 'Memo'];
     const rows = filteredPayments.map((p) => [
       p.rawPayerName || '',
       `$${(p.amountCents / 100).toFixed(2)}`,
@@ -1111,7 +1111,7 @@ export default function PaymentsPage() {
       <FadeIn>
         <PageHeader
           title="Payments"
-          helpText="View and manage payments. Allocate payments to charges or create new charges from unallocated payments."
+          helpText="View and manage payments. Match payments to charges or create new charges from unmatched payments."
           actions={
             <div className="flex items-center gap-2">
               {isAdmin && (
@@ -1165,13 +1165,13 @@ export default function PaymentsPage() {
             color="emerald"
           />
           <StatCard
-            title="Unallocated"
+            title="Unmatched"
             value={totalUnallocated}
             isMoney
-            description={totalUnallocated > 0 ? 'Needs attention' : 'All allocated'}
+            description={totalUnallocated > 0 ? 'Pending auto-match' : 'All matched'}
             icon={Wallet}
             delay={0.2}
-            color="rose"
+            color="amber"
           />
         </div>
       )}
@@ -1196,8 +1196,8 @@ export default function PaymentsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Payments</SelectItem>
-                <SelectItem value="allocated">Allocated</SelectItem>
-                <SelectItem value="unallocated">Unallocated</SelectItem>
+                <SelectItem value="allocated">Matched</SelectItem>
+                <SelectItem value="unallocated">Unmatched</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -1252,7 +1252,7 @@ export default function PaymentsPage() {
                   <button
                     onClick={handleBulkAutoAllocate}
                     className="w-7 h-7 flex items-center justify-center transition-all hover:text-primary"
-                    title={`Auto-allocate ${selectedPayments.size} selected`}
+                    title={`Auto-match ${selectedPayments.size} selected`}
                     disabled={bulkAutoAllocate.isPending}
                   >
                     {bulkAutoAllocate.isPending ? (
@@ -1392,7 +1392,7 @@ export default function PaymentsPage() {
           <DialogHeader>
             <DialogTitle>Delete Payment</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete this payment? This will also remove any allocations to charges.
+              Are you sure you want to delete this payment? This will also remove any matches to charges.
             </DialogDescription>
           </DialogHeader>
           {deletingPayment && (
@@ -1432,12 +1432,12 @@ export default function PaymentsPage() {
         <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>
-              {chargeDialogPayment && chargeDialogPayment.unallocatedCents > 0 ? 'Apply to Charge' : 'Manage Allocations'}
+              {chargeDialogPayment && chargeDialogPayment.unallocatedCents > 0 ? 'Apply to Charge' : 'Manage Matches'}
             </DialogTitle>
             <DialogDescription>
               {chargeDialogPayment && chargeDialogPayment.unallocatedCents > 0
-                ? 'Allocate this payment to an existing charge or create a new one.'
-                : 'View and manage current allocations for this payment.'}
+                ? 'Match this payment to an existing charge or create a new one.'
+                : 'View and manage current matches for this payment.'}
             </DialogDescription>
           </DialogHeader>
           {(() => {
@@ -1459,15 +1459,15 @@ export default function PaymentsPage() {
                   </div>
                   <div className="text-right">
                     <Money cents={livePayment.unallocatedCents} size="lg" className="text-success" />
-                    <p className="text-xs text-muted-foreground">unallocated</p>
+                    <p className="text-xs text-muted-foreground">unmatched</p>
                   </div>
                 </div>
               </div>
 
-              {/* Current allocations */}
+              {/* Current matches */}
               {hasAllocations && (
                 <div className="space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground">Current Allocations</p>
+                  <p className="text-xs font-medium text-muted-foreground">Current Matches</p>
                   <div className="space-y-1">
                     {livePayment.allocations.map((a: any) => (
                       <div key={a.id} className="flex items-center justify-between p-2.5 rounded-lg border border-border/50 bg-secondary/20">
@@ -1478,7 +1478,7 @@ export default function PaymentsPage() {
                         <button
                           onClick={() => handleUnallocate({ id: a.id, chargeId: a.chargeId, amountCents: a.amountCents }, livePayment.id)}
                           className="ml-2 rounded-full p-1 hover:bg-destructive/20 hover:text-destructive transition-colors shrink-0"
-                          title="Remove allocation"
+                          title="Remove match"
                         >
                           <X className="w-3 h-3" />
                         </button>
@@ -1488,7 +1488,7 @@ export default function PaymentsPage() {
                 </div>
               )}
 
-              {/* Tab switcher - only when there are unallocated funds */}
+              {/* Tab switcher - only when there are unmatched funds */}
               {hasUnallocatedFunds ? (
                 <>
                   <div className="flex rounded-lg bg-secondary/50 p-1">
@@ -1653,10 +1653,10 @@ export default function PaymentsPage() {
                       </>
                     )}
 
-                    {/* Allocation amount input */}
+                    {/* Match amount input */}
                     {selectedChargeId && (
                       <div className="space-y-2 pt-2 border-t border-border/30">
-                        <Label>Amount to Allocate ($)</Label>
+                        <Label>Amount to Match ($)</Label>
                         <Input
                           type="number"
                           step="0.01"
@@ -1826,7 +1826,7 @@ export default function PaymentsPage() {
                 </>
               ) : hasAllocations ? (
                 <p className="text-sm text-muted-foreground text-center py-4">
-                  Remove an allocation above to reallocate funds.
+                  Remove a match above to re-match funds.
                 </p>
               ) : null}
             </>
@@ -1848,17 +1848,17 @@ export default function PaymentsPage() {
                   {allocatePayment.isPending ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Allocating...
+                      Matching...
                     </>
                   ) : (
-                    'Allocate'
+                    'Match'
                   )}
                 </Button>
               ) : (
                 <Button
                   onClick={handleConfirmCreateCharge}
                   disabled={createCharge.isPending || allocatePayment.isPending || selectedMembers.size === 0}
-                 
+
                 >
                   {(createCharge.isPending || allocatePayment.isPending) ? (
                     <>
@@ -1866,7 +1866,7 @@ export default function PaymentsPage() {
                       Creating...
                     </>
                   ) : (
-                    `Create Charge${selectedMembers.size > 1 ? 's' : ''} & Allocate`
+                    `Create Charge${selectedMembers.size > 1 ? 's' : ''} & Match`
                   )}
                 </Button>
               )
@@ -1875,22 +1875,22 @@ export default function PaymentsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Similar Payments Allocation Dialog */}
+      {/* Similar Payments Match Dialog */}
       <Dialog
         open={!!similarPaymentsDialog}
         onOpenChange={(open) => !open && setSimilarPaymentsDialog(null)}
       >
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Allocate Similar Payments?</DialogTitle>
+            <DialogTitle>Match Similar Payments?</DialogTitle>
             <DialogDescription>
-              Would you like to allocate any of these similar payments to "{similarPaymentsDialog?.chargeTitle}"?
+              Would you like to match any of these similar payments to "{similarPaymentsDialog?.chargeTitle}"?
             </DialogDescription>
           </DialogHeader>
           {similarPaymentsDialog && (
             <div className="space-y-4 py-4">
               <p className="text-sm text-muted-foreground">
-                Payments sorted by similarity to the charge amount. Select any to allocate:
+                Payments sorted by similarity to the charge amount. Select any to match:
               </p>
               <div className="space-y-2 max-h-[300px] overflow-y-auto scrollbar-none">
                 {similarPaymentsDialog.similarPayments.map((payment) => (
@@ -1948,10 +1948,10 @@ export default function PaymentsPage() {
               {allocatePayment.isPending ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Allocating...
+                  Matching...
                 </>
               ) : (
-                `Allocate ${selectedSimilarPayments.size > 0 ? selectedSimilarPayments.size : ''} Payment${selectedSimilarPayments.size !== 1 ? 's' : ''}`
+                `Match ${selectedSimilarPayments.size > 0 ? selectedSimilarPayments.size : ''} Payment${selectedSimilarPayments.size !== 1 ? 's' : ''}`
               )}
             </Button>
           </DialogFooter>
@@ -1961,7 +1961,7 @@ export default function PaymentsPage() {
       <BatchActionsBar selectedCount={selectedPayments.size} onClear={() => setSelectedPayments(new Set())}>
         <Button variant="secondary" size="sm" onClick={handleBulkAutoAllocate} disabled={bulkAutoAllocate.isPending} className="h-8">
           <Link2 className="w-3.5 h-3.5 mr-1.5" />
-          Auto-Allocate
+          Auto-Match
         </Button>
         <Button variant="secondary" size="sm" onClick={handleBulkCreateCharges} disabled={bulkCreateCharges.isPending} className="h-8">
           <Receipt className="w-3.5 h-3.5 mr-1.5" />

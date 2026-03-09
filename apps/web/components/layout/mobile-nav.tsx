@@ -14,17 +14,17 @@ import {
 
 const primaryItems = [
   { href: '/dashboard', label: 'Home', icon: LayoutDashboard },
-  { href: '/spreadsheet', label: 'Spreadsheet', icon: Table2 },
+  { href: '/agent', label: 'AI', icon: Sparkles },
   { href: '/members', label: 'Members', icon: Users },
-  { href: '/charges', label: 'Charges', icon: Receipt },
+  { href: '/charges', label: 'Dues', icon: Receipt },
 ];
 
 const moreItems = [
-  { href: '/agent', label: 'LedgelyAI', icon: Sparkles },
   { href: '/payments', label: 'Payments', icon: CreditCard },
   { href: '/expenses', label: 'Expenses', icon: TrendingDown },
   { href: '/inbox', label: 'Inbox', icon: Inbox },
-  { href: '/audit', label: 'Audit Log', icon: History },
+  { href: '/spreadsheet', label: 'Spreadsheet', icon: Table2 },
+  { href: '/audit', label: 'Activity', icon: History },
 ];
 
 export function MobileNav() {

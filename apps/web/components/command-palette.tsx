@@ -83,7 +83,7 @@ export function CommandPalette() {
                 Members
               </CommandItem>
               <CommandItem icon={Receipt} onSelect={() => runCommand(() => router.push('/charges'))}>
-                Charges
+                Dues
               </CommandItem>
               <CommandItem icon={TrendingDown} onSelect={() => runCommand(() => router.push('/expenses'))}>
                 Expenses
@@ -98,7 +98,7 @@ export function CommandPalette() {
                 Spreadsheet
               </CommandItem>
               <CommandItem icon={History} onSelect={() => runCommand(() => router.push('/audit'))}>
-                Audit Log
+                Activity
               </CommandItem>
             </Command.Group>
 
@@ -112,7 +112,7 @@ export function CommandPalette() {
                 Create Member
               </CommandItem>
               <CommandItem icon={Plus} onSelect={() => runCommand(() => router.push('/charges/new'))}>
-                Create Charge
+                Create Due
               </CommandItem>
               <CommandItem icon={Plus} onSelect={() => runCommand(() => router.push('/expenses/new'))}>
                 Create Expense

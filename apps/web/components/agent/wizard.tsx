@@ -31,7 +31,7 @@ export const WIZARD_TEMPLATES: Record<string, string> = {
   'create-expenses': `Record expenses:\n- \n(e.g. "Office supplies, $120, Operations, Mar 1"\nor multi-expense: "Party Supplies: cups $15, plates $20, napkins $8")`,
   'create-payments': `Record payments:\n- \n(e.g. "John Smith, $50, Mar 1, Venmo")`,
   'view-members': 'Show me all active members and their current balances',
-  'view-charges': 'Show me all outstanding charges',
+  'view-charges': 'Show me all unpaid charges',
   'view-payments': 'Show me recent payments',
   'view-balances': 'Give me a summary of all member balances',
   'edit-members': `Edit member:\n[member details]`,

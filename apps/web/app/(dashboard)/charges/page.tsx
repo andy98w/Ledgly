@@ -159,7 +159,7 @@ export default function ChargesPage() {
     }
 
     if (charges.length === 0) {
-      throw new Error(errors.length > 0 ? errors.slice(0, 5).join('\n') : 'No valid charges found');
+      throw new Error(errors.length > 0 ? errors.slice(0, 5).join('\n') : 'No valid dues found');
     }
 
     await bulkCreateCharges.mutateAsync({ orgId: currentOrgId, charges });
@@ -227,7 +227,7 @@ export default function ChargesPage() {
       {
         onSuccess: () => {
           toast({
-            title: 'Charge updated',
+            title: 'Due updated',
             action: undoData ? (
               <ToastUndoButton
                 onClick={() => {
@@ -241,7 +241,7 @@ export default function ChargesPage() {
                           <ToastUndoButton
                             onClick={() => updateCharge.mutate(
                               { orgId: currentOrgId!, chargeId, data: redoData },
-                              { onSuccess: () => toast({ title: 'Charge updated' }) },
+                              { onSuccess: () => toast({ title: 'Due updated' }) },
                             )}
                             label="Redo"
                           />
@@ -256,7 +256,7 @@ export default function ChargesPage() {
           });
           setEditingCharge(null);
         },
-        onError: (error: any) => { toast({ title: 'Error updating charge', description: error.message || 'Please try again', variant: 'destructive' }); },
+        onError: (error: any) => { toast({ title: 'Error updating due', description: error.message || 'Please try again', variant: 'destructive' }); },
       },
     );
   };
@@ -269,13 +269,13 @@ export default function ChargesPage() {
       {
         onSuccess: () => {
           toast({
-            title: 'Charge deleted',
+            title: 'Due deleted',
             description: 'You can undo this action.',
             action: <ToastUndoButton onClick={() => handleRestoreCharge(chargeId)} />,
           });
           setDeletingCharge(null);
         },
-        onError: (error: any) => { toast({ title: 'Error deleting charge', description: error.message || 'Please try again', variant: 'destructive' }); },
+        onError: (error: any) => { toast({ title: 'Error deleting due', description: error.message || 'Please try again', variant: 'destructive' }); },
       },
     );
   };
@@ -286,18 +286,18 @@ export default function ChargesPage() {
       { orgId: currentOrgId, chargeId },
       {
         onSuccess: () => toast({
-          title: 'Charge restored',
+          title: 'Due restored',
           action: (
             <ToastUndoButton
               onClick={() => voidCharge.mutate(
                 { orgId: currentOrgId!, chargeId },
-                { onSuccess: () => toast({ title: 'Charge deleted' }) },
+                { onSuccess: () => toast({ title: 'Due deleted' }) },
               )}
               label="Redo"
             />
           ),
         }),
-        onError: (error: any) => { toast({ title: 'Error restoring charge', description: error.message || 'Please try again', variant: 'destructive' }); },
+        onError: (error: any) => { toast({ title: 'Error restoring due', description: error.message || 'Please try again', variant: 'destructive' }); },
       },
     );
   };
@@ -354,10 +354,10 @@ export default function ChargesPage() {
       if (updatedCount > 0) parts.push(`Updated ${updatedCount}`);
       if (addedMemberIds.length > 0) parts.push(`added ${addedMemberIds.length}`);
       if (removedMemberIds.length > 0) parts.push(`removed ${removedMemberIds.length}`);
-      toast({ title: `${parts.join(', ')} charge${updatedCount + addedMemberIds.length !== 1 ? 's' : ''}` });
+      toast({ title: `${parts.join(', ')} due${updatedCount + addedMemberIds.length !== 1 ? 's' : ''}` });
       setEditingGroup(null);
     } catch (error: any) {
-      toast({ title: 'Error updating charges', description: error.message || 'Please try again', variant: 'destructive' });
+      toast({ title: 'Error updating dues', description: error.message || 'Please try again', variant: 'destructive' });
     }
   };
 
@@ -373,10 +373,10 @@ export default function ChargesPage() {
           deletingGroup.charges.map((c) => voidCharge.mutateAsync({ orgId: currentOrgId, chargeId: c.id })),
         );
       }
-      toast({ title: `Deleted ${deletingGroup.memberCount} charges` });
+      toast({ title: `Deleted ${deletingGroup.memberCount} dues` });
       setDeletingGroup(null);
     } catch (error: any) {
-      toast({ title: 'Error deleting charges', description: error.message || 'Please try again', variant: 'destructive' });
+      toast({ title: 'Error deleting dues', description: error.message || 'Please try again', variant: 'destructive' });
     }
   };
 
@@ -390,7 +390,7 @@ export default function ChargesPage() {
       clearSelection();
 
       toast({
-        title: `Deleted ${deletedCount} charge${deletedCount !== 1 ? 's' : ''}`,
+        title: `Deleted ${deletedCount} due${deletedCount !== 1 ? 's' : ''}`,
         action: (
           <ToastUndoButton
             onClick={async () => {
@@ -399,12 +399,12 @@ export default function ChargesPage() {
                 try { await restoreCharge.mutateAsync({ orgId: currentOrgId, chargeId }); restoredCount++; } catch { /* continue */ }
               }
               toast({
-                title: `Restored ${restoredCount} charge${restoredCount !== 1 ? 's' : ''}`,
+                title: `Restored ${restoredCount} due${restoredCount !== 1 ? 's' : ''}`,
                 action: (
                   <ToastUndoButton
                     onClick={async () => {
                       const redoResult = await bulkVoidCharges.mutateAsync({ orgId: currentOrgId, chargeIds });
-                      toast({ title: `Deleted ${redoResult.voidedCount} charge${redoResult.voidedCount !== 1 ? 's' : ''}` });
+                      toast({ title: `Deleted ${redoResult.voidedCount} due${redoResult.voidedCount !== 1 ? 's' : ''}` });
                     }}
                     label="Redo"
                   />
@@ -442,7 +442,7 @@ export default function ChargesPage() {
       {
         onSuccess: () => {
           toast({
-            title: 'Allocation removed',
+            title: 'Match removed',
             action: (
               <ToastUndoButton
                 onClick={() => {
@@ -452,19 +452,19 @@ export default function ChargesPage() {
                       onSuccess: (result: any) => {
                         const newAllocId = result?.allocations?.[0]?.id;
                         toast({
-                          title: 'Allocation restored',
+                          title: 'Match restored',
                           action: newAllocId ? (
                             <ToastUndoButton
                               onClick={() => removeAllocation.mutate(
                                 { orgId: currentOrgId!, allocationId: newAllocId },
-                                { onSuccess: () => toast({ title: 'Allocation removed' }) },
+                                { onSuccess: () => toast({ title: 'Match removed' }) },
                               )}
                               label="Redo"
                             />
                           ) : undefined,
                         });
                       },
-                      onError: () => toast({ title: 'Failed to restore allocation', variant: 'destructive' }),
+                      onError: () => toast({ title: 'Failed to restore match', variant: 'destructive' }),
                     },
                   );
                 }}
@@ -472,7 +472,7 @@ export default function ChargesPage() {
             ),
           });
         },
-        onError: (error: any) => toast({ title: 'Error removing allocation', description: error.message || 'Please try again', variant: 'destructive' }),
+        onError: (error: any) => toast({ title: 'Error removing match', description: error.message || 'Please try again', variant: 'destructive' }),
       },
     );
   }, [currentOrgId, removeAllocation, allocatePayment, toast]);
@@ -485,19 +485,19 @@ export default function ChargesPage() {
         onSuccess: (result: any) => {
           const allocationId = result?.allocations?.[0]?.id;
           toast({
-            title: 'Payment allocated',
+            title: 'Payment matched',
             action: allocationId ? (
               <ToastUndoButton
                 onClick={() => removeAllocation.mutate(
                   { orgId: currentOrgId!, allocationId },
                   {
                     onSuccess: () => toast({
-                      title: 'Allocation removed',
+                      title: 'Match removed',
                       action: (
                         <ToastUndoButton
                           onClick={() => allocatePayment.mutate(
                             { orgId: currentOrgId!, paymentId, allocations: [{ chargeId, amountCents }] },
-                            { onSuccess: () => toast({ title: 'Payment allocated' }) },
+                            { onSuccess: () => toast({ title: 'Payment matched' }) },
                           )}
                           label="Redo"
                         />
@@ -512,7 +512,7 @@ export default function ChargesPage() {
           setAllocatingCharge(null);
         },
         onError: (error: any) => {
-          toast({ title: 'Error allocating payment', description: error.message || 'Please try again', variant: 'destructive' });
+          toast({ title: 'Error matching payment', description: error.message || 'Please try again', variant: 'destructive' });
         },
       },
     );
@@ -565,12 +565,12 @@ export default function ChargesPage() {
       }
 
       toast({
-        title: 'Charge created successfully',
-        ...(totalAllocated > 0 && { description: `Auto-allocated ${formatCents(totalAllocated)} from existing payments` }),
+        title: 'Due created successfully',
+        ...(totalAllocated > 0 && { description: `Auto-matched ${formatCents(totalAllocated)} from existing payments` }),
       });
       setShowCreateDialog(false);
     } catch (error: any) {
-      toast({ title: 'Error creating charge', description: error.message || 'Please try again', variant: 'destructive' });
+      toast({ title: 'Error creating due', description: error.message || 'Please try again', variant: 'destructive' });
     }
   };
 
@@ -586,7 +586,7 @@ export default function ChargesPage() {
     ]);
     const filename = `charges-${new Date().toISOString().split('T')[0]}`;
     if (format === 'csv') exportCSV(headers, rows, filename);
-    else exportPDF('Charges', headers, rows, filename);
+    else exportPDF('Dues', headers, rows, filename);
   };
 
   return (
@@ -595,8 +595,8 @@ export default function ChargesPage() {
       {/* Header */}
       <FadeIn>
         <PageHeader
-          title="Charges"
-          helpText="Create charges for dues, events, fines, or other fees. Assign to one or multiple members and track payment status."
+          title="Dues"
+          helpText="Create dues for events, fines, or other fees. Assign to one or multiple members and track payment status."
           actions={
             <div className="flex items-center gap-2">
               {isAdmin && (
@@ -606,7 +606,7 @@ export default function ChargesPage() {
                   className="hover:opacity-90 transition-opacity"
                 >
                   <Plus className="w-4 h-4 mr-1.5" />
-                  Create Charge
+                  Create Due
                 </Button>
               )}
               <DropdownMenu>
@@ -640,9 +640,9 @@ export default function ChargesPage() {
       {/* Stats */}
       {totalCharges > 0 && (
         <div className="grid gap-4 md:grid-cols-3">
-          <StatCard title="Total Charges" value={totalCharges} description="All time charges" icon={Receipt} delay={0} color="amber" />
+          <StatCard title="Total Dues" value={totalCharges} description="All time dues" icon={Receipt} delay={0} color="amber" />
           <StatCard title="Total Amount" value={totalAmount} isMoney description="Amount billed" icon={TrendingUp} delay={0.1} color="emerald" />
-          <StatCard title="Collection Rate" value={`${collectionRate}%`} description={`${totalCollected > 0 ? `$${(totalCollected / 100).toFixed(0)}` : '$0'} collected`} icon={Percent} delay={0.2} color="violet" />
+          <StatCard title="% Collected" value={`${collectionRate}%`} description={`${totalCollected > 0 ? `$${(totalCollected / 100).toFixed(0)}` : '$0'} collected`} icon={Percent} delay={0.2} color="violet" />
         </div>
       )}
 
@@ -652,8 +652,8 @@ export default function ChargesPage() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
             <Input
-              placeholder="Search charges..."
-              aria-label="Search charges"
+              placeholder="Search dues..."
+              aria-label="Search dues"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9 h-9 bg-secondary/30 border-border/50"
@@ -666,7 +666,7 @@ export default function ChargesPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="OPEN">Open</SelectItem>
+                <SelectItem value="OPEN">Unpaid</SelectItem>
                 <SelectItem value="PARTIALLY_PAID">Partial</SelectItem>
                 <SelectItem value="PAID">Paid</SelectItem>
               </SelectContent>
@@ -699,11 +699,11 @@ export default function ChargesPage() {
         <FadeIn delay={0.3}>
           <EmptyState
             icon={Receipt}
-            title="No charges yet"
-            description="Create your first charge to start tracking dues"
+            title="No dues yet"
+            description="Create your first due to start tracking payments"
             action={isAdmin && (
               <Button asChild>
-                <Link href="/charges/new">Create your first charge</Link>
+                <Link href="/charges/new">Create your first due</Link>
               </Button>
             )}
             className="rounded-xl border border-border/50 bg-card/50"
@@ -714,11 +714,11 @@ export default function ChargesPage() {
           <div className="space-y-3">
             {isAdmin && paginatedGroups.length > 0 && (
               <div className="rounded-xl border border-border/50 bg-secondary/20 p-4 flex items-center justify-between">
-                <button onClick={toggleSelectAllCharges} className="flex items-center gap-3 transition-colors" aria-label={isAllChargesSelected ? "Deselect all charges" : "Select all charges"} aria-pressed={isAllChargesSelected}>
+                <button onClick={toggleSelectAllCharges} className="flex items-center gap-3 transition-colors" aria-label={isAllChargesSelected ? "Deselect all dues" : "Select all dues"} aria-pressed={isAllChargesSelected}>
                   {isAllChargesSelected ? <CheckCircle2 className="w-5 h-5 text-primary" /> : <Circle className="w-5 h-5 text-muted-foreground hover:text-primary" />}
                   <span className="text-sm text-muted-foreground">{isAllChargesSelected ? 'Deselect all' : 'Select all'}</span>
                 </button>
-                <button onClick={handleBulkDeleteCharges} className={cn("w-7 h-7 flex items-center justify-center transition-all hover:text-destructive", selectedCharges.size === 0 && "invisible")} aria-label={`Delete ${selectedCharges.size} selected charges`}>
+                <button onClick={handleBulkDeleteCharges} className={cn("w-7 h-7 flex items-center justify-center transition-all hover:text-destructive", selectedCharges.size === 0 && "invisible")} aria-label={`Delete ${selectedCharges.size} selected dues`}>
                   <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
                 </button>
               </div>
@@ -772,8 +772,8 @@ export default function ChargesPage() {
       <CSVImportDialog
         open={showImport}
         onOpenChange={setShowImport}
-        title="Import Charges"
-        description="Upload a CSV file to bulk import charges. Member names will be fuzzy-matched to existing members."
+        title="Import Dues"
+        description="Upload a CSV file to bulk import dues. Member names will be fuzzy-matched to existing members."
         fields={CHARGE_IMPORT_FIELDS}
         onImport={handleImportCharges}
       />

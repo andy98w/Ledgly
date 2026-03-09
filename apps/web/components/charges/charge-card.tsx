@@ -131,7 +131,7 @@ export const ChargeCard = memo(function ChargeCard({
                   {!isPaid && onAllocatePayment && (
                     <DropdownMenuItem onClick={() => onAllocatePayment(charge)}>
                       <Link2 className="h-4 w-4 mr-2" />
-                      Allocate Payment
+                      Match Payment
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuItem onClick={() => onEdit(charge)}>

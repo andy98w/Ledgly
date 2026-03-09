@@ -95,7 +95,7 @@ export default function PortalPage() {
               </div>
               <div>
                 <p className="font-semibold text-success">You're all paid up</p>
-                <p className="text-sm text-muted-foreground mt-0.5">No outstanding balance</p>
+                <p className="text-sm text-muted-foreground mt-0.5">No unpaid balance</p>
               </div>
             </div>
           </div>

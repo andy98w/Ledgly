@@ -834,7 +834,7 @@ export default function MembersPage() {
       <FadeIn>
         <PageHeader
           title="Members"
-          helpText="Add and manage organization members. Members can have charges assigned to them and receive payment allocations."
+          helpText="Add and manage organization members. Members can have dues assigned to them and receive payments."
           actions={
             <div className="flex items-center gap-2">
               {isAdmin && <AddMemberDialog />}

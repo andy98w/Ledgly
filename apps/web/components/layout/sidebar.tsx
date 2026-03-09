@@ -53,21 +53,26 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-const navItems: Array<{
+type NavItem = {
   href: string;
   label: string;
   icon: typeof LayoutDashboard;
   badge?: string;
-}> = [
+};
+
+const primaryNavItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/spreadsheet', label: 'Spreadsheet', icon: Table2 },
   { href: '/agent', label: 'LedgelyAI', icon: Sparkles },
   { href: '/members', label: 'Members', icon: Users },
-  { href: '/charges', label: 'Charges', icon: Receipt },
-  { href: '/expenses', label: 'Expenses', icon: TrendingDown },
+  { href: '/charges', label: 'Dues', icon: Receipt },
   { href: '/payments', label: 'Payments', icon: CreditCard },
+  { href: '/expenses', label: 'Expenses', icon: TrendingDown },
   { href: '/inbox', label: 'Inbox', icon: Inbox },
-  { href: '/audit', label: 'Audit Log', icon: History },
+];
+
+const secondaryNavItems: NavItem[] = [
+  { href: '/spreadsheet', label: 'Spreadsheet', icon: Table2 },
+  { href: '/audit', label: 'Activity', icon: History },
 ];
 
 export function Sidebar() {
@@ -224,7 +229,7 @@ export function Sidebar() {
         {/* Navigation */}
         <nav data-tour="sidebar-nav" className={cn('flex-1 py-4 space-y-1', isCollapsed ? 'px-2' : 'px-3')}>
           <TooltipProvider delayDuration={0}>
-            {navItems.map((item) => {
+            {primaryNavItems.map((item) => {
               const isActive = pathname === item.href;
               const link = (
                 <Link
@@ -251,6 +256,52 @@ export function Sidebar() {
                       {item.badge}
                     </span>
                   )}
+                </Link>
+              );
+
+              if (isCollapsed) {
+                return (
+                  <Tooltip key={item.href}>
+                    <TooltipTrigger asChild>{link}</TooltipTrigger>
+                    <TooltipContent side="right">{item.label}</TooltipContent>
+                  </Tooltip>
+                );
+              }
+
+              return link;
+            })}
+
+            {/* Secondary nav separator */}
+            <div className="pt-2 mt-2 border-t border-border/30">
+              {!isCollapsed && (
+                <span className="px-3 text-[11px] text-muted-foreground/50 uppercase tracking-wider font-medium">
+                  More
+                </span>
+              )}
+            </div>
+
+            {secondaryNavItems.map((item) => {
+              const isActive = pathname === item.href;
+              const link = (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    'relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
+                    isCollapsed && 'justify-center px-0',
+                    isActive
+                      ? 'text-primary'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50',
+                  )}
+                >
+                  {isActive && (
+                    <>
+                      <div className="absolute inset-0 bg-primary/8 rounded-xl transition-all" />
+                      <div className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-primary" />
+                    </>
+                  )}
+                  <item.icon className={cn('h-5 w-5 relative z-10 shrink-0', isActive && 'text-primary')} />
+                  {!isCollapsed && <span className="relative z-10">{item.label}</span>}
                 </Link>
               );
 

@@ -404,7 +404,7 @@ export default function InboxPage() {
           } else if (data.autoConfirmed > 0 && data.needsReview === 0) {
             toast({
               title: `${data.autoConfirmed} payments auto-confirmed!`,
-              description: 'Members matched automatically and payments allocated.',
+              description: 'Members matched automatically and payments matched.',
             });
           } else if (data.autoConfirmed > 0) {
             toast({
@@ -919,7 +919,7 @@ export default function InboxPage() {
                     <CheckCircle2 className="w-5 h-5 text-primary" />
                   </div>
                   <div>
-                    <p className="font-medium">Smart allocation</p>
+                    <p className="font-medium">Smart matching</p>
                     <p className="text-sm text-muted-foreground">
                       Derives reason from payment memo
                     </p>

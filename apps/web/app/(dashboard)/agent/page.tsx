@@ -34,6 +34,7 @@ import {
   type ChatMessage,
   type ProposedAction,
 } from '@/lib/queries/agent';
+import { useDashboard } from '@/lib/queries/organizations';
 import { queryKeys } from '@/lib/query-keys';
 
 // Strip wizard hint text before sending to LLM
@@ -50,6 +51,9 @@ export default function AgentPage() {
   const user = useAuthStore((s) => s.user);
   const isSidebarCollapsed = useSidebarStore((s) => s.isCollapsed);
   const userName = user?.name || user?.email || 'You';
+  const { data: dashStats } = useDashboard(currentOrgId);
+  const isNewOrg = dashStats && dashStats.memberCount <= 1 && dashStats.openChargesCount === 0;
+  const currentOrg = user?.memberships.find((m) => m.orgId === currentOrgId);
 
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [input, setInput] = useState('');
@@ -501,19 +505,31 @@ export default function AgentPage() {
                 <div className="p-4 rounded-2xl bg-primary/10 mb-4">
                   <Sparkles className="h-8 w-8 text-primary" />
                 </div>
-                <h2 className="text-lg font-semibold mb-2">LedgelyAI</h2>
+                <h2 className="text-lg font-semibold mb-2">
+                  {isNewOrg ? `Welcome to ${currentOrg?.orgName || 'Ledgly'}!` : 'LedgelyAI'}
+                </h2>
                 <p className="text-muted-foreground text-sm max-w-md">
-                  I can help you manage your organization.
+                  {isNewOrg
+                    ? "I can help you get started. Try one of these to set up your organization:"
+                    : "I can help you manage your organization."}
                 </p>
 
                 {/* Suggestion buttons */}
                 <div className="grid gap-2 text-sm text-left max-w-sm w-full mt-6">
-                  {[
-                    'How many members do I have?',
-                    'Charge all active members $50 for Spring Dues',
-                    'Add John Smith and Jane Doe as members',
-                    'Show me all outstanding balances',
-                  ].map((suggestion) => (
+                  {(isNewOrg
+                    ? [
+                        'Add my members',
+                        'Create dues for all members',
+                        'Import members from CSV',
+                        'How does Ledgly work?',
+                      ]
+                    : [
+                        'How many members do I have?',
+                        'Charge all active members $50 for Spring Dues',
+                        'Add John Smith and Jane Doe as members',
+                        'Show me all unpaid balances',
+                      ]
+                  ).map((suggestion) => (
                     <button
                       key={suggestion}
                       onClick={() => {
