@@ -46,6 +46,25 @@ function stripWizardHints(text: string): string {
   return result.trim();
 }
 
+function getContextSuggestions(pathname: string): string[] {
+  if (pathname.startsWith('/payments')) {
+    return ['Match all unmatched payments', "Who hasn't paid?"];
+  }
+  if (pathname.startsWith('/charges')) {
+    return ['Send reminders for unpaid charges', 'Charge all members $50'];
+  }
+  if (pathname.startsWith('/members')) {
+    return ['Show member balances', 'Who owes the most?'];
+  }
+  if (pathname.startsWith('/expenses')) {
+    return ['Show expense summary this month'];
+  }
+  if (pathname === '/dashboard') {
+    return ['Give me a financial summary'];
+  }
+  return [];
+}
+
 export function AISidebar() {
   const pathname = usePathname();
   const isAdmin = useIsAdminOrTreasurer();
@@ -497,15 +516,31 @@ export function AISidebar() {
               </div>
             </div>
           )}
-          {messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-              <div className="p-3 rounded-xl bg-primary/10 mb-3">
-                <Sparkles className="h-6 w-6 text-primary" />
+          {messages.length === 0 && (() => {
+            const suggestions = getContextSuggestions(pathname);
+            return (
+              <div className="flex flex-col items-center justify-center h-full text-center">
+                <div className="p-3 rounded-xl bg-primary/10 mb-3">
+                  <Sparkles className="h-6 w-6 text-primary" />
+                </div>
+                <p className="text-sm font-medium mb-1">LedgelyAI</p>
+                <p className="text-xs text-muted-foreground mb-4">Ask me anything about your organization.</p>
+                {suggestions.length > 0 && (
+                  <div className="space-y-1.5 w-full max-w-[240px]">
+                    {suggestions.map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => handleSend(s)}
+                        className="w-full text-left text-xs px-3 py-2 rounded-lg border border-border/50 bg-secondary/30 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-              <p className="text-sm font-medium mb-1">LedgelyAI</p>
-              <p className="text-xs text-muted-foreground">Ask me anything about your organization.</p>
-            </div>
-          )}
+            );
+          })()}
 
           {messages.map((msg) => (
             <div
@@ -736,15 +771,31 @@ export function AISidebar() {
                 </div>
               </div>
             )}
-            {messages.length === 0 && (
-              <div className="flex flex-col items-center justify-center h-full text-center">
-                <div className="p-3 rounded-xl bg-primary/10 mb-3">
-                  <Sparkles className="h-6 w-6 text-primary" />
+            {messages.length === 0 && (() => {
+              const suggestions = getContextSuggestions(pathname);
+              return (
+                <div className="flex flex-col items-center justify-center h-full text-center">
+                  <div className="p-3 rounded-xl bg-primary/10 mb-3">
+                    <Sparkles className="h-6 w-6 text-primary" />
+                  </div>
+                  <p className="text-sm font-medium mb-1">LedgelyAI</p>
+                  <p className="text-xs text-muted-foreground mb-4">Ask me anything about your organization.</p>
+                  {suggestions.length > 0 && (
+                    <div className="space-y-1.5 w-full max-w-[240px]">
+                      {suggestions.map((s) => (
+                        <button
+                          key={s}
+                          onClick={() => handleSend(s)}
+                          className="w-full text-left text-xs px-3 py-2 rounded-lg border border-border/50 bg-secondary/30 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <p className="text-sm font-medium mb-1">LedgelyAI</p>
-                <p className="text-xs text-muted-foreground">Ask me anything about your organization.</p>
-              </div>
-            )}
+              );
+            })()}
 
             {messages.map((msg) => (
               <div
