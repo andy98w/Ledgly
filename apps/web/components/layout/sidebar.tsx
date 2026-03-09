@@ -9,7 +9,6 @@ import {
   Users,
   Receipt,
   CreditCard,
-  Inbox,
   Settings,
   LogOut,
   Building2,
@@ -67,7 +66,6 @@ const primaryNavItems: NavItem[] = [
   { href: '/charges', label: 'Charges', icon: Receipt },
   { href: '/payments', label: 'Payments', icon: CreditCard },
   { href: '/expenses', label: 'Expenses', icon: TrendingDown },
-  { href: '/inbox', label: 'Inbox', icon: Inbox },
 ];
 
 const secondaryNavItems: NavItem[] = [

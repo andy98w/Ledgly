@@ -2,16 +2,30 @@
 
 import { useState, useMemo, useEffect, useCallback, memo } from 'react';
 import Link from 'next/link';
-import { Plus, CreditCard, AlertCircle, TrendingUp, Wallet, Search, MoreHorizontal, Pencil, Trash2, Loader2, ChevronDown, Link2, Check, Users, Circle, CheckCircle2, X, UserPlus, Receipt, MoreVertical, FileSpreadsheet, FileText } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
+import { Plus, CreditCard, AlertCircle, TrendingUp, Wallet, Search, MoreHorizontal, Pencil, Trash2, Loader2, ChevronDown, Link2, Check, Users, Circle, CheckCircle2, X, UserPlus, Receipt, MoreVertical, FileSpreadsheet, FileText, Mail, Zap, RefreshCw, ExternalLink, Sparkles, Clock, ArrowDownLeft, ArrowUpRight, Undo2, EyeOff } from 'lucide-react';
 import { useAutoAllocateToCharge, useRemoveAllocation, useBulkAutoAllocate } from '@/lib/queries/payments';
 import { cn } from '@/lib/utils';
 import { groupCharges } from '@/lib/utils/charge-grouping';
 import { calculateNameSimilarity } from '@/lib/utils/name-similarity';
 import { usePayments, useUpdatePayment, useDeletePayment, useRestorePayment, useAllocatePayment, useBulkDeletePayments } from '@/lib/queries/payments';
 import { useCharges, useBulkCreateCharges } from '@/lib/queries/charges';
-import { useMembers, useCreateMembers } from '@/lib/queries/members';
+import { useMembers, useCreateMembers, useDeleteMember } from '@/lib/queries/members';
 import { useAuthStore, useIsAdminOrTreasurer } from '@/lib/stores/auth';
 import { formatDate } from '@/lib/utils';
+import {
+  useGmailStatus,
+  useGmailImports,
+  useImportStats,
+  useSyncGmail,
+  useConfirmImport,
+  useIgnoreImport,
+  useRestoreImport,
+  useUnconfirmImport,
+  useDisconnectGmail,
+  getGmailConnectUrl,
+  type EmailImport,
+} from '@/lib/queries/gmail';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -59,6 +73,214 @@ import {
 import { BatchActionsBar } from '@/components/ui/batch-actions-bar';
 import { ExportDropdown } from '@/components/export-dropdown';
 import { exportCSV, exportPDF } from '@/lib/export';
+
+// ── Import Card (Review tab) ────────────────────────────────────
+function ImportCard({
+  item,
+  members,
+  onConfirm,
+  onIgnore,
+  onCreateMember,
+  isConfirming,
+  isIgnoring,
+  isSelected,
+  onToggleSelect,
+}: {
+  item: EmailImport;
+  members: Array<{ id: string; displayName: string }>;
+  onConfirm: (membershipId?: string) => void;
+  onIgnore: () => void;
+  onCreateMember: (name: string) => Promise<string | null>;
+  isConfirming: boolean;
+  isIgnoring: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: () => void;
+}) {
+  const [selectedMemberId, setSelectedMemberId] = useState<string>('none');
+  const [memberSearch, setMemberSearch] = useState('');
+  const [isCreatingMember, setIsCreatingMember] = useState(false);
+
+  useEffect(() => {
+    if (item.parsedPayerName && members.length > 0) {
+      const payerNameLower = item.parsedPayerName.toLowerCase();
+      const match = members.find((m) =>
+        m.displayName.toLowerCase().includes(payerNameLower) ||
+        payerNameLower.includes(m.displayName.toLowerCase()),
+      );
+      if (match) setSelectedMemberId(match.id);
+    }
+  }, [item.parsedPayerName, members]);
+
+  const filteredMembers = useMemo(() => {
+    if (!memberSearch) return members;
+    const query = memberSearch.toLowerCase();
+    return members.filter((m) => m.displayName.toLowerCase().includes(query));
+  }, [members, memberSearch]);
+
+  const createName = memberSearch.trim() || item.parsedPayerName || '';
+  const canCreateNew = createName && !filteredMembers.some(
+    (m) => m.displayName.toLowerCase() === createName.toLowerCase()
+  );
+
+  const handleCreateAndSelect = async () => {
+    if (!createName) return;
+    setIsCreatingMember(true);
+    const newMemberId = await onCreateMember(createName);
+    if (newMemberId) {
+      setSelectedMemberId(newMemberId);
+      setMemberSearch('');
+    }
+    setIsCreatingMember(false);
+  };
+
+  const sourceColors: Record<string, string> = {
+    venmo: 'bg-blue-500/10 text-blue-400 border-blue-500/30',
+    zelle: 'bg-purple-500/10 text-purple-400 border-purple-500/30',
+    cashapp: 'bg-green-500/10 text-green-400 border-green-500/30',
+    paypal: 'bg-blue-600/10 text-blue-300 border-blue-600/30',
+  };
+
+  const isOutgoing = item.parsedDirection === 'outgoing';
+
+  return (
+    <MotionCard className={isOutgoing
+      ? 'border-l-4 border-l-destructive/30 bg-destructive/5'
+      : 'border-l-4 border-l-success/30 bg-success/5'
+    }>
+      <MotionCardContent className="p-3">
+        <div className="flex items-start justify-between gap-3">
+          {onToggleSelect && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggleSelect(); }}
+              className="mt-1 flex items-center justify-center transition-colors"
+              title={isSelected ? "Deselect" : "Select"}
+            >
+              {isSelected ? (
+                <CheckCircle2 className="w-5 h-5 text-primary" />
+              ) : (
+                <Circle className="w-5 h-5 text-muted-foreground hover:text-primary" />
+              )}
+            </button>
+          )}
+          <div className="flex items-start gap-3 flex-1 min-w-0">
+            <AvatarGradient name={item.parsedPayerName || 'Unknown'} size="md" />
+            <div className="space-y-1 flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap min-w-0">
+                <p className="font-medium text-sm truncate" title={isOutgoing ? `To: ${item.parsedPayerName || 'Unknown'}` : item.parsedPayerName || 'Unknown Payer'}>
+                  {isOutgoing ? `To: ${item.parsedPayerName || 'Unknown'}` : item.parsedPayerName || 'Unknown Payer'}
+                </p>
+                <Badge variant="outline" className={`text-xs ${isOutgoing ? 'bg-destructive/10 text-destructive border-destructive/20' : 'bg-success/10 text-success border-success/20'}`}>
+                  {isOutgoing ? (<><ArrowUpRight className="w-3 h-3 mr-1" />Out</>) : (<><ArrowDownLeft className="w-3 h-3 mr-1" />In</>)}
+                </Badge>
+                <Badge variant="outline" className={`text-xs ${sourceColors[item.parsedSource] || ''}`}>
+                  {item.parsedSource}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-3">
+                {item.parsedAmount && <Money cents={item.parsedAmount} size="md" />}
+                <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                  <span>{new Date(item.emailDate).toLocaleDateString()}</span>
+                  {item.parsedMemo && (<><span className="opacity-30">•</span><span>"{item.parsedMemo}"</span></>)}
+                </div>
+              </div>
+              {item.needsReviewReason && (
+                <div className="flex items-center gap-1.5">
+                  <AlertCircle className="w-3 h-3 text-warning" />
+                  <p className="text-xs text-warning">{item.needsReviewReason}</p>
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {!isOutgoing && (
+              <Select value={selectedMemberId} onValueChange={(v) => { setSelectedMemberId(v); setMemberSearch(''); }}>
+                <SelectTrigger className="h-8 w-40 text-xs bg-secondary/30 border-border/50">
+                  <SelectValue placeholder="Member" />
+                </SelectTrigger>
+                <SelectContent>
+                  <div className="px-2 pb-2">
+                    <div className="relative">
+                      <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                      <Input
+                        placeholder="Search or create..."
+                        value={memberSearch}
+                        onChange={(e) => setMemberSearch(e.target.value)}
+                        className="h-7 pl-7 text-xs"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                  </div>
+                  <SelectItem value="none">Unassigned</SelectItem>
+                  {canCreateNew && (
+                    <div
+                      className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-xs outline-none hover:bg-accent hover:text-accent-foreground text-primary font-medium"
+                      onClick={(e) => { e.stopPropagation(); handleCreateAndSelect(); }}
+                    >
+                      <Plus className="w-3 h-3 mr-2" />
+                      {isCreatingMember ? 'Creating...' : `Create "${createName}"`}
+                    </div>
+                  )}
+                  {filteredMembers.map((member) => (
+                    <SelectItem key={member.id} value={member.id}>
+                      <div className="flex items-center gap-2">
+                        <AvatarGradient name={member.displayName} size="xs" />
+                        {member.displayName}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <Button
+              size="sm"
+              variant="outline"
+              className={isOutgoing
+                ? 'border-destructive/30 text-destructive hover:bg-destructive/10'
+                : 'border-success/30 text-success hover:bg-success/10'
+              }
+              onClick={() => onConfirm(isOutgoing ? undefined : (selectedMemberId === 'none' ? undefined : selectedMemberId))}
+              disabled={isConfirming || isIgnoring || !item.parsedAmount}
+            >
+              {isConfirming ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-muted-foreground hover:text-foreground"
+              onClick={onIgnore}
+              disabled={isConfirming || isIgnoring}
+            >
+              {isIgnoring ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
+            </Button>
+          </div>
+        </div>
+      </MotionCardContent>
+    </MotionCard>
+  );
+}
+
+function ReviewLoadingSkeleton() {
+  return (
+    <div className="space-y-2">
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="rounded-xl border border-border/50 bg-card p-3">
+          <div className="flex items-center gap-3">
+            <Skeleton className="w-10 h-10 rounded-full" />
+            <div className="space-y-1.5 flex-1">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-5 w-20" />
+            </div>
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-8 w-32" />
+              <Skeleton className="h-8 w-8" />
+              <Skeleton className="h-8 w-8" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 interface EditPaymentData {
   id: string;
@@ -237,6 +459,8 @@ function PaymentCardSkeleton() {
 }
 
 export default function PaymentsPage() {
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState<'review' | 'payments'>('payments');
   const [allocationFilter, setAllocationFilter] = useState<'all' | 'allocated' | 'unallocated'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
@@ -248,6 +472,17 @@ export default function PaymentsPage() {
   const [allocationAmount, setAllocationAmount] = useState<number>(0);
   const [expandedGroupKey, setExpandedGroupKey] = useState<string | null>(null);
   const [selectedPayments, setSelectedPayments] = useState<Set<string>>(new Set());
+
+  // Review tab state
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [ignoringId, setIgnoringId] = useState<string | null>(null);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [selectedImports, setSelectedImports] = useState<Set<string>>(new Set());
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+  const [reviewSubTab, setReviewSubTab] = useState<'pending' | 'ignored'>('pending');
+  const [pendingPage, setPendingPage] = useState(1);
+  const [pendingPerPage, setPendingPerPage] = useState(20);
+  const [pendingSearch, setPendingSearch] = useState('');
 
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
   const isAdmin = useIsAdminOrTreasurer();
@@ -261,13 +496,55 @@ export default function PaymentsPage() {
   const allocatePayment = useAllocatePayment();
   const bulkCreateCharges = useBulkCreateCharges();
   const createMembers = useCreateMembers();
+  const deleteMember = useDeleteMember();
   const autoAllocate = useAutoAllocateToCharge();
   const removeAllocation = useRemoveAllocation();
   const bulkAutoAllocate = useBulkAutoAllocate();
 
+  // Gmail / Review tab hooks
+  const { data: gmailStatus, isLoading: gmailStatusLoading } = useGmailStatus(currentOrgId);
+  const { data: importsData, isLoading: importsLoading } = useGmailImports(currentOrgId, 'pending');
+  const { data: ignoredData, isLoading: ignoredLoading } = useGmailImports(currentOrgId, 'ignored');
+  const { data: importStats } = useImportStats(currentOrgId);
+  const syncGmail = useSyncGmail();
+  const confirmImport = useConfirmImport();
+  const ignoreImport = useIgnoreImport();
+  const restoreImportAction = useRestoreImport();
+  const unconfirmImport = useUnconfirmImport();
+  const disconnectGmail = useDisconnectGmail();
+
+  const gmailConnected = gmailStatus?.connected;
+  const pendingImports = importsData?.data || [];
+  const ignoredImports = ignoredData?.data || [];
+
+  // Auto-select review tab when URL has ?tab=review
+  useEffect(() => {
+    if (searchParams.get('tab') === 'review') setActiveTab('review');
+  }, [searchParams]);
+
+  // Auto-select review tab when pending imports exist on first load
+  useEffect(() => {
+    if (importStats && importStats.pending > 0 && searchParams.get('tab') !== 'review') {
+      setActiveTab('review');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [importStats?.pending]);
+
+  // Handle Gmail OAuth callback
+  useEffect(() => {
+    const connected = searchParams.get('connected');
+    const error = searchParams.get('error');
+    if (connected === 'true') {
+      toast({ title: 'Gmail connected successfully!' });
+      if (currentOrgId) syncGmail.mutate({ orgId: currentOrgId });
+    } else if (error) {
+      toast({ title: 'Connection failed', description: 'Could not connect to Gmail.', variant: 'destructive' });
+    }
+  }, [searchParams, currentOrgId]);
+
   // Fetch charges for allocation and members for creating charges
   const { data: chargesData } = useCharges(currentOrgId, { status: 'OPEN' });
-  const { data: membersData } = useMembers(currentOrgId);
+  const { data: membersData } = useMembers(currentOrgId, { status: 'ACTIVE', limit: 100 });
   const openCharges = chargesData?.data || [];
   const members = membersData?.data || [];
   const chargeGroups = useMemo(() => groupCharges(openCharges), [openCharges]);
@@ -850,16 +1127,192 @@ export default function PaymentsPage() {
     else exportPDF('Payments', headers, rows, filename);
   };
 
+  // ── Review tab handlers ──────────────────────────────────────
+  const handleGmailSync = () => {
+    if (!currentOrgId) return;
+    syncGmail.mutate(
+      { orgId: currentOrgId },
+      {
+        onSuccess: (data) => {
+          if (data.imported === 0) {
+            toast({ title: 'All caught up!', description: 'No new payment emails found.' });
+          } else if (data.autoConfirmed > 0 && data.needsReview === 0) {
+            toast({ title: `${data.autoConfirmed} payments auto-confirmed!` });
+          } else if (data.autoConfirmed > 0) {
+            toast({ title: 'Sync complete', description: `${data.autoConfirmed} auto-confirmed, ${data.needsReview} need review` });
+          } else {
+            toast({ title: 'Sync complete', description: `${data.needsReview} payments need your review` });
+          }
+        },
+        onError: (error: any) => {
+          toast({ title: 'Sync failed', description: error.message, variant: 'destructive' });
+        },
+      },
+    );
+  };
+
+  const handleConfirmImport = (importId: string, membershipId?: string) => {
+    if (!currentOrgId) return;
+    setConfirmingId(importId);
+    confirmImport.mutate(
+      { orgId: currentOrgId, importId, membershipId },
+      {
+        onSuccess: () => {
+          toast({
+            title: 'Payment confirmed!',
+            action: (
+              <ToastUndoButton
+                onClick={() => unconfirmImport.mutate(
+                  { orgId: currentOrgId!, importId },
+                  {
+                    onSuccess: () => toast({ title: 'Moved back to pending' }),
+                    onError: () => toast({ title: 'Failed to undo', variant: 'destructive' }),
+                  },
+                )}
+              />
+            ),
+          });
+          setConfirmingId(null);
+        },
+        onError: (error: any) => {
+          toast({ title: 'Error', description: error.message, variant: 'destructive' });
+          setConfirmingId(null);
+        },
+      },
+    );
+  };
+
+  const handleIgnoreImport = (importId: string) => {
+    if (!currentOrgId) return;
+    setIgnoringId(importId);
+    ignoreImport.mutate(
+      { orgId: currentOrgId, importId },
+      {
+        onSuccess: () => {
+          setIgnoringId(null);
+          toast({
+            title: 'Import ignored',
+            action: (
+              <ToastUndoButton
+                onClick={() => restoreImportAction.mutate(
+                  { orgId: currentOrgId!, importId },
+                  {
+                    onSuccess: () => toast({ title: 'Import restored' }),
+                    onError: () => toast({ title: 'Failed to undo', variant: 'destructive' }),
+                  },
+                )}
+              />
+            ),
+          });
+        },
+        onError: (error: any) => {
+          toast({ title: 'Error', description: error.message, variant: 'destructive' });
+          setIgnoringId(null);
+        },
+      },
+    );
+  };
+
+  const handleRestoreImport = (importId: string) => {
+    if (!currentOrgId) return;
+    setRestoringId(importId);
+    restoreImportAction.mutate(
+      { orgId: currentOrgId, importId },
+      {
+        onSuccess: () => {
+          toast({ title: 'Import restored' });
+          setRestoringId(null);
+        },
+        onError: (error: any) => {
+          toast({ title: 'Error', description: error.message, variant: 'destructive' });
+          setRestoringId(null);
+        },
+      },
+    );
+  };
+
+  const handleCreateMemberForImport = async (name: string): Promise<string | null> => {
+    if (!currentOrgId) return null;
+    try {
+      const result = await createMembers.mutateAsync({ orgId: currentOrgId, members: [{ name }] });
+      const createdId = result[0]?.id;
+      toast({
+        title: `Member "${name}" created`,
+        action: createdId ? (
+          <ToastUndoButton
+            onClick={() => deleteMember.mutate(
+              { orgId: currentOrgId, memberId: createdId },
+              {
+                onSuccess: () => toast({ title: `${name} removed` }),
+                onError: () => toast({ title: 'Failed to undo', variant: 'destructive' }),
+              },
+            )}
+          />
+        ) : undefined,
+      });
+      return createdId || null;
+    } catch (error: any) {
+      toast({ title: 'Error creating member', description: error.message, variant: 'destructive' });
+      return null;
+    }
+  };
+
+  const toggleImportSelection = (importId: string) => {
+    setSelectedImports((prev) => {
+      const next = new Set(prev);
+      if (next.has(importId)) next.delete(importId);
+      else next.add(importId);
+      return next;
+    });
+  };
+
+  const handleBulkApproveImports = async () => {
+    if (!currentOrgId || selectedImports.size === 0) return;
+    setIsBulkProcessing(true);
+    const importIds = Array.from(selectedImports);
+    let approvedCount = 0;
+    for (const importId of importIds) {
+      try { await confirmImport.mutateAsync({ orgId: currentOrgId, importId }); approvedCount++; } catch { /* continue */ }
+    }
+    setSelectedImports(new Set());
+    setIsBulkProcessing(false);
+    toast({ title: `Approved ${approvedCount} payment${approvedCount !== 1 ? 's' : ''}` });
+  };
+
+  const handleBulkIgnoreImports = async () => {
+    if (!currentOrgId || selectedImports.size === 0) return;
+    setIsBulkProcessing(true);
+    const importIds = Array.from(selectedImports);
+    let ignoredCount = 0;
+    for (const importId of importIds) {
+      try { await ignoreImport.mutateAsync({ orgId: currentOrgId, importId }); ignoredCount++; } catch { /* continue */ }
+    }
+    setSelectedImports(new Set());
+    setIsBulkProcessing(false);
+    toast({ title: `Ignored ${ignoredCount} import${ignoredCount !== 1 ? 's' : ''}` });
+  };
+
+  const handleDisconnectGmail = () => {
+    if (!currentOrgId) return;
+    disconnectGmail.mutate({ orgId: currentOrgId }, { onSuccess: () => toast({ title: 'Gmail disconnected' }) });
+  };
+
   return (
     <div data-tour="payments-list" className="space-y-8">
       {/* Header */}
       <FadeIn>
         <PageHeader
           title="Payments"
-          helpText="View and manage payments. Match payments to charges or create new charges from unmatched payments."
+          helpText="View and manage payments. Review imports from Gmail or manage confirmed payments."
           actions={
             <div className="flex items-center gap-2">
-              {isAdmin && (
+              {activeTab === 'review' && gmailConnected && (
+                <Button variant="outline" size="sm" onClick={handleGmailSync} disabled={syncGmail.isPending}>
+                  {syncGmail.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <RefreshCw className="w-4 h-4 mr-1.5" />}
+                  Sync
+                </Button>
+              )}
+              {activeTab === 'payments' && isAdmin && (
                 <Button asChild size="sm" className="hover:opacity-90 transition-opacity">
                   <Link href="/payments/new">
                     <Plus className="w-4 h-4 mr-1.5" />
@@ -867,28 +1320,342 @@ export default function PaymentsPage() {
                   </Link>
                 </Button>
               )}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="icon" className="h-9 w-9">
-                    <MoreVertical className="w-4 h-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => handleExportPayments('csv')} className="cursor-pointer">
-                    <FileSpreadsheet className="w-4 h-4 mr-2" />
-                    Export CSV
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleExportPayments('pdf')} className="cursor-pointer">
-                    <FileText className="w-4 h-4 mr-2" />
-                    Export PDF
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {activeTab === 'payments' && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="icon" className="h-9 w-9">
+                      <MoreVertical className="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => handleExportPayments('csv')} className="cursor-pointer">
+                      <FileSpreadsheet className="w-4 h-4 mr-2" />
+                      Export CSV
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleExportPayments('pdf')} className="cursor-pointer">
+                      <FileText className="w-4 h-4 mr-2" />
+                      Export PDF
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </div>
           }
         />
       </FadeIn>
 
+      {/* Tab Bar */}
+      <FadeIn delay={0.05}>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setActiveTab('review')}
+            className={cn(
+              'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors text-sm',
+              activeTab === 'review'
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50',
+            )}
+          >
+            <Mail className="w-4 h-4" />
+            Review
+            {importStats && importStats.pending > 0 && (
+              <Badge variant={activeTab === 'review' ? 'secondary' : 'outline'} className="ml-1 text-xs">
+                {importStats.pending}
+              </Badge>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('payments')}
+            className={cn(
+              'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors text-sm',
+              activeTab === 'payments'
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50',
+            )}
+          >
+            <CreditCard className="w-4 h-4" />
+            Payments
+          </button>
+        </div>
+      </FadeIn>
+
+      {/* ── Review Tab ──────────────────────────────────────────── */}
+      {activeTab === 'review' && (
+        <div className="space-y-6">
+          {/* Gmail Connection Status */}
+          {gmailStatusLoading ? (
+            <Skeleton className="h-32 rounded-2xl" />
+          ) : gmailConnected ? (
+            <div className="rounded-2xl border border-success/30 bg-gradient-to-br from-success/10 via-success/5 to-transparent p-5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-success/20 flex items-center justify-center">
+                    <CheckCircle2 className="w-6 h-6 text-success" />
+                  </div>
+                  <div>
+                    <p className="font-semibold">Gmail Connected</p>
+                    <p className="text-sm text-muted-foreground">{gmailStatus?.email}</p>
+                    {gmailStatus?.lastSyncAt && (
+                      <p className="text-xs text-muted-foreground">Last synced: {new Date(gmailStatus.lastSyncAt).toLocaleString()}</p>
+                    )}
+                  </div>
+                </div>
+                <Button variant="ghost" size="sm" onClick={handleDisconnectGmail} className="text-muted-foreground hover:text-destructive">
+                  Disconnect
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="relative overflow-hidden rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-6">
+              <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-blue-500/5 to-primary/5 animate-pulse" />
+              <div className="relative">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center shadow-lg">
+                    <Zap className="w-7 h-7 text-primary-foreground" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">Auto-Import Payments</h2>
+                    <p className="text-muted-foreground">Connect Gmail to automatically import Venmo and Zelle notifications</p>
+                  </div>
+                </div>
+                <div className="grid gap-4 md:grid-cols-3 mb-6">
+                  <div className="flex items-start gap-3 p-3 rounded-xl bg-card/50">
+                    <div className="p-2 rounded-lg bg-success/10"><Sparkles className="w-5 h-5 text-success" /></div>
+                    <div><p className="font-medium">Auto-match members</p><p className="text-sm text-muted-foreground">Payments auto-assigned when names match</p></div>
+                  </div>
+                  <div className="flex items-start gap-3 p-3 rounded-xl bg-card/50">
+                    <div className="p-2 rounded-lg bg-primary/10"><CheckCircle2 className="w-5 h-5 text-primary" /></div>
+                    <div><p className="font-medium">Smart matching</p><p className="text-sm text-muted-foreground">Derives reason from payment memo</p></div>
+                  </div>
+                  <div className="flex items-start gap-3 p-3 rounded-xl bg-card/50">
+                    <div className="p-2 rounded-lg bg-blue-500/10"><AlertCircle className="w-5 h-5 text-blue-400" /></div>
+                    <div><p className="font-medium">Review unknowns only</p><p className="text-sm text-muted-foreground">Manual review when no match found</p></div>
+                  </div>
+                </div>
+                <a href={currentOrgId ? getGmailConnectUrl(currentOrgId) : '#'} className="inline-flex">
+                  <Button className="hover:opacity-90">
+                    <Mail className="w-4 h-4 mr-2" />
+                    Connect Gmail
+                    <ExternalLink className="w-4 h-4 ml-2" />
+                  </Button>
+                </a>
+              </div>
+            </div>
+          )}
+
+          {/* Stats */}
+          {gmailConnected && importStats && (
+            <div className="grid grid-cols-3 gap-4">
+              <div className="rounded-xl border bg-card p-4">
+                <div className="flex items-center gap-2 text-muted-foreground mb-1"><Clock className="w-4 h-4" /><span className="text-sm">Pending</span></div>
+                <p className="text-xl font-bold">{importStats.pending}</p>
+              </div>
+              <div className="rounded-xl border bg-card p-4">
+                <div className="flex items-center gap-2 text-success mb-1"><CheckCircle2 className="w-4 h-4" /><span className="text-sm">Confirmed</span></div>
+                <p className="text-xl font-bold text-success">{importStats.autoConfirmed + importStats.confirmed}</p>
+                <p className="text-xs text-muted-foreground">last 7 days</p>
+              </div>
+              <div className="rounded-xl border bg-card p-4">
+                <div className="flex items-center gap-2 text-muted-foreground mb-1"><X className="w-4 h-4" /><span className="text-sm">Ignored</span></div>
+                <p className="text-xl font-bold">{importStats.ignored}</p>
+                <p className="text-xs text-muted-foreground">last 7 days</p>
+              </div>
+            </div>
+          )}
+
+          {/* Pending / Ignored sub-tabs */}
+          {gmailConnected && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setReviewSubTab('pending')}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors text-sm',
+                    reviewSubTab === 'pending' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50',
+                  )}
+                >
+                  <Clock className="w-4 h-4" />
+                  Pending
+                  {pendingImports.length > 0 && <Badge variant="outline" className="ml-1">{pendingImports.length}</Badge>}
+                </button>
+                <button
+                  onClick={() => setReviewSubTab('ignored')}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors text-sm',
+                    reviewSubTab === 'ignored' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50',
+                  )}
+                >
+                  <EyeOff className="w-4 h-4" />
+                  Ignored
+                  {ignoredImports.length > 0 && <Badge variant="outline" className="ml-1">{ignoredImports.length}</Badge>}
+                </button>
+              </div>
+
+              {reviewSubTab === 'pending' && (() => {
+                const filteredImports = pendingSearch
+                  ? pendingImports.filter((item) =>
+                      (item.parsedPayerName || '').toLowerCase().includes(pendingSearch.toLowerCase()) ||
+                      (item.parsedMemo || '').toLowerCase().includes(pendingSearch.toLowerCase()))
+                  : pendingImports;
+
+                const totalPendingPages = Math.ceil(filteredImports.length / pendingPerPage);
+                const pendingStartIndex = (pendingPage - 1) * pendingPerPage;
+                const paginatedImports = filteredImports.slice(pendingStartIndex, pendingStartIndex + pendingPerPage);
+                const currentPageIds = paginatedImports.map((i) => i.id);
+                const isAllCurrentPageSelected = currentPageIds.length > 0 && currentPageIds.every((id) => selectedImports.has(id));
+
+                const toggleSelectAllCurrentPage = () => {
+                  if (isAllCurrentPageSelected) {
+                    setSelectedImports((prev) => { const next = new Set(prev); currentPageIds.forEach((id) => next.delete(id)); return next; });
+                  } else {
+                    setSelectedImports((prev) => { const next = new Set(Array.from(prev)); currentPageIds.forEach((id) => next.add(id)); return next; });
+                  }
+                };
+
+                return importsLoading ? <ReviewLoadingSkeleton /> : pendingImports.length > 0 ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">Show</span>
+                        <Select value={String(pendingPerPage)} onValueChange={(v) => { setPendingPerPage(Number(v)); setPendingPage(1); }}>
+                          <SelectTrigger className="w-20 h-8 bg-secondary/30 border-border/50"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="20">20</SelectItem>
+                            <SelectItem value="50">50</SelectItem>
+                            <SelectItem value="100">100</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <span className="text-sm text-muted-foreground">per page</span>
+                      </div>
+                      <div className="relative w-64">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input placeholder="Search by name or memo..." value={pendingSearch} onChange={(e) => { setPendingSearch(e.target.value); setPendingPage(1); }} className="pl-10 h-9 bg-secondary/30 border-border/50 focus:border-primary" />
+                      </div>
+                    </div>
+
+                    {filteredImports.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">No results found for &quot;{pendingSearch}&quot;</div>
+                    ) : (
+                      <>
+                        <div className="rounded-xl border border-border/50 bg-secondary/20 p-3 flex items-center justify-between">
+                          <button onClick={toggleSelectAllCurrentPage} className="flex items-center gap-3 transition-colors" title={isAllCurrentPageSelected ? "Deselect all" : "Select all"}>
+                            {isAllCurrentPageSelected ? <CheckCircle2 className="w-5 h-5 text-primary" /> : <Circle className="w-5 h-5 text-muted-foreground hover:text-primary" />}
+                            <span className="text-sm text-muted-foreground">{isAllCurrentPageSelected ? 'Deselect all on page' : 'Select all on page'}</span>
+                          </button>
+                          <div className={`flex items-center gap-2 transition-opacity ${selectedImports.size > 0 ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                            <button onClick={handleBulkApproveImports} disabled={isBulkProcessing} className="w-7 h-7 flex items-center justify-center transition-colors hover:text-success" title={`Approve ${selectedImports.size} selected`}>
+                              {isBulkProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4 text-muted-foreground hover:text-success" />}
+                            </button>
+                            <button onClick={handleBulkIgnoreImports} disabled={isBulkProcessing} className="w-7 h-7 flex items-center justify-center transition-colors hover:text-destructive" title={`Ignore ${selectedImports.size} selected`}>
+                              <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
+                            </button>
+                          </div>
+                        </div>
+                        <AnimatedList
+                          items={paginatedImports}
+                          getKey={(item) => item.id}
+                          className="space-y-3"
+                          renderItem={(item) => (
+                            <ImportCard
+                              item={item}
+                              members={members}
+                              onConfirm={(membershipId) => handleConfirmImport(item.id, membershipId)}
+                              onIgnore={() => handleIgnoreImport(item.id)}
+                              onCreateMember={handleCreateMemberForImport}
+                              isConfirming={confirmingId === item.id}
+                              isIgnoring={ignoringId === item.id}
+                              isSelected={selectedImports.has(item.id)}
+                              onToggleSelect={() => toggleImportSelection(item.id)}
+                            />
+                          )}
+                        />
+                        {totalPendingPages > 1 && (
+                          <div className="flex items-center justify-between pt-4">
+                            <span className="text-sm text-muted-foreground">
+                              Showing {pendingStartIndex + 1}-{Math.min(pendingStartIndex + pendingPerPage, filteredImports.length)} of {filteredImports.length}
+                            </span>
+                            <Pagination page={pendingPage} totalPages={totalPendingPages} onPageChange={setPendingPage} />
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-border/50 bg-card/30 py-12 text-center">
+                    <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
+                      <CheckCircle2 className="w-8 h-8 text-success" />
+                    </div>
+                    <h3 className="font-semibold mb-2">Inbox Zero!</h3>
+                    <p className="text-sm text-muted-foreground max-w-md mx-auto">All caught up. New payment emails will appear here when you sync.</p>
+                    <Button variant="outline" size="sm" className="mt-4" onClick={handleGmailSync} disabled={syncGmail.isPending}>
+                      {syncGmail.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                      Check for new emails
+                    </Button>
+                  </div>
+                );
+              })()}
+
+              {reviewSubTab === 'ignored' && (
+                ignoredLoading ? <ReviewLoadingSkeleton /> : ignoredImports.length > 0 ? (
+                  <AnimatedList
+                    items={ignoredImports}
+                    getKey={(item) => item.id}
+                    className="space-y-3"
+                    renderItem={(item) => (
+                      <MotionCard className="opacity-60 hover:opacity-100 transition-opacity">
+                        <MotionCardContent className="p-5">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-start gap-4 flex-1">
+                              <AvatarGradient name={item.parsedPayerName || 'Unknown'} size="lg" />
+                              <div className="space-y-2 flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <p className="font-semibold">{item.parsedPayerName || 'Unknown Payer'}</p>
+                                  <Badge variant="outline" className="text-muted-foreground">Ignored</Badge>
+                                </div>
+                                {item.parsedAmount && <Money cents={item.parsedAmount} size="lg" className="text-muted-foreground" />}
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                  <span>{new Date(item.emailDate).toLocaleDateString()}</span>
+                                </div>
+                              </div>
+                            </div>
+                            <Button size="sm" variant="outline" onClick={() => handleRestoreImport(item.id)} disabled={restoringId === item.id}>
+                              {restoringId === item.id ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Undo2 className="w-4 h-4 mr-2" />}
+                              Restore
+                            </Button>
+                          </div>
+                        </MotionCardContent>
+                      </MotionCard>
+                    )}
+                  />
+                ) : (
+                  <div className="rounded-xl border border-dashed border-border/50 bg-card/30 py-12 text-center">
+                    <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
+                      <EyeOff className="w-8 h-8 text-muted-foreground" />
+                    </div>
+                    <h3 className="font-semibold mb-2">No ignored items</h3>
+                    <p className="text-sm text-muted-foreground max-w-md mx-auto">Items you ignore will appear here. You can restore them anytime.</p>
+                  </div>
+                )
+              )}
+            </div>
+          )}
+
+          {/* Floating Batch Actions Bar — Pending */}
+          <BatchActionsBar selectedCount={selectedImports.size} onClear={() => setSelectedImports(new Set())}>
+            <Button size="sm" variant="outline" className="border-success/30 text-success hover:bg-success/10" onClick={handleBulkApproveImports} disabled={isBulkProcessing}>
+              {isBulkProcessing ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />}
+              Approve
+            </Button>
+            <Button size="sm" variant="outline" className="border-destructive/30 text-destructive hover:bg-destructive/10" onClick={handleBulkIgnoreImports} disabled={isBulkProcessing}>
+              <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+              Ignore
+            </Button>
+          </BatchActionsBar>
+        </div>
+      )}
+
+      {/* ── Payments Tab ────────────────────────────────────────── */}
+      {activeTab === 'payments' && <>
       {/* Stats Grid */}
       {totalPayments > 0 && (
         <div className="grid gap-4 md:grid-cols-3">
@@ -1440,6 +2207,7 @@ export default function PaymentsPage() {
           Delete
         </Button>
       </BatchActionsBar>
+      </>}
     </div>
   );
 }

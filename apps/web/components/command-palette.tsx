@@ -8,7 +8,7 @@ import {
   Users,
   Receipt,
   CreditCard,
-  Inbox,
+  Mail,
   Settings,
   TrendingDown,
   Table2,
@@ -91,8 +91,8 @@ export function CommandPalette() {
               <CommandItem icon={CreditCard} onSelect={() => runCommand(() => router.push('/payments'))}>
                 Payments
               </CommandItem>
-              <CommandItem icon={Inbox} onSelect={() => runCommand(() => router.push('/inbox'))}>
-                Inbox
+              <CommandItem icon={Mail} onSelect={() => runCommand(() => router.push('/payments?tab=review'))}>
+                Review Imports
               </CommandItem>
               <CommandItem icon={Table2} onSelect={() => runCommand(() => router.push('/spreadsheet'))}>
                 Spreadsheet

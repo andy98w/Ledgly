@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, Receipt, CreditCard, MoreHorizontal, TrendingDown, Inbox, Table2, History, Sparkles } from 'lucide-react';
+import { LayoutDashboard, Users, Receipt, CreditCard, MoreHorizontal, TrendingDown, Table2, History, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -22,7 +22,6 @@ const primaryItems = [
 const moreItems = [
   { href: '/payments', label: 'Payments', icon: CreditCard },
   { href: '/expenses', label: 'Expenses', icon: TrendingDown },
-  { href: '/inbox', label: 'Inbox', icon: Inbox },
   { href: '/spreadsheet', label: 'Spreadsheet', icon: Table2 },
   { href: '/audit', label: 'Activity', icon: History },
 ];
