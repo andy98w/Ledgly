@@ -62,6 +62,7 @@ import { CSVImportDialog, type ImportField } from '@/components/import/csv-impor
 import { calculateNameSimilarity } from '@/lib/utils/name-similarity';
 import { ChargeCreateDialog } from '@/components/charges/charge-create-dialog';
 import { MultiExpenseCreateDialog } from '@/components/expenses/multi-expense-create-dialog';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 /** Strip "VENMO payment to " etc. prefixes from Gmail-imported expense titles */
 function cleanExpenseTitle(title: string): string {
@@ -463,6 +464,7 @@ export default function SpreadsheetPage() {
   const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
   const [showMultiChargeDialog, setShowMultiChargeDialog] = useState(false);
   const [showMultiExpenseDialog, setShowMultiExpenseDialog] = useState(false);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [newRowData, setNewRowData] = useState({
     date: new Date().toISOString().split('T')[0],
     category: '',
@@ -1524,6 +1526,14 @@ export default function SpreadsheetPage() {
 
       {/* Spreadsheet Table */}
       <FadeIn delay={0.25}>
+        {!isLoading && rows.length > 0 && (
+          <div className="flex items-center gap-2 mb-2 text-xs text-muted-foreground">
+            <span>Showing {rows.length} items</span>
+            {((chargesData?.data?.length ?? 0) >= 100 || (expensesData?.data?.length ?? 0) >= 100 || (paymentsData?.data?.length ?? 0) >= 100) && (
+              <span>(limited to 100 per type)</span>
+            )}
+          </div>
+        )}
         <div className="rounded-xl border bg-card overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -1534,7 +1544,7 @@ export default function SpreadsheetPage() {
                       <div className="flex items-center gap-0.5">
                         {selectedRows.size > 0 && (
                           <button
-                            onClick={handleDeleteSelected}
+                            onClick={() => setShowBulkDeleteConfirm(true)}
                             className="w-6 h-6 shrink-0 flex items-center justify-center transition-colors hover:text-destructive"
                             title={`Delete ${selectedRows.size} selected`}
                           >
@@ -1876,8 +1886,12 @@ export default function SpreadsheetPage() {
                   ))
                 ) : paginatedRows.length === 0 ? (
                   <tr>
-                    <td colSpan={isAdmin ? 8 : 7} className="px-4 py-12 text-center text-muted-foreground">
-                      No transactions found
+                    <td colSpan={isAdmin ? 8 : 7}>
+                      <div className="flex flex-col items-center justify-center text-center py-12">
+                        <Search className="h-6 w-6 text-muted-foreground mb-2" />
+                        <p className="font-semibold">No results</p>
+                        <p className="text-sm text-muted-foreground mt-1">Try adjusting your search or filters</p>
+                      </div>
                     </td>
                   </tr>
                 ) : (
@@ -2406,6 +2420,18 @@ export default function SpreadsheetPage() {
       />
 
       {/* Multi-expense Create Dialog */}
+      <ConfirmDialog
+        open={showBulkDeleteConfirm}
+        onOpenChange={setShowBulkDeleteConfirm}
+        title={`Delete ${selectedRows.size} selected row${selectedRows.size !== 1 ? 's' : ''}?`}
+        description="The selected charges, expenses, and payments will be deleted. This can be undone."
+        confirmLabel="Delete"
+        onConfirm={() => {
+          handleDeleteSelected();
+          setShowBulkDeleteConfirm(false);
+        }}
+      />
+
       <MultiExpenseCreateDialog
         open={showMultiExpenseDialog}
         onClose={() => setShowMultiExpenseDialog(false)}

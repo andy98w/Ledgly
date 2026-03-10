@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { History, Receipt, CreditCard, Users, TrendingDown, Building2, Link2, Filter, Undo2, Redo2, Loader2, ChevronDown, ChevronRight, Search, Sparkles } from 'lucide-react';
+import Link from 'next/link';
+import { History, Receipt, CreditCard, Users, TrendingDown, Building2, Link2, Filter, Undo2, Redo2, Loader2, ChevronDown, ChevronRight, Search, Sparkles, AlertCircle } from 'lucide-react';
 import { useAuditLogs, useUndoAuditLog, useUndoBatch, useRedoAuditLog, useRedoBatch, type AuditLogEntry, type BatchedAuditLogEntry, type AuditLogItem } from '@/lib/queries/audit';
 import { useAuthStore, useIsAdminOrTreasurer } from '@/lib/stores/auth';
 import { formatRelativeDate } from '@/lib/utils';
@@ -24,6 +25,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { PageHeader } from '@/components/ui/page-header';
 import { Pagination } from '@/components/ui/pagination';
 import { EmptyState } from '@/components/ui/empty-state';
+import { DateRangeFilter } from '@/components/ui/date-range-filter';
 import { cn } from '@/lib/utils';
 
 const entityTypeIcons: Record<string, typeof Receipt> = {
@@ -566,11 +568,12 @@ export default function AuditLogPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [searchQuery, setSearchQuery] = useState('');
+  const [dateRange, setDateRange] = useState<{ from?: string; to?: string }>({});
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
   const { toast } = useToast();
   const isAdmin = useIsAdminOrTreasurer();
 
-  const { data, isLoading } = useAuditLogs(currentOrgId, {
+  const { data, isLoading, isError, refetch } = useAuditLogs(currentOrgId, {
     entityType: entityTypeFilter !== 'all' ? entityTypeFilter : undefined,
     source: sourceFilter !== 'all' ? sourceFilter : undefined,
     limit: 100,
@@ -583,16 +586,20 @@ export default function AuditLogPage() {
 
   const allLogs = data?.data || [];
 
-  // Filter by search query
+  // Filter by search query and date range
   const logs = allLogs.filter((log) => {
-    if (!searchQuery.trim()) return true;
-    const query = searchQuery.toLowerCase();
-    const actorName = log.actor?.name?.toLowerCase() || '';
-    const entityType = log.entityType?.toLowerCase() || '';
-    const action = log.action?.toLowerCase() || '';
-    const description = ('batchDescription' in log ? (log as any).batchDescription : '')?.toLowerCase() || '';
-    const diffStr = 'diffJson' in log && log.diffJson ? JSON.stringify(log.diffJson).toLowerCase() : '';
-    return actorName.includes(query) || entityType.includes(query) || action.includes(query) || description.includes(query) || diffStr.includes(query);
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      const actorName = log.actor?.name?.toLowerCase() || '';
+      const entityType = log.entityType?.toLowerCase() || '';
+      const action = log.action?.toLowerCase() || '';
+      const description = ('batchDescription' in log ? (log as any).batchDescription : '')?.toLowerCase() || '';
+      const diffStr = 'diffJson' in log && log.diffJson ? JSON.stringify(log.diffJson).toLowerCase() : '';
+      if (!(actorName.includes(query) || entityType.includes(query) || action.includes(query) || description.includes(query) || diffStr.includes(query))) return false;
+    }
+    if (dateRange.from && log.createdAt.slice(0, 10) < dateRange.from) return false;
+    if (dateRange.to && log.createdAt.slice(0, 10) > dateRange.to) return false;
+    return true;
   });
 
   const totalPages = Math.ceil(logs.length / pageSize);
@@ -663,15 +670,13 @@ export default function AuditLogPage() {
 
   if (!isAdmin) {
     return (
-      <div className="text-center py-12">
-        <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
-          <History className="h-8 w-8 text-muted-foreground" />
-        </div>
-        <h3 className="text-lg font-semibold mb-2">Access Denied</h3>
-        <p className="text-muted-foreground">
-          Only admins and treasurers can view activity.
-        </p>
-      </div>
+      <EmptyState
+        icon={History}
+        title="Access Denied"
+        description="Only admins and treasurers can view activity."
+        action={<Button asChild variant="outline"><Link href="/dashboard">Go to Dashboard</Link></Button>}
+        className="rounded-xl border border-border/50 bg-card/50"
+      />
     );
   }
 
@@ -723,6 +728,7 @@ export default function AuditLogPage() {
                 <SelectItem value="MANUAL">Manual</SelectItem>
               </SelectContent>
             </Select>
+            <DateRangeFilter value={dateRange} onChange={(r) => { setDateRange(r); setPage(1); }} />
           </div>
         </div>
       </FadeIn>
@@ -735,6 +741,16 @@ export default function AuditLogPage() {
           <AuditLogSkeleton />
           <AuditLogSkeleton />
         </div>
+      ) : isError ? (
+        <FadeIn delay={0.2}>
+          <EmptyState
+            icon={AlertCircle}
+            title="Failed to load activity"
+            description="Something went wrong loading activity data."
+            action={<Button onClick={() => refetch()} variant="outline">Try Again</Button>}
+            className="rounded-xl border border-border/50 bg-card/50"
+          />
+        </FadeIn>
       ) : logs.length === 0 ? (
         <FadeIn delay={0.2}>
           <EmptyState

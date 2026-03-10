@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useCallback, memo } from 'react';
 import Link from 'next/link';
 
-import { Plus, Search, Users, AlertCircle, MoreHorizontal, Pencil, Trash2, ArrowUp, ArrowDown, Circle, CheckCircle2, Mail, Clock, Upload, MoreVertical, FileSpreadsheet, FileText, X } from 'lucide-react';
+import { Plus, Search, Users, AlertCircle, MoreHorizontal, Pencil, Trash2, Circle, CheckCircle2, Mail, Clock, Upload, MoreVertical, FileSpreadsheet, FileText, X } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import { useMembers, useCreateMembers, useUpdateMember, useDeleteMember, useRestoreMember, useResendInvitation, useBulkDeleteMembers, useApproveMember } from '@/lib/queries/members';
 import { useAuthStore, useIsAdminOrTreasurer, useIsOwner, useCurrentMembership } from '@/lib/stores/auth';
@@ -45,6 +45,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { ToastUndoButton } from '@/components/ui/toast-undo-button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { BatchActionsBar } from '@/components/ui/batch-actions-bar';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ExportDropdown } from '@/components/export-dropdown';
 import { CSVImportDialog, type ImportField } from '@/components/import/csv-import-dialog';
 import { exportCSV, exportPDF } from '@/lib/export';
@@ -591,12 +592,13 @@ export default function MembersPage() {
   const [pageSize, setPageSize] = useState(20);
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [showImport, setShowImport] = useState(false);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const { toast } = useToast();
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
   const isAdmin = useIsAdminOrTreasurer();
   const isOwner = useIsOwner();
   const currentMembership = useCurrentMembership();
-  const { data, isLoading } = useMembers(currentOrgId, { search });
+  const { data, isLoading, isError, refetch } = useMembers(currentOrgId, { search });
   const deleteMember = useDeleteMember();
   const restoreMember = useRestoreMember();
   const resendInvitation = useResendInvitation();
@@ -866,17 +868,41 @@ export default function MembersPage() {
         />
       </FadeIn>
 
-      {/* Search */}
+      {/* Search + Sort */}
       <FadeIn delay={0.1}>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-          <Input
-            placeholder="Search members..."
-            aria-label="Search members"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10 h-9 bg-secondary/30 border-border/50 focus:border-primary"
-          />
+        <div className="space-y-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <Input
+              placeholder="Search members..."
+              aria-label="Search members"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-10 h-9 bg-secondary/30 border-border/50 focus:border-primary"
+            />
+          </div>
+          <div className="flex gap-2">
+            <Select
+              value={`${sortBy}-${sortOrder}`}
+              onValueChange={(v) => {
+                const [field, order] = v.split('-') as [typeof sortBy, typeof sortOrder];
+                setSortBy(field);
+                setSortOrder(order);
+              }}
+            >
+              <SelectTrigger className="w-[160px] h-8 bg-secondary/30 border-border/50 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="name-asc">Name (A-Z)</SelectItem>
+                <SelectItem value="name-desc">Name (Z-A)</SelectItem>
+                <SelectItem value="joinedAt-desc">Joined (Newest)</SelectItem>
+                <SelectItem value="joinedAt-asc">Joined (Oldest)</SelectItem>
+                <SelectItem value="balance-desc">Balance (High-Low)</SelectItem>
+                <SelectItem value="balance-asc">Balance (Low-High)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </FadeIn>
 
@@ -887,6 +913,16 @@ export default function MembersPage() {
           <MemberCardSkeleton />
           <MemberCardSkeleton />
         </div>
+      ) : isError ? (
+        <FadeIn delay={0.2}>
+          <EmptyState
+            icon={AlertCircle}
+            title="Failed to load members"
+            description="Something went wrong loading member data."
+            action={<Button onClick={() => refetch()} variant="outline">Try Again</Button>}
+            className="rounded-xl border border-border/50 bg-card/50"
+          />
+        </FadeIn>
       ) : sortedMembers.length === 0 ? (
         <FadeIn delay={0.2}>
           <EmptyState
@@ -918,7 +954,7 @@ export default function MembersPage() {
                 </span>
               </button>
               <button
-                onClick={handleBulkDelete}
+                onClick={() => setShowBulkDeleteConfirm(true)}
                 className={cn(
                   "w-7 h-7 flex items-center justify-center transition-all hover:text-destructive",
                   selectedRows.size === 0 && "invisible"
@@ -966,11 +1002,24 @@ export default function MembersPage() {
       />
 
       <BatchActionsBar selectedCount={selectedRows.size} onClear={() => setSelectedRows(new Set())}>
-        <Button variant="destructive" size="sm" onClick={handleBulkDelete} className="h-8">
+        <Button variant="destructive" size="sm" onClick={() => setShowBulkDeleteConfirm(true)} className="h-8">
           <Trash2 className="w-3.5 h-3.5 mr-1.5" />
           Delete
         </Button>
       </BatchActionsBar>
+
+      <ConfirmDialog
+        open={showBulkDeleteConfirm}
+        onOpenChange={setShowBulkDeleteConfirm}
+        title={`Remove ${selectedRows.size} member${selectedRows.size !== 1 ? 's' : ''}?`}
+        description="This will remove the selected members and all their associated charges and payment records. This can be undone."
+        confirmLabel="Remove"
+        isPending={bulkDeleteMembers.isPending}
+        onConfirm={() => {
+          handleBulkDelete();
+          setShowBulkDeleteConfirm(false);
+        }}
+      />
 
       <CSVImportDialog
         open={showImport}

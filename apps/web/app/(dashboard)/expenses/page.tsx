@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback, memo } from 'react';
 
-import { Plus, Receipt, TrendingDown, Trash2, MoreHorizontal, Loader2, Search, Pencil, Circle, CheckCircle2, Upload, MoreVertical, FileSpreadsheet, FileText } from 'lucide-react';
+import { Plus, Receipt, TrendingDown, Trash2, MoreHorizontal, Loader2, Search, Pencil, Circle, CheckCircle2, Upload, MoreVertical, FileSpreadsheet, FileText, AlertCircle } from 'lucide-react';
 import { useExpenses, useExpenseSummary, useDeleteExpense, useCreateExpense, useUpdateExpense, useRestoreExpense, useBulkDeleteExpenses } from '@/lib/queries/expenses';
 
 /** Strip "VENMO payment to " etc. prefixes from Gmail-imported expense titles */
@@ -53,6 +53,8 @@ import { Pagination } from '@/components/ui/pagination';
 import { EmptyState } from '@/components/ui/empty-state';
 import { AvatarGradient } from '@/components/ui/avatar-gradient';
 import { BatchActionsBar } from '@/components/ui/batch-actions-bar';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { DateRangeFilter } from '@/components/ui/date-range-filter';
 import { ExportDropdown } from '@/components/export-dropdown';
 import { CSVImportDialog, type ImportField } from '@/components/import/csv-import-dialog';
 import { exportCSV, exportPDF } from '@/lib/export';
@@ -223,7 +225,7 @@ export default function ExpensesPage() {
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
   const isAdmin = useIsAdminOrTreasurer();
   const { toast } = useToast();
-  const { data, isLoading } = useExpenses(currentOrgId, {
+  const { data, isLoading, isError, refetch } = useExpenses(currentOrgId, {
     category: categoryFilter !== 'all' ? categoryFilter : undefined,
   });
   const { data: summary } = useExpenseSummary(currentOrgId);
@@ -239,6 +241,8 @@ export default function ExpensesPage() {
   const updateExpense = useUpdateExpense();
   const [selectedExpenses, setSelectedExpenses] = useState<Set<string>>(new Set());
   const [showImport, setShowImport] = useState(false);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [dateRange, setDateRange] = useState<{ from?: string; to?: string }>({});
 
   const handleImportExpenses = async (records: Record<string, string>[]) => {
     if (!currentOrgId) throw new Error('No org selected');
@@ -452,15 +456,20 @@ export default function ExpensesPage() {
 
   const expenses = useMemo(() => {
     const allExpenses = data?.data || [];
-    if (!searchQuery.trim()) return allExpenses;
-
-    const query = searchQuery.toLowerCase();
-    return allExpenses.filter((expense) =>
-      expense.title?.toLowerCase().includes(query) ||
-      expense.vendor?.toLowerCase().includes(query) ||
-      expense.description?.toLowerCase().includes(query)
-    );
-  }, [data?.data, searchQuery]);
+    return allExpenses.filter((expense) => {
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        if (
+          !expense.title?.toLowerCase().includes(query) &&
+          !expense.vendor?.toLowerCase().includes(query) &&
+          !expense.description?.toLowerCase().includes(query)
+        ) return false;
+      }
+      if (dateRange.from && expense.date < dateRange.from) return false;
+      if (dateRange.to && expense.date.slice(0, 10) > dateRange.to) return false;
+      return true;
+    });
+  }, [data?.data, searchQuery, dateRange]);
 
   // Pagination
   const totalPages = Math.ceil(expenses.length / pageSize);
@@ -478,7 +487,7 @@ export default function ExpensesPage() {
   // Reset page when filters or search changes
   useEffect(() => {
     setPage(1);
-  }, [categoryFilter, searchQuery]);
+  }, [categoryFilter, searchQuery, dateRange]);
 
   const handleDelete = useCallback((expense: any) => {
     setDeletingExpense(expense);
@@ -706,6 +715,7 @@ export default function ExpensesPage() {
                 <SelectItem value="OTHER">Other</SelectItem>
               </SelectContent>
             </Select>
+            <DateRangeFilter value={dateRange} onChange={setDateRange} />
           </div>
         </div>
       </FadeIn>
@@ -717,6 +727,16 @@ export default function ExpensesPage() {
           <ExpenseCardSkeleton />
           <ExpenseCardSkeleton />
         </div>
+      ) : isError ? (
+        <FadeIn delay={0.3}>
+          <EmptyState
+            icon={AlertCircle}
+            title="Failed to load expenses"
+            description="Something went wrong loading expense data."
+            action={<Button onClick={() => refetch()} variant="outline">Try Again</Button>}
+            className="rounded-xl border border-border/50 bg-card/50"
+          />
+        </FadeIn>
       ) : expenses.length === 0 ? (
         <FadeIn delay={0.3}>
           <EmptyState
@@ -752,7 +772,7 @@ export default function ExpensesPage() {
                   </span>
                 </button>
                 <button
-                  onClick={handleBulkDeleteExpenses}
+                  onClick={() => setShowBulkDeleteConfirm(true)}
                   className={cn(
                     "w-7 h-7 flex items-center justify-center transition-all hover:text-destructive",
                     selectedExpenses.size === 0 && "invisible"
@@ -1037,11 +1057,24 @@ export default function ExpensesPage() {
       </Dialog>
 
       <BatchActionsBar selectedCount={selectedExpenses.size} onClear={() => setSelectedExpenses(new Set())}>
-        <Button variant="destructive" size="sm" onClick={handleBulkDeleteExpenses} className="h-8">
+        <Button variant="destructive" size="sm" onClick={() => setShowBulkDeleteConfirm(true)} className="h-8">
           <Trash2 className="w-3.5 h-3.5 mr-1.5" />
           Delete
         </Button>
       </BatchActionsBar>
+
+      <ConfirmDialog
+        open={showBulkDeleteConfirm}
+        onOpenChange={setShowBulkDeleteConfirm}
+        title={`Delete ${selectedExpenses.size} expense${selectedExpenses.size !== 1 ? 's' : ''}?`}
+        description="The selected expenses will be permanently deleted. This can be undone."
+        confirmLabel="Delete"
+        isPending={bulkDeleteExpenses.isPending}
+        onConfirm={() => {
+          handleBulkDeleteExpenses();
+          setShowBulkDeleteConfirm(false);
+        }}
+      />
 
       <CSVImportDialog
         open={showImport}

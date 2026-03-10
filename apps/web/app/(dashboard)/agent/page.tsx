@@ -2,11 +2,17 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Send, Paperclip, X, Loader2, Sparkles, Plus, MessageSquare, Trash2, PanelLeftClose, PanelLeft, Wand2 } from 'lucide-react';
+import { Send, Paperclip, X, Loader2, Sparkles, Plus, MessageSquare, Trash2, PanelLeftClose, PanelLeft, Wand2, History } from 'lucide-react';
 import { useAuthStore } from '@/lib/stores/auth';
 import { useSidebarStore } from '@/lib/stores/sidebar';
 import { cn, formatRelativeDate } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { PageHeader } from '@/components/ui/page-header';
 import { FadeIn } from '@/components/ui/page-transition';
 import { AvatarGradient } from '@/components/ui/avatar-gradient';
@@ -62,6 +68,7 @@ export default function AgentPage() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [wizardAction, setWizardAction] = useState<WizardActionId | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [showMobileSessions, setShowMobileSessions] = useState(false);
   const [showSidebar, setShowSidebar] = useState(() => {
     if (typeof window === 'undefined') return false;
     const saved = localStorage.getItem('agent-sidebar-open');
@@ -492,6 +499,9 @@ export default function AgentPage() {
                 <PanelLeft className="h-4 w-4" />
               </Button>
             )}
+            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 md:hidden" onClick={() => setShowMobileSessions(true)}>
+              <History className="h-4 w-4" />
+            </Button>
             <PageHeader
               title="LedgelyAI"
               helpText="Use natural language to manage members, charges, expenses, and payments. Drop a CSV file or click the attach button to import data in bulk."
@@ -722,6 +732,53 @@ export default function AgentPage() {
           </div>
         </div>
       </div>
+
+      {/* Mobile sessions dialog */}
+      <Dialog open={showMobileSessions} onOpenChange={setShowMobileSessions}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Sessions</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-1 max-h-[60vh] overflow-y-auto">
+            <button
+              onClick={() => { handleNewChat(); setShowMobileSessions(false); }}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-primary hover:bg-secondary/50 transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              New conversation
+            </button>
+            {sessions?.map((s) => (
+              <div
+                key={s.id}
+                className={cn(
+                  'flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors',
+                  activeSessionId === s.id
+                    ? 'bg-secondary text-foreground'
+                    : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground',
+                )}
+                onClick={() => { handleSelectSession(s.id); setShowMobileSessions(false); }}
+              >
+                <MessageSquare className="h-4 w-4 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="truncate">{s.title}</div>
+                  <div className="text-xs text-muted-foreground/60">{formatRelativeDate(s.updatedAt)}</div>
+                </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleDeleteSession(s.id); }}
+                  className="p-1 rounded hover:bg-destructive/10 hover:text-destructive transition-all"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
+            {(!sessions || sessions.length === 0) && (
+              <div className="px-3 py-8 text-center text-xs text-muted-foreground">
+                No conversations yet
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </FadeIn>
   );
 }

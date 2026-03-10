@@ -228,7 +228,7 @@ export function Sidebar() {
         <nav data-tour="sidebar-nav" className={cn('flex-1 py-4 space-y-1', isCollapsed ? 'px-2' : 'px-3')}>
           <TooltipProvider delayDuration={0}>
             {primaryNavItems.map((item) => {
-              const isActive = pathname === item.href;
+              const isActive = item.href === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(item.href);
               const link = (
                 <Link
                   key={item.href}
@@ -279,7 +279,7 @@ export function Sidebar() {
             </div>
 
             {secondaryNavItems.map((item) => {
-              const isActive = pathname === item.href;
+              const isActive = item.href === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(item.href);
               const link = (
                 <Link
                   key={item.href}

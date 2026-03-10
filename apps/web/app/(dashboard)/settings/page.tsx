@@ -77,6 +77,7 @@ export default function SettingsPage() {
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [transferTargetId, setTransferTargetId] = useState<string | null>(null);
+  const [transferConfirmText, setTransferConfirmText] = useState('');
 
   const generateJoinCode = useGenerateJoinCode(currentOrgId ?? null);
   const disableJoinCode = useDisableJoinCode(currentOrgId ?? null);
@@ -923,7 +924,7 @@ export default function SettingsPage() {
       {/* Transfer Ownership Dialog */}
       <Dialog open={showTransferDialog} onOpenChange={(open) => {
         setShowTransferDialog(open);
-        if (!open) setTransferTargetId(null);
+        if (!open) { setTransferTargetId(null); setTransferConfirmText(''); }
       }}>
         <DialogContent>
           <DialogHeader>
@@ -958,6 +959,15 @@ export default function SettingsPage() {
                 The new owner will need to transfer ownership back to you if you want it returned.
               </p>
             </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Type TRANSFER to confirm</Label>
+              <Input
+                value={transferConfirmText}
+                onChange={(e) => setTransferConfirmText(e.target.value)}
+                placeholder="TRANSFER"
+                className="h-11 bg-secondary/30 border-border/50 focus:border-primary"
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowTransferDialog(false)}>
@@ -965,7 +975,7 @@ export default function SettingsPage() {
             </Button>
             <Button
               onClick={handleTransferOwnership}
-              disabled={transferOwnership.isPending || !transferTargetId}
+              disabled={transferOwnership.isPending || !transferTargetId || transferConfirmText !== 'TRANSFER'}
             >
               {transferOwnership.isPending ? (
                 <>

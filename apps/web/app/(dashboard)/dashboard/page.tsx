@@ -39,7 +39,7 @@ function StatCardSkeleton() {
 
 export default function DashboardPage() {
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
-  const { data: stats, isLoading } = useDashboard(currentOrgId);
+  const { data: stats, isLoading, isError, refetch } = useDashboard(currentOrgId);
 
   if (isLoading) {
     return (
@@ -76,11 +76,15 @@ export default function DashboardPage() {
     );
   }
 
-  if (!stats) {
+  if (isError || !stats) {
     return (
-      <div className="text-center py-12">
-        <p className="text-muted-foreground">Failed to load dashboard</p>
-      </div>
+      <EmptyState
+        icon={AlertCircle}
+        title="Failed to load dashboard"
+        description="Something went wrong loading your data."
+        action={<Button onClick={() => refetch()} variant="outline">Try Again</Button>}
+        className="rounded-xl border border-border/50 bg-card/50"
+      />
     );
   }
 

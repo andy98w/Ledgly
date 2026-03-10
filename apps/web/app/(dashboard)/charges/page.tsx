@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Plus, Receipt, TrendingUp, Percent, Search, Trash2, Circle, CheckCircle2, Mail, Upload, MoreVertical, Download, FileSpreadsheet, FileText, ArrowUpDown } from 'lucide-react';
+import { Plus, Receipt, TrendingUp, Percent, Search, Trash2, Circle, CheckCircle2, Mail, Upload, MoreVertical, Download, FileSpreadsheet, FileText, ArrowUpDown, AlertCircle } from 'lucide-react';
 import { useCharges, useUpdateCharge, useVoidCharge, useRestoreCharge, useCreateCharge, useBulkVoidCharges, useSendChargeReminders, useBulkCreateCharges } from '@/lib/queries/charges';
 import { useMembers, useCreateMembers } from '@/lib/queries/members';
 import { usePayments, useAutoAllocateToCharge, useRemoveAllocation, useAllocatePayment } from '@/lib/queries/payments';
@@ -47,6 +47,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { useChargeFilters } from '@/hooks/use-charge-filters';
 import { useBulkSelection } from '@/hooks/use-bulk-selection';
 import { BatchActionsBar } from '@/components/ui/batch-actions-bar';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ExportDropdown } from '@/components/export-dropdown';
 import { CSVImportDialog, type ImportField } from '@/components/import/csv-import-dialog';
 import { exportCSV, exportPDF } from '@/lib/export';
@@ -77,12 +78,13 @@ export default function ChargesPage() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [allocatingCharge, setAllocatingCharge] = useState<any | null>(null);
   const [showImport, setShowImport] = useState(false);
+  const [showBulkVoidConfirm, setShowBulkVoidConfirm] = useState(false);
 
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
   const isAdmin = useIsAdminOrTreasurer();
   const { toast } = useToast();
 
-  const { data, isLoading } = useCharges(currentOrgId, {
+  const { data, isLoading, isError, refetch } = useCharges(currentOrgId, {
     status: statusFilter || undefined,
     category: categoryFilter || undefined,
   });
@@ -695,6 +697,16 @@ export default function ChargesPage() {
           <ChargeCardSkeleton />
           <ChargeCardSkeleton />
         </div>
+      ) : isError ? (
+        <FadeIn delay={0.3}>
+          <EmptyState
+            icon={AlertCircle}
+            title="Failed to load charges"
+            description="Something went wrong loading charge data."
+            action={<Button onClick={() => refetch()} variant="outline">Try Again</Button>}
+            className="rounded-xl border border-border/50 bg-card/50"
+          />
+        </FadeIn>
       ) : filteredCharges.length === 0 ? (
         <FadeIn delay={0.3}>
           <EmptyState
@@ -718,7 +730,7 @@ export default function ChargesPage() {
                   {isAllChargesSelected ? <CheckCircle2 className="w-5 h-5 text-primary" /> : <Circle className="w-5 h-5 text-muted-foreground hover:text-primary" />}
                   <span className="text-sm text-muted-foreground">{isAllChargesSelected ? 'Deselect all' : 'Select all'}</span>
                 </button>
-                <button onClick={handleBulkDeleteCharges} className={cn("w-7 h-7 flex items-center justify-center transition-all hover:text-destructive", selectedCharges.size === 0 && "invisible")} aria-label={`Delete ${selectedCharges.size} selected charges`}>
+                <button onClick={() => setShowBulkVoidConfirm(true)} className={cn("w-7 h-7 flex items-center justify-center transition-all hover:text-destructive", selectedCharges.size === 0 && "invisible")} aria-label={`Delete ${selectedCharges.size} selected charges`}>
                   <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
                 </button>
               </div>
@@ -783,11 +795,24 @@ export default function ChargesPage() {
           <Mail className="w-3.5 h-3.5 mr-1.5" />
           Send Reminders
         </Button>
-        <Button variant="destructive" size="sm" onClick={handleBulkDeleteCharges} className="h-8">
+        <Button variant="destructive" size="sm" onClick={() => setShowBulkVoidConfirm(true)} className="h-8">
           <Trash2 className="w-3.5 h-3.5 mr-1.5" />
           Void
         </Button>
       </BatchActionsBar>
+
+      <ConfirmDialog
+        open={showBulkVoidConfirm}
+        onOpenChange={setShowBulkVoidConfirm}
+        title={`Void ${selectedCharges.size} charge${selectedCharges.size !== 1 ? 's' : ''}?`}
+        description="Voided charges will no longer appear as outstanding. Payment allocations will be removed. This can be undone."
+        confirmLabel="Void"
+        isPending={bulkVoidCharges.isPending}
+        onConfirm={() => {
+          handleBulkDeleteCharges();
+          setShowBulkVoidConfirm(false);
+        }}
+      />
     </div>
     </TooltipProvider>
   );
