@@ -258,6 +258,10 @@ export default function PaymentsPage() {
   const [allocationAmount, setAllocationAmount] = useState<number>(0);
   const [expandedGroupKey, setExpandedGroupKey] = useState<string | null>(null);
   const [selectedPayments, setSelectedPayments] = useState<Set<string>>(new Set());
+  const [unmatchedDialog, setUnmatchedDialog] = useState<{
+    unmatchedNames: string[];
+    matchedEntries: { member: any; totalCents: number }[];
+  } | null>(null);
 
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
   const isAdmin = useIsAdminOrTreasurer();
@@ -755,49 +759,11 @@ export default function PaymentsPage() {
     }
   };
 
-  const handleBulkCreateCharges = async () => {
-    if (!currentOrgId || selectedPayments.size === 0) return;
-
-    const selectedList = paginatedPayments.filter(
-      (p) => selectedPayments.has(p.id) && p.unallocatedCents > 0
-    );
-
-    if (selectedList.length === 0) {
-      toast({ title: 'No unmatched payments selected' });
-      return;
-    }
-
-    // Deduplicate: one charge per member (sum unallocated cents from all their payments)
-    const memberMap = new Map<string, { member: any; totalCents: number }>();
-    let skipped = 0;
-    for (const payment of selectedList) {
-      const member = findMatchingMember(payment.rawPayerName || '');
-      if (member) {
-        const existing = memberMap.get(member.id);
-        if (existing) {
-          existing.totalCents += payment.unallocatedCents;
-        } else {
-          memberMap.set(member.id, { member, totalCents: payment.unallocatedCents });
-        }
-      } else {
-        skipped++;
-      }
-    }
-
-    const memberEntries = Array.from(memberMap.values());
-
-    if (memberEntries.length === 0) {
-      toast({
-        title: 'No matching members found',
-        description: 'Create members first.',
-        variant: 'destructive',
-      });
-      return;
-    }
+  const executeBulkCreateCharges = async (matchedEntries: { member: any; totalCents: number }[]) => {
+    if (!currentOrgId) return;
 
     try {
-      // Bulk create one charge per member (batched audit log)
-      const chargeSpecs = memberEntries.map(({ member, totalCents }) => ({
+      const chargeSpecs = matchedEntries.map(({ member, totalCents }) => ({
         membershipId: member.id,
         category: 'DUES' as string,
         title: 'Dues',
@@ -812,17 +778,12 @@ export default function PaymentsPage() {
 
       const chargeArray = Array.isArray(createdCharges) ? createdCharges : [createdCharges];
 
-      // Auto-allocate each charge using fresh server data (locked transaction).
-      // The server reads actual unallocated amounts and caps allocation accordingly.
       let totalAllocatedCents = 0;
-      let allocatedCount = 0;
       for (const charge of chargeArray) {
         if (!charge?.id) continue;
         try {
           const result = await autoAllocate.mutateAsync({ orgId: currentOrgId, chargeId: charge.id });
-          const cents = result?.allocatedCents || 0;
-          totalAllocatedCents += cents;
-          if (cents > 0) allocatedCount++;
+          totalAllocatedCents += result?.allocatedCents || 0;
         } catch {
           // continue on failure
         }
@@ -833,16 +794,85 @@ export default function PaymentsPage() {
       if (totalAllocatedCents > 0) {
         parts.push(`matched $${(totalAllocatedCents / 100).toFixed(2)}`);
       }
-      toast({
-        title: parts.join(', '),
-        description: skipped > 0 ? `${skipped} payment${skipped !== 1 ? 's' : ''} skipped (no matching member).` : undefined,
-      });
+      toast({ title: parts.join(', ') });
     } catch (error: any) {
       toast({
         title: 'Error creating charges',
         description: error.message || 'Please try again',
         variant: 'destructive',
       });
+    }
+  };
+
+  const handleBulkCreateCharges = async () => {
+    if (!currentOrgId || selectedPayments.size === 0) return;
+
+    const selectedList = paginatedPayments.filter(
+      (p) => selectedPayments.has(p.id) && p.unallocatedCents > 0
+    );
+
+    if (selectedList.length === 0) {
+      toast({ title: 'No unmatched payments selected' });
+      return;
+    }
+
+    const memberMap = new Map<string, { member: any; totalCents: number }>();
+    const unmatchedNames = new Map<string, string>();
+    for (const payment of selectedList) {
+      const name = (payment.rawPayerName || '').trim();
+      const member = findMatchingMember(name);
+      if (member) {
+        const existing = memberMap.get(member.id);
+        if (existing) {
+          existing.totalCents += payment.unallocatedCents;
+        } else {
+          memberMap.set(member.id, { member, totalCents: payment.unallocatedCents });
+        }
+      } else if (name) {
+        unmatchedNames.set(name.toLowerCase(), name);
+      }
+    }
+
+    const matchedEntries = Array.from(memberMap.values());
+    const uniqueUnmatched = Array.from(unmatchedNames.values());
+
+    if (matchedEntries.length === 0 && uniqueUnmatched.length === 0) {
+      toast({ title: 'No matching members found', variant: 'destructive' });
+      return;
+    }
+
+    if (uniqueUnmatched.length > 0) {
+      setUnmatchedDialog({ unmatchedNames: uniqueUnmatched, matchedEntries });
+      return;
+    }
+
+    await executeBulkCreateCharges(matchedEntries);
+  };
+
+  const handleUnmatchedCreateMembers = async () => {
+    if (!currentOrgId || !unmatchedDialog) return;
+    try {
+      await createMembers.mutateAsync({
+        orgId: currentOrgId,
+        members: unmatchedDialog.unmatchedNames.map((name) => ({ name })),
+      });
+      toast({ title: `Created ${unmatchedDialog.unmatchedNames.length} member${unmatchedDialog.unmatchedNames.length !== 1 ? 's' : ''}` });
+      setUnmatchedDialog(null);
+      // Re-run after members are created so new members get matched
+      handleBulkCreateCharges();
+    } catch (error: any) {
+      toast({ title: 'Error creating members', description: error.message, variant: 'destructive' });
+    }
+  };
+
+  const handleUnmatchedSkip = async () => {
+    if (!unmatchedDialog) return;
+    const { matchedEntries } = unmatchedDialog;
+    setUnmatchedDialog(null);
+    if (matchedEntries.length > 0) {
+      await executeBulkCreateCharges(matchedEntries);
+    } else {
+      toast({ title: 'No matched payments to create charges for' });
     }
   };
 
@@ -1212,6 +1242,54 @@ export default function PaymentsPage() {
                 </>
               ) : (
                 'Delete Payment'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!unmatchedDialog} onOpenChange={(open) => !open && setUnmatchedDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Unmatched Payers</DialogTitle>
+            <DialogDescription>
+              {unmatchedDialog?.unmatchedNames.length} payer{unmatchedDialog?.unmatchedNames.length !== 1 ? 's' : ''} couldn't be matched to existing members.
+              Create members for them, or skip to only create charges for matched payments.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2 max-h-48 overflow-y-auto">
+            <div className="space-y-1">
+              {unmatchedDialog?.unmatchedNames.map((name) => (
+                <div key={name} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary/30">
+                  <UserPlus className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <span className="text-sm font-medium">{name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          {unmatchedDialog && unmatchedDialog.matchedEntries.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {unmatchedDialog.matchedEntries.length} other payment{unmatchedDialog.matchedEntries.length !== 1 ? 's' : ''} matched successfully.
+            </p>
+          )}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setUnmatchedDialog(null)}>
+              Cancel
+            </Button>
+            <Button variant="secondary" onClick={handleUnmatchedSkip}>
+              Skip Unmatched
+            </Button>
+            <Button onClick={handleUnmatchedCreateMembers} disabled={createMembers.isPending}>
+              {createMembers.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <UserPlus className="w-4 h-4 mr-2" />
+                  Create Members
+                </>
               )}
             </Button>
           </DialogFooter>
