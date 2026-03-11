@@ -322,7 +322,6 @@ export default function PaymentsPage() {
       const memberName = (member.displayName || member.name || member.user?.name || '').toLowerCase().trim();
       if (!memberName) continue;
       if (calculateNameSimilarity(payerName, memberName) >= 0.8) return member;
-      if (memberName.includes(normalizedPayer) || normalizedPayer.includes(memberName)) return member;
     }
     return null;
   }, [members]);

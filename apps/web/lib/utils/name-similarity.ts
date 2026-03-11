@@ -43,14 +43,24 @@ export function calculateNameSimilarity(name1: string, name2: string): number {
   const parts1 = n1.split(' ').filter(Boolean);
   const parts2 = n2.split(' ').filter(Boolean);
 
-  const allParts1InParts2 = parts1.every((p1) =>
-    parts2.some((p2) => p2.includes(p1) || p1.includes(p2)),
-  );
-  const allParts2InParts1 = parts2.every((p2) =>
-    parts1.some((p1) => p1.includes(p2) || p2.includes(p1)),
-  );
+  const [shorter, longer] = parts1.length <= parts2.length
+    ? [parts1, parts2]
+    : [parts2, parts1];
 
-  if (allParts1InParts2 && allParts2InParts1) return 0.95;
+  let j = 0;
+  let orderedMatchCount = 0;
+  for (const part of shorter) {
+    while (j < longer.length) {
+      if (longer[j].includes(part) || part.includes(longer[j])) {
+        orderedMatchCount++;
+        j++;
+        break;
+      }
+      j++;
+    }
+  }
+
+  if (orderedMatchCount === shorter.length) return 0.95;
 
   if (parts1.length >= 2 && parts2.length >= 2) {
     const firstMatch = parts1[0] === parts2[0];
