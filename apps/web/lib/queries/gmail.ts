@@ -24,30 +24,20 @@ export interface EmailImport {
   parsedPayerName?: string;
   parsedPayerEmail?: string;
   parsedMemo?: string;
-  status: 'PENDING' | 'AUTO_CONFIRMED' | 'CONFIRMED' | 'IGNORED' | 'DUPLICATE';
+  status: 'AUTO_CONFIRMED' | 'IGNORED' | 'DUPLICATE';
   createdAt: string;
   reviewedAt?: string;
-  // Auto-matching fields
   matchedMembershipId?: string;
   matchConfidence?: number;
-  needsReviewReason?: string;
   derivedCategory?: string;
   allocatedChargeIds?: string[];
   expenseId?: string;
-}
-
-export interface ImportStats {
-  pending: number;
-  autoConfirmed: number;
-  confirmed: number;
-  ignored: number;
 }
 
 export interface SyncResult {
   imported: number;
   skipped: number;
   autoConfirmed: number;
-  needsReview: number;
 }
 
 export function useGmailStatus(orgId: string | null) {
@@ -56,26 +46,6 @@ export function useGmailStatus(orgId: string | null) {
     queryFn: () => api.get<GmailStatus>(`/organizations/${orgId}/gmail/status`),
     enabled: !!orgId,
     staleTime: 30_000,
-  });
-}
-
-export function useGmailImports(orgId: string | null, status = 'pending') {
-  return useQuery({
-    queryKey: queryKeys.gmail.imports(orgId, status),
-    queryFn: () =>
-      api.get<{ data: EmailImport[] }>(
-        `/organizations/${orgId}/gmail/imports?status=${status}`,
-      ),
-    enabled: !!orgId,
-  });
-}
-
-export function useImportStats(orgId: string | null) {
-  return useQuery({
-    queryKey: queryKeys.gmail.stats(orgId),
-    queryFn: () =>
-      api.get<ImportStats>(`/organizations/${orgId}/gmail/imports/stats`),
-    enabled: !!orgId,
   });
 }
 
@@ -102,39 +72,6 @@ export function useSyncGmail() {
   });
 }
 
-export function useConfirmImport() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({
-      orgId,
-      importId,
-      membershipId,
-    }: {
-      orgId: string;
-      importId: string;
-      membershipId?: string;
-    }) =>
-      api.post(`/organizations/${orgId}/gmail/imports/${importId}/confirm`, {
-        membershipId,
-      }),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.gmail.all(variables.orgId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.payments.all(variables.orgId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.dashboard.all(variables.orgId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.audit.all(variables.orgId),
-      });
-    },
-  });
-}
-
 export function useIgnoreImport() {
   const queryClient = useQueryClient();
 
@@ -143,7 +80,10 @@ export function useIgnoreImport() {
       api.post(`/organizations/${orgId}/gmail/imports/${importId}/ignore`),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: queryKeys.gmail.imports(variables.orgId),
+        queryKey: queryKeys.gmail.all(variables.orgId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.payments.all(variables.orgId),
       });
     },
   });
@@ -157,30 +97,10 @@ export function useRestoreImport() {
       api.post(`/organizations/${orgId}/gmail/imports/${importId}/restore`),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: queryKeys.gmail.imports(variables.orgId),
-      });
-    },
-  });
-}
-
-export function useUnconfirmImport() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ orgId, importId }: { orgId: string; importId: string }) =>
-      api.post(`/organizations/${orgId}/gmail/imports/${importId}/unconfirm`),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
         queryKey: queryKeys.gmail.all(variables.orgId),
       });
       queryClient.invalidateQueries({
         queryKey: queryKeys.payments.all(variables.orgId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.dashboard.all(variables.orgId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.audit.all(variables.orgId),
       });
     },
   });

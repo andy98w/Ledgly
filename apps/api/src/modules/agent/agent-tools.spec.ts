@@ -2,8 +2,8 @@ import { agentTools, toolDefinitions, toolMap } from './agent-tools';
 
 describe('Agent tool definitions', () => {
   it('exports correct number of tools', () => {
-    expect(agentTools.length).toBe(25);
-    expect(toolDefinitions.length).toBe(25);
+    expect(agentTools.length).toBe(32);
+    expect(toolDefinitions.length).toBe(32);
   });
 
   it('every tool has a unique name', () => {
@@ -25,7 +25,7 @@ describe('Agent tool definitions', () => {
   });
 
   it('read tools do not require confirmation', () => {
-    const readNames = ['list_members', 'list_charges', 'list_payments', 'get_balances', 'list_expenses'];
+    const readNames = ['list_members', 'list_charges', 'list_payments', 'get_balances', 'list_expenses', 'get_insights', 'generate_report'];
     for (const name of readNames) {
       const tool = toolMap.get(name);
       expect(tool).toBeDefined();
@@ -130,5 +130,17 @@ describe('Agent tool definitions', () => {
   it('restore_payments requires paymentIds', () => {
     const tool = toolDefinitions.find((t) => t.name === 'restore_payments')!;
     expect(tool.input_schema.required).toContain('paymentIds');
+  });
+
+  it('get_insights has no required fields', () => {
+    const tool = toolDefinitions.find((t) => t.name === 'get_insights')!;
+    expect(tool).toBeDefined();
+    expect(tool.input_schema.required).toEqual([]);
+  });
+
+  it('generate_report requires period', () => {
+    const tool = toolDefinitions.find((t) => t.name === 'generate_report')!;
+    expect(tool).toBeDefined();
+    expect(tool.input_schema.required).toContain('period');
   });
 });

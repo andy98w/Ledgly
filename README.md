@@ -320,7 +320,7 @@ PostgreSQL native enums enforce valid states at the database level:
 | `ChargeCategory` | DUES, EVENT, FINE, MERCH, OTHER | Charge classification |
 | `ChargeStatus` | OPEN, PARTIALLY_PAID, PAID, VOID | Payment progress |
 | `ExpenseCategory` | EVENT, SUPPLIES, FOOD, VENUE, MARKETING, SERVICES, OTHER | Expense classification |
-| `EmailImportStatus` | PENDING, CONFIRMED, IGNORED, DUPLICATE, AUTO_CONFIRMED | Import processing state |
+| `EmailImportStatus` | AUTO_CONFIRMED, IGNORED, DUPLICATE | Import processing state |
 | `NotificationType` | PAYMENT_RECEIVED, CHARGE_OVERDUE, MEMBER_JOINED, EXPENSE_CREATED, CHARGE_CREATED, SYSTEM | Notification routing |
 
 ---
@@ -543,8 +543,8 @@ The `/expenses/summary` endpoint groups expenses by category and time period, re
 Outgoing payment emails (e.g., "You paid $200 to Party Supplies Co") are detected during Gmail sync. The system:
 1. Identifies outgoing direction from email subject patterns
 2. Searches for existing expenses matching amount/date/vendor
-3. If match found → links import to expense (pending review)
-4. If no match + auto-approve enabled → creates new expense automatically
+3. If exact duplicate found (>= 0.95 confidence) → skips
+4. Otherwise → creates new expense automatically
 
 ### 8.5 Audit System
 
@@ -709,7 +709,7 @@ Output: (membershipId, confidence score)
 5. Try first name only match → confidence 0.6
 6. Try last name only match → confidence 0.5
 7. Try fuzzy match (Levenshtein distance < threshold) → confidence 0.4-0.7
-8. No match → null (import goes to PENDING for manual review)
+8. No match → null (payment created with no member assignment)
 ```
 
 ### Category Derivation
@@ -724,27 +724,21 @@ Payment memos are analyzed for category keywords:
 | merch, shirt, merchandise, apparel | MERCH |
 | (no match) | OTHER |
 
-### Auto-Confirmation Logic
+### Import Logic
+
+All email imports automatically create payments/expenses. Duplicates are skipped.
 
 ```
-IF org.autoApprovePayments = true AND direction = 'incoming':
-  IF memberMatch.confidence >= 0.9:
-    IF derivedCategory AND matchingOpenCharges.length > 0:
-      → AUTO_CONFIRMED (create payment + allocate to matching charges)
-    ELSE:
-      → AUTO_CONFIRMED (create payment, no allocation)
-  ELSE IF memberMatch.confidence >= 0.7:
-    → PENDING (needs_review_reason: "Low confidence member match")
-  ELSE:
-    → PENDING (needs_review_reason: "No member match found")
+IF direction = 'incoming':
+  - Run member matching (best-effort assignment)
+  - Always create Payment record (membershipId nullable for unmatched)
+  - Auto-allocate to charges when confidence >= 0.9 + category match
+  - Create EmailImport with status AUTO_CONFIRMED
 
 IF direction = 'outgoing':
-  IF potentialExpenseMatches.length > 0:
-    → PENDING (needs_review_reason: "Multiple expense matches")
-  ELSE IF org.autoApproveExpenses = true:
-    → AUTO_CONFIRMED (create expense)
-  ELSE:
-    → PENDING
+  - Check for exact duplicate expenses (>= 0.95 confidence)
+  - If duplicate → skip (status DUPLICATE)
+  - Otherwise → create Expense + EmailImport with status AUTO_CONFIRMED
 ```
 
 ### Sync Process
@@ -760,14 +754,13 @@ IF direction = 'outgoing':
    - Parse email (identify provider, extract amount/payer/memo/direction)
    - Create `email_import` record
    - Run member matching + category derivation
-   - Apply auto-confirmation logic
-   - Create payment/expense records if auto-confirmed
+   - Create payment/expense records automatically
 7. **Update sync timestamp**: `last_sync_at` and `last_history_id`
 
 ### Error Handling
 
 - Token revocation detected → mark connection as inactive, notify admin
-- Parse failure → create import with `PENDING` status and `needs_review_reason`
+- Parse failure → email skipped (not a recognized payment notification)
 - Duplicate message → skip (idempotent via unique index on gmail_connection_id + message_id)
 - Partial sync failure → `Promise.allSettled` ensures successful messages are saved even if some fail
 

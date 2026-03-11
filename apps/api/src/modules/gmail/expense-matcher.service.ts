@@ -4,8 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 export interface ExpenseMatchResult {
   matchedExpenseId: string | null;
   confidence: number; // 0.0 to 1.0
-  needsReview: boolean;
-  reviewReason: string | null;
+  isDuplicate: boolean;
   potentialMatches: Array<{
     id: string;
     title: string;
@@ -69,41 +68,17 @@ export class ExpenseMatcherService {
       }
     }
 
-    // Sort by confidence descending
     potentialMatches.sort((a, b) => b.confidence - a.confidence);
 
-    // Determine if we have a confident match
     const bestMatch = potentialMatches[0];
-    let needsReview = true;
-    let reviewReason: string | null = null;
-    let matchedExpenseId: string | null = null;
-
-    if (bestMatch) {
-      if (bestMatch.confidence >= 0.95) {
-        // Very high confidence - could auto-match, but still show for review
-        needsReview = true;
-        reviewReason = 'Potential duplicate expense detected';
-        matchedExpenseId = bestMatch.id;
-      } else if (bestMatch.confidence >= 0.7) {
-        needsReview = true;
-        reviewReason = 'Similar expense found - please confirm';
-        matchedExpenseId = bestMatch.id;
-      } else {
-        needsReview = true;
-        reviewReason = 'Possible matching expense found';
-      }
-    } else {
-      // No matches found - create new expense
-      needsReview = false;
-      reviewReason = null;
-    }
+    const isDuplicate = bestMatch ? bestMatch.confidence >= 0.95 : false;
+    const matchedExpenseId = bestMatch?.confidence >= 0.7 ? bestMatch.id : null;
 
     return {
       matchedExpenseId,
       confidence: bestMatch?.confidence || 0,
-      needsReview,
-      reviewReason,
-      potentialMatches: potentialMatches.slice(0, 3), // Return top 3 matches
+      isDuplicate,
+      potentialMatches: potentialMatches.slice(0, 3),
     };
   }
 
@@ -123,20 +98,16 @@ export class ExpenseMatcherService {
     let score = 0;
     let factors = 0;
 
-    // Amount match (most important)
     const amountDiff = Math.abs(expense.amountCents - amountCents);
     if (amountDiff === 0) {
-      score += 0.5; // Exact amount match is heavily weighted
+      score += 0.5;
     } else if (amountDiff <= 100) {
-      // Within $1
       score += 0.4;
     } else if (amountDiff <= 500) {
-      // Within $5
       score += 0.2;
     }
     factors += 0.5;
 
-    // Date match
     const daysDiff = Math.abs(
       (expense.date.getTime() - date.getTime()) / (1000 * 60 * 60 * 24),
     );
@@ -149,7 +120,6 @@ export class ExpenseMatcherService {
     }
     factors += 0.25;
 
-    // Vendor/name match
     if (vendor && expense.vendor) {
       const vendorSimilarity = this.calculateStringSimilarity(
         vendor.toLowerCase(),
@@ -157,7 +127,6 @@ export class ExpenseMatcherService {
       );
       score += vendorSimilarity * 0.15;
     } else if (vendor && expense.title) {
-      // Try matching vendor against title
       const titleSimilarity = this.calculateStringSimilarity(
         vendor.toLowerCase(),
         expense.title.toLowerCase(),
@@ -166,7 +135,6 @@ export class ExpenseMatcherService {
     }
     factors += 0.15;
 
-    // Memo/description match
     if (memo && expense.description) {
       const memoSimilarity = this.calculateStringSimilarity(
         memo.toLowerCase(),
@@ -182,7 +150,6 @@ export class ExpenseMatcherService {
     }
     factors += 0.1;
 
-    // Normalize score
     return Math.min(1, score / factors);
   }
 
@@ -190,12 +157,10 @@ export class ExpenseMatcherService {
     if (str1 === str2) return 1.0;
     if (!str1 || !str2) return 0;
 
-    // Check for containment
     if (str1.includes(str2) || str2.includes(str1)) {
       return 0.8;
     }
 
-    // Check word overlap
     const words1 = str1.split(/\s+/).filter((w) => w.length > 2);
     const words2 = str2.split(/\s+/).filter((w) => w.length > 2);
 

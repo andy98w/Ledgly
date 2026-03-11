@@ -88,13 +88,12 @@ describe('Members unit tests', () => {
       amountCents: 5000,
     });
 
-    // Create a payment for this member
     const payment = await ctx.paymentsService.create(ctx.orgId, ctx.membershipId, {
       amountCents: 3000,
       paidAt: '2026-01-15',
-      rawPayerName: 'Portal Member',
-      membershipId: memberMembershipId,
+      rawPayerName: 'No Match Payer',
     });
+    await ctx.prisma.payment.update({ where: { id: payment.id }, data: { membershipId: memberMembershipId } });
 
     const result = await ctx.membersService.findByUserId(ctx.orgId, memberUserId);
 

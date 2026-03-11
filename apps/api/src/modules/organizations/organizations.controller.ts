@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { IsString, IsBoolean, IsOptional, IsArray } from 'class-validator';
+import { IsString, IsOptional, IsArray, IsBoolean } from 'class-validator';
 import { OrganizationsService } from './organizations.service';
 import { CurrentUser, CurrentUserData, Roles, Public } from '../../common/decorators';
 import { RolesGuard } from '../../common/guards';
@@ -23,18 +23,14 @@ class UpdateOrganizationDto {
   @IsOptional()
   timezone?: string;
 
-  @IsBoolean()
-  @IsOptional()
-  autoApprovePayments?: boolean;
-
-  @IsBoolean()
-  @IsOptional()
-  autoApproveExpenses?: boolean;
-
   @IsArray()
   @IsString({ each: true })
   @IsOptional()
   enabledPaymentSources?: string[];
+
+  @IsString()
+  @IsOptional()
+  paymentInstructions?: string;
 }
 
 class UpdateJoinCodeSettingsDto {
@@ -94,12 +90,10 @@ export class OrganizationsController {
 
   @Get(':orgId/dashboard')
   async getDashboard(@Param('orgId') orgId: string, @CurrentUser() user: CurrentUserData) {
-    // Verify membership
     await this.organizationsService.findOne(orgId, user.userId);
     return this.organizationsService.getDashboard(orgId);
   }
 
-  // Admin: generate/regenerate join code
   @Post(':orgId/join-code')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
@@ -107,7 +101,6 @@ export class OrganizationsController {
     return this.organizationsService.generateJoinCode(orgId, req.membership.id);
   }
 
-  // Admin: disable join code
   @Delete(':orgId/join-code')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
@@ -115,12 +108,18 @@ export class OrganizationsController {
     return this.organizationsService.disableJoinCode(orgId, req.membership.id);
   }
 
-  // Admin: toggle enabled/approval settings
   @Patch(':orgId/join-code')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
   async updateJoinCodeSettings(@Param('orgId') orgId: string, @Body() dto: UpdateJoinCodeSettingsDto, @Req() req: any) {
     return this.organizationsService.updateJoinCodeSettings(orgId, dto, req.membership.id);
+  }
+
+  @Get(':orgId/insights')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'TREASURER')
+  async getInsights(@Param('orgId') orgId: string) {
+    return this.organizationsService.getInsights(orgId);
   }
 
   @Delete(':orgId')

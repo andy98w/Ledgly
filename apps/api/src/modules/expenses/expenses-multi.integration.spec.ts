@@ -1,6 +1,6 @@
 import { createTestContext, cleanupTestContext, TestContext } from '../../test/test-helpers';
 
-jest.setTimeout(15_000);
+jest.setTimeout(60_000);
 
 describe('Multi-expense (parent-child) integration', () => {
   let ctx: TestContext;

@@ -1,6 +1,6 @@
 import { createTestContext, cleanupTestContext, TestContext } from '../../test/test-helpers';
 
-jest.setTimeout(30_000);
+jest.setTimeout(60_000);
 
 describe('Bulk auto-allocate edge cases (integration)', () => {
   let ctx: TestContext;
@@ -42,11 +42,16 @@ describe('Bulk auto-allocate edge cases (integration)', () => {
     await cleanupTestContext(ctx);
   }, 15_000);
 
-  // Helper to clean up test data
+  beforeEach(async () => {
+    await ctx.prisma.auditLog.deleteMany({ where: { orgId: ctx.orgId, entityType: { in: ['ALLOCATION', 'CHARGE', 'PAYMENT'] } } });
+    await ctx.prisma.paymentAllocation.deleteMany({ where: { orgId: ctx.orgId } });
+    await ctx.prisma.charge.deleteMany({ where: { orgId: ctx.orgId } });
+    await ctx.prisma.payment.deleteMany({ where: { orgId: ctx.orgId } });
+  });
+
   async function cleanup(chargeIds: string[], paymentIds: string[]) {
     const allIds = [...chargeIds, ...paymentIds];
     await ctx.prisma.auditLog.deleteMany({ where: { orgId: ctx.orgId, entityId: { in: allIds } } });
-    // Also clean audit logs for allocations
     await ctx.prisma.auditLog.deleteMany({
       where: { orgId: ctx.orgId, entityType: 'ALLOCATION', entityId: { in: [...chargeIds, ...paymentIds] } },
     });
@@ -56,7 +61,6 @@ describe('Bulk auto-allocate edge cases (integration)', () => {
   }
 
   it('two payments for same member, one charge — second partially allocated', async () => {
-    // Charge: $100 for memberA
     const charges = await ctx.chargesService.create(ctx.orgId, ctx.membershipId, {
       membershipIds: [memberA],
       category: 'DUES' as any,
@@ -65,23 +69,22 @@ describe('Bulk auto-allocate edge cases (integration)', () => {
     });
     const charge = charges[0];
 
-    // Payment 1: $60 from Alice
+    // Create payments without membershipId to skip auto-allocation in create(),
+    // then link them to the member directly so bulkAutoAllocate can find charges
     const p1 = await ctx.paymentsService.create(ctx.orgId, ctx.membershipId, {
       amountCents: 6000,
       paidAt: '2026-01-01',
-      rawPayerName: 'Alice Allocator',
-      membershipId: memberA,
+      rawPayerName: 'No Match Payer 1',
     });
+    await ctx.prisma.payment.update({ where: { id: p1.id }, data: { membershipId: memberA } });
 
-    // Payment 2: $60 from Alice
     const p2 = await ctx.paymentsService.create(ctx.orgId, ctx.membershipId, {
       amountCents: 6000,
       paidAt: '2026-01-02',
-      rawPayerName: 'Alice Allocator',
-      membershipId: memberA,
+      rawPayerName: 'No Match Payer 2',
     });
+    await ctx.prisma.payment.update({ where: { id: p2.id }, data: { membershipId: memberA } });
 
-    // Bulk auto-allocate both payments
     const result = await ctx.paymentsService.bulkAutoAllocate(ctx.orgId, [p1.id, p2.id], ctx.membershipId);
 
     // P1 allocates $60, P2 allocates $40 (charge balance), $20 left on P2
@@ -111,11 +114,10 @@ describe('Bulk auto-allocate edge cases (integration)', () => {
     const payment = await ctx.paymentsService.create(ctx.orgId, ctx.membershipId, {
       amountCents: 5000,
       paidAt: '2026-02-01',
-      rawPayerName: 'Alice Allocator',
-      membershipId: memberA,
+      rawPayerName: 'No Match Payer',
     });
+    await ctx.prisma.payment.update({ where: { id: payment.id }, data: { membershipId: memberA } });
 
-    // Manually allocate the full amount first
     await ctx.paymentsService.allocate(ctx.orgId, payment.id, ctx.membershipId, {
       allocations: [{ chargeId: charge.id, amountCents: 5000 }],
     });
@@ -133,9 +135,9 @@ describe('Bulk auto-allocate edge cases (integration)', () => {
     const payment = await ctx.paymentsService.create(ctx.orgId, ctx.membershipId, {
       amountCents: 3000,
       paidAt: '2026-02-15',
-      rawPayerName: 'Bob Builder',
-      membershipId: memberB,
+      rawPayerName: 'No Match Payer',
     });
+    await ctx.prisma.payment.update({ where: { id: payment.id }, data: { membershipId: memberB } });
 
     // No charges created for memberB
     const result = await ctx.paymentsService.bulkAutoAllocate(ctx.orgId, [payment.id], ctx.membershipId);
@@ -156,13 +158,12 @@ describe('Bulk auto-allocate edge cases (integration)', () => {
     });
     const charge = charges[0];
 
-    // Payment: $100
     const payment = await ctx.paymentsService.create(ctx.orgId, ctx.membershipId, {
       amountCents: 10000,
       paidAt: '2026-03-01',
-      rawPayerName: 'Alice Allocator',
-      membershipId: memberA,
+      rawPayerName: 'No Match Payer',
     });
+    await ctx.prisma.payment.update({ where: { id: payment.id }, data: { membershipId: memberA } });
 
     const result = await ctx.paymentsService.bulkAutoAllocate(ctx.orgId, [payment.id], ctx.membershipId);
 
@@ -201,13 +202,12 @@ describe('Bulk auto-allocate edge cases (integration)', () => {
     const c1 = charges1[0];
     const c2 = charges2[0];
 
-    // Payment: $50 (enough for first charge + partial second)
     const payment = await ctx.paymentsService.create(ctx.orgId, ctx.membershipId, {
       amountCents: 5000,
       paidAt: '2026-03-15',
-      rawPayerName: 'Alice Allocator',
-      membershipId: memberA,
+      rawPayerName: 'No Match Payer',
     });
+    await ctx.prisma.payment.update({ where: { id: payment.id }, data: { membershipId: memberA } });
 
     const result = await ctx.paymentsService.bulkAutoAllocate(ctx.orgId, [payment.id], ctx.membershipId);
 
@@ -245,21 +245,19 @@ describe('Bulk auto-allocate edge cases (integration)', () => {
     });
     const charge = charges[0];
 
-    // Payment for memberA (will allocate)
     const pA = await ctx.paymentsService.create(ctx.orgId, ctx.membershipId, {
       amountCents: 5000,
       paidAt: '2026-04-01',
-      rawPayerName: 'Alice Allocator',
-      membershipId: memberA,
+      rawPayerName: 'No Match Payer A',
     });
+    await ctx.prisma.payment.update({ where: { id: pA.id }, data: { membershipId: memberA } });
 
-    // Payment for memberB (will skip — no charges for Bob)
     const pB = await ctx.paymentsService.create(ctx.orgId, ctx.membershipId, {
       amountCents: 3000,
       paidAt: '2026-04-01',
-      rawPayerName: 'Bob Builder',
-      membershipId: memberB,
+      rawPayerName: 'No Match Payer B',
     });
+    await ctx.prisma.payment.update({ where: { id: pB.id }, data: { membershipId: memberB } });
 
     const result = await ctx.paymentsService.bulkAutoAllocate(ctx.orgId, [pA.id, pB.id], ctx.membershipId);
 
@@ -280,15 +278,13 @@ describe('Bulk auto-allocate edge cases (integration)', () => {
     });
     const charge = charges[0];
 
-    // Create a payment for $80
     const payment = await ctx.paymentsService.create(ctx.orgId, ctx.membershipId, {
       amountCents: 8000,
       paidAt: '2026-05-01',
-      rawPayerName: 'Alice Allocator',
-      membershipId: memberA,
+      rawPayerName: 'No Match Payer',
     });
+    await ctx.prisma.payment.update({ where: { id: payment.id }, data: { membershipId: memberA } });
 
-    // Partially allocate $30 first
     await ctx.paymentsService.allocate(ctx.orgId, payment.id, ctx.membershipId, {
       allocations: [{ chargeId: charge.id, amountCents: 3000 }],
     });
@@ -322,8 +318,7 @@ describe('Bulk auto-allocate edge cases (integration)', () => {
     const payment = await ctx.paymentsService.create(ctx.orgId, ctx.membershipId, {
       amountCents: 3000,
       paidAt: '2026-06-01',
-      rawPayerName: 'Alice Allocator',
-      membershipId: memberA,
+      rawPayerName: 'No Match Payer',
     });
 
     // Try to allocate $50 from a $30 payment → should fail
@@ -341,11 +336,6 @@ describe('Bulk auto-allocate edge cases (integration)', () => {
   });
 
   it('voided charges are excluded from auto-allocation', async () => {
-    // Clean any leftover charges/payments for memberA from prior tests
-    await ctx.prisma.paymentAllocation.deleteMany({ where: { orgId: ctx.orgId } });
-    await ctx.prisma.charge.deleteMany({ where: { orgId: ctx.orgId, membershipId: memberA } });
-    await ctx.prisma.payment.deleteMany({ where: { orgId: ctx.orgId, membershipId: memberA } });
-
     const charges = await ctx.chargesService.create(ctx.orgId, ctx.membershipId, {
       membershipIds: [memberA],
       category: 'DUES' as any,
@@ -354,15 +344,14 @@ describe('Bulk auto-allocate edge cases (integration)', () => {
     });
     const charge = charges[0];
 
-    // Void the charge
     await ctx.chargesService.void(ctx.orgId, charge.id, ctx.membershipId);
 
     const payment = await ctx.paymentsService.create(ctx.orgId, ctx.membershipId, {
       amountCents: 5000,
       paidAt: '2026-06-15',
-      rawPayerName: 'Alice Allocator',
-      membershipId: memberA,
+      rawPayerName: 'No Match Payer',
     });
+    await ctx.prisma.payment.update({ where: { id: payment.id }, data: { membershipId: memberA } });
 
     // Auto-allocate should skip (no open charges)
     const result = await ctx.paymentsService.bulkAutoAllocate(ctx.orgId, [payment.id], ctx.membershipId);

@@ -15,6 +15,9 @@ import { GmailModule } from './modules/gmail/gmail.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AgentModule } from './modules/agent/agent.module';
+import { SchedulesModule } from './modules/schedules/schedules.module';
+import { RemindersModule } from './modules/reminders/reminders.module';
+import { ReportsModule } from './modules/reports/reports.module';
 
 @Module({
   imports: [
@@ -35,6 +38,9 @@ import { AgentModule } from './modules/agent/agent.module';
     GmailModule,
     NotificationsModule,
     AgentModule,
+    SchedulesModule,
+    RemindersModule,
+    ReportsModule,
   ],
   providers: [
     {

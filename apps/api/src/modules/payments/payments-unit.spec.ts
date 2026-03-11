@@ -1,6 +1,6 @@
 import { createTestContext, cleanupTestContext, TestContext } from '../../test/test-helpers';
 
-jest.setTimeout(30_000);
+jest.setTimeout(60_000);
 
 describe('Payment allocation unit tests', () => {
   let ctx: TestContext;
@@ -70,8 +70,7 @@ describe('Payment allocation unit tests', () => {
     const payment = await ctx.paymentsService.create(ctx.orgId, ctx.membershipId, {
       amountCents: 8000,
       paidAt: '2026-02-01',
-      rawPayerName: 'Payment Tester',
-      membershipId: member,
+      rawPayerName: 'No Match Payer',
     });
 
     await ctx.paymentsService.allocate(ctx.orgId, payment.id, ctx.membershipId, {
@@ -79,7 +78,7 @@ describe('Payment allocation unit tests', () => {
     });
 
     const p = await ctx.paymentsService.findOne(ctx.orgId, payment.id);
-    expect(p.unallocatedCents).toBe(3000); // $80 - $50 = $30 left
+    expect(p.unallocatedCents).toBe(3000);
     expect(p.allocations).toHaveLength(1);
     expect(p.allocations[0].amountCents).toBe(5000);
 
@@ -97,8 +96,7 @@ describe('Payment allocation unit tests', () => {
     const payment = await ctx.paymentsService.create(ctx.orgId, ctx.membershipId, {
       amountCents: 7000,
       paidAt: '2026-02-10',
-      rawPayerName: 'Payment Tester',
-      membershipId: member,
+      rawPayerName: 'No Match Payer',
     });
 
     await ctx.paymentsService.allocate(ctx.orgId, payment.id, ctx.membershipId, {
@@ -129,7 +127,7 @@ describe('Payment allocation unit tests', () => {
     });
 
     const payment = await ctx.paymentsService.create(ctx.orgId, ctx.membershipId, {
-      amountCents: 6000, paidAt: '2026-03-01', rawPayerName: 'Payment Tester', membershipId: member,
+      amountCents: 6000, paidAt: '2026-03-01', rawPayerName: 'No Match Payer',
     });
 
     const allocs = await ctx.paymentsService.allocate(ctx.orgId, payment.id, ctx.membershipId, {

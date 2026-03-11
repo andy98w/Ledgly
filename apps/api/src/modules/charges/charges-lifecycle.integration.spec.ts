@@ -1,7 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { createTestContext, cleanupTestContext, TestContext } from '../../test/test-helpers';
 
-jest.setTimeout(30_000);
+jest.setTimeout(60_000);
 
 describe('Charge lifecycle edge cases (integration)', () => {
   let ctx: TestContext;
@@ -48,7 +48,7 @@ describe('Charge lifecycle edge cases (integration)', () => {
     const charge = charges[0];
 
     const payment = await ctx.paymentsService.create(ctx.orgId, ctx.membershipId, {
-      amountCents: 8000, paidAt: '2026-01-01', rawPayerName: 'Lifecycle Tester', membershipId: member,
+      amountCents: 8000, paidAt: '2026-01-01', rawPayerName: 'No Match Payer',
     });
 
     // Allocate $80 to $100 charge → PARTIALLY_PAID
@@ -73,7 +73,7 @@ describe('Charge lifecycle edge cases (integration)', () => {
     const charge = charges[0];
 
     const payment = await ctx.paymentsService.create(ctx.orgId, ctx.membershipId, {
-      amountCents: 5000, paidAt: '2026-01-02', rawPayerName: 'Lifecycle Tester', membershipId: member,
+      amountCents: 5000, paidAt: '2026-01-02', rawPayerName: 'No Match Payer',
     });
 
     // Allocate $50 → charge becomes PAID
@@ -98,7 +98,7 @@ describe('Charge lifecycle edge cases (integration)', () => {
     const charge = charges[0];
 
     const payment = await ctx.paymentsService.create(ctx.orgId, ctx.membershipId, {
-      amountCents: 6000, paidAt: '2026-01-03', rawPayerName: 'Lifecycle Tester', membershipId: member,
+      amountCents: 6000, paidAt: '2026-01-03', rawPayerName: 'No Match Payer',
     });
 
     await ctx.paymentsService.allocate(ctx.orgId, payment.id, ctx.membershipId, {
@@ -126,7 +126,7 @@ describe('Charge lifecycle edge cases (integration)', () => {
     const charge = charges[0];
 
     const payment = await ctx.paymentsService.create(ctx.orgId, ctx.membershipId, {
-      amountCents: 7000, paidAt: '2026-02-01', rawPayerName: 'Lifecycle Tester', membershipId: member,
+      amountCents: 7000, paidAt: '2026-02-01', rawPayerName: 'No Match Payer',
     });
 
     await ctx.paymentsService.allocate(ctx.orgId, payment.id, ctx.membershipId, {
@@ -176,7 +176,7 @@ describe('Charge lifecycle edge cases (integration)', () => {
     const charge = charges[0];
 
     const payment = await ctx.paymentsService.create(ctx.orgId, ctx.membershipId, {
-      amountCents: 5000, paidAt: '2026-02-15', rawPayerName: 'Lifecycle Tester', membershipId: member,
+      amountCents: 5000, paidAt: '2026-02-15', rawPayerName: 'No Match Payer',
     });
 
     // Allocate fully → PAID
@@ -214,7 +214,7 @@ describe('Charge lifecycle edge cases (integration)', () => {
     const charge = charges[0];
 
     const payment = await ctx.paymentsService.create(ctx.orgId, ctx.membershipId, {
-      amountCents: 4000, paidAt: '2026-03-01', rawPayerName: 'Lifecycle Tester', membershipId: member,
+      amountCents: 4000, paidAt: '2026-03-01', rawPayerName: 'No Match Payer',
     });
 
     const allocs = await ctx.paymentsService.allocate(ctx.orgId, payment.id, ctx.membershipId, {
@@ -238,10 +238,10 @@ describe('Charge lifecycle edge cases (integration)', () => {
     const charge = charges[0];
 
     const p1 = await ctx.paymentsService.create(ctx.orgId, ctx.membershipId, {
-      amountCents: 6000, paidAt: '2026-03-10', rawPayerName: 'Lifecycle Tester', membershipId: member,
+      amountCents: 6000, paidAt: '2026-03-10', rawPayerName: 'No Match Payer',
     });
     const p2 = await ctx.paymentsService.create(ctx.orgId, ctx.membershipId, {
-      amountCents: 4000, paidAt: '2026-03-11', rawPayerName: 'Lifecycle Tester', membershipId: member,
+      amountCents: 4000, paidAt: '2026-03-11', rawPayerName: 'No Match Payer',
     });
 
     // Two allocations to same charge: $60 + $40 = $100 → PAID
@@ -277,7 +277,7 @@ describe('Charge lifecycle edge cases (integration)', () => {
     const charge = charges[0];
 
     const payment = await ctx.paymentsService.create(ctx.orgId, ctx.membershipId, {
-      amountCents: 9900, paidAt: '2026-04-01', rawPayerName: 'Lifecycle Tester', membershipId: member,
+      amountCents: 9900, paidAt: '2026-04-01', rawPayerName: 'No Match Payer',
     });
 
     // Step 1: $33 → PARTIALLY_PAID

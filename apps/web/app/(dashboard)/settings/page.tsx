@@ -3,16 +3,18 @@
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { Moon, Sun, Monitor, User, Building2, Shield, Loader2, Camera, Plus, AlertTriangle, Mail, GraduationCap, KeyRound, Eye, EyeOff, Link2, Copy, Check, RefreshCw, ArrowRightLeft } from 'lucide-react';
+import { Moon, Sun, Monitor, User, Building2, Shield, Loader2, Camera, Plus, AlertTriangle, Mail, GraduationCap, KeyRound, Eye, EyeOff, Link2, Copy, Check, RefreshCw, ArrowRightLeft, Banknote, Bell, Trash2 } from 'lucide-react';
 import { useAuthStore, useIsOwner } from '@/lib/stores/auth';
 import { useTutorialStore } from '@/lib/stores/tutorial';
 import { useUpdateProfile, useChangePassword } from '@/lib/queries/auth';
 import { useCreateOrganization, useDeleteOrganization, useOrganization, useUpdateOrganization, useGenerateJoinCode, useDisableJoinCode, useUpdateJoinCodeSettings } from '@/lib/queries/organizations';
 import { useMembers, useTransferOwnership } from '@/lib/queries/members';
+import { useReminderRules, useCreateReminderRule, useDeleteReminderRule } from '@/lib/queries/reminders';
 import { uploadAvatar } from '@/lib/supabase';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
@@ -78,6 +80,9 @@ export default function SettingsPage() {
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [transferTargetId, setTransferTargetId] = useState<string | null>(null);
   const [transferConfirmText, setTransferConfirmText] = useState('');
+  const [paymentInstructions, setPaymentInstructions] = useState(orgDetails?.paymentInstructions || '');
+  const [newRuleTrigger, setNewRuleTrigger] = useState('BEFORE_DUE');
+  const [newRuleDays, setNewRuleDays] = useState('3');
 
   const generateJoinCode = useGenerateJoinCode(currentOrgId ?? null);
   const disableJoinCode = useDisableJoinCode(currentOrgId ?? null);
@@ -86,6 +91,9 @@ export default function SettingsPage() {
   const transferOwnership = useTransferOwnership();
   const { data: membersData } = useMembers(isOwner ? currentOrgId : null);
   const isAdminRole = currentOrg?.role === 'OWNER' || currentOrg?.role === 'ADMIN';
+  const { data: reminderRules } = useReminderRules(isAdminRole ? currentOrgId ?? null : null);
+  const createReminderRule = useCreateReminderRule();
+  const deleteReminderRule = useDeleteReminderRule();
 
   const hasChanges = name !== (user?.name || '');
 
@@ -214,7 +222,6 @@ export default function SettingsPage() {
     const file = e.target.files?.[0];
     if (!file || !user) return;
 
-    // Validate file type
     if (!file.type.startsWith('image/')) {
       toast({
         title: 'Invalid file type',
@@ -224,7 +231,6 @@ export default function SettingsPage() {
       return;
     }
 
-    // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
       toast({
         title: 'File too large',
@@ -686,35 +692,189 @@ export default function SettingsPage() {
               </MotionCardTitle>
             </MotionCardHeader>
             <MotionCardContent>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <Label className="text-sm font-medium">Auto-approve payments</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Automatically confirm incoming payments with high-confidence member matches
-                    </p>
-                  </div>
-                  <Switch
-                    checked={orgDetails?.autoApprovePayments ?? true}
-                    onCheckedChange={(checked) =>
-                      updateOrganization.mutate({ autoApprovePayments: checked })
-                    }
-                  />
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">
+                  All email imports automatically create payments and expenses. Manage them from their respective pages.
+                </p>
+              </div>
+            </MotionCardContent>
+          </MotionCard>
+        </FadeIn>
+      )}
+
+      {/* Payment Instructions — admin/owner only */}
+      {isAdminRole && (
+        <FadeIn delay={0.5}>
+          <MotionCard hover={false}>
+            <MotionCardHeader>
+              <MotionCardTitle className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Banknote className="h-4 w-4 text-primary" />
                 </div>
-                <Separator className="opacity-50" />
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <Label className="text-sm font-medium">Auto-approve expenses</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Automatically create expenses from outgoing payment emails
-                    </p>
+                Payment Instructions
+              </MotionCardTitle>
+            </MotionCardHeader>
+            <MotionCardContent>
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Instructions shown to members on how to pay (Venmo, Zelle, etc.)
+                </p>
+                <Textarea
+                  value={paymentInstructions}
+                  onChange={(e) => setPaymentInstructions(e.target.value)}
+                  placeholder="e.g., Venmo: @ThetaChi, Zelle: treasurer@theta.org"
+                  className="min-h-[100px] bg-secondary/30 border-border/50 focus:border-primary"
+                />
+                <Button
+                  disabled={updateOrganization.isPending || paymentInstructions === (orgDetails?.paymentInstructions || '')}
+                  onClick={() =>
+                    updateOrganization.mutate(
+                      { paymentInstructions },
+                      {
+                        onSuccess: () => toast({ title: 'Payment instructions saved!' }),
+                        onError: (error: any) =>
+                          toast({
+                            title: 'Error',
+                            description: error.message || 'Failed to save payment instructions',
+                            variant: 'destructive',
+                          }),
+                      },
+                    )
+                  }
+                >
+                  {updateOrganization.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    'Save Instructions'
+                  )}
+                </Button>
+              </div>
+            </MotionCardContent>
+          </MotionCard>
+        </FadeIn>
+      )}
+
+      {/* Email Reminders — admin/owner only */}
+      {isAdminRole && (
+        <FadeIn delay={0.55}>
+          <MotionCard hover={false}>
+            <MotionCardHeader>
+              <MotionCardTitle className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Bell className="h-4 w-4 text-primary" />
+                </div>
+                Email Reminders
+              </MotionCardTitle>
+            </MotionCardHeader>
+            <MotionCardContent>
+              <div className="space-y-4">
+                {/* Active rules list */}
+                {(reminderRules as any)?.data?.length > 0 ? (
+                  <div className="space-y-2">
+                    {(reminderRules as any).data.map((rule: { id: string; triggerType: string; daysOffset: number; isActive: boolean }) => (
+                      <div
+                        key={rule.id}
+                        className="flex items-center justify-between p-3 rounded-xl bg-secondary/30"
+                      >
+                        <span className="text-sm">
+                          <span className="font-medium">{rule.daysOffset} day{rule.daysOffset !== 1 ? 's' : ''}</span>{' '}
+                          {rule.triggerType === 'BEFORE_DUE' ? 'before due date' : 'after due date'}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                          onClick={() => {
+                            if (!currentOrgId) return;
+                            deleteReminderRule.mutate(
+                              { orgId: currentOrgId, id: rule.id },
+                              {
+                                onSuccess: () => toast({ title: 'Reminder rule deleted' }),
+                                onError: (error: any) =>
+                                  toast({
+                                    title: 'Error',
+                                    description: error.message || 'Failed to delete rule',
+                                    variant: 'destructive',
+                                  }),
+                              },
+                            );
+                          }}
+                          disabled={deleteReminderRule.isPending}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
                   </div>
-                  <Switch
-                    checked={orgDetails?.autoApproveExpenses ?? true}
-                    onCheckedChange={(checked) =>
-                      updateOrganization.mutate({ autoApproveExpenses: checked })
-                    }
-                  />
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No reminder rules configured. Add one below to automatically email members about upcoming or overdue charges.
+                  </p>
+                )}
+
+                <Separator className="opacity-50" />
+
+                {/* Add rule form */}
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium">Add Rule</Label>
+                  <div className="flex items-center gap-3">
+                    <Input
+                      type="number"
+                      min="1"
+                      max="90"
+                      value={newRuleDays}
+                      onChange={(e) => setNewRuleDays(e.target.value)}
+                      className="w-20 h-10 bg-secondary/30 border-border/50"
+                    />
+                    <span className="text-sm text-muted-foreground whitespace-nowrap">days</span>
+                    <Select value={newRuleTrigger} onValueChange={setNewRuleTrigger}>
+                      <SelectTrigger className="h-10 bg-secondary/30 border-border/50">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="BEFORE_DUE">Before due date</SelectItem>
+                        <SelectItem value="AFTER_DUE">After due date</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      size="sm"
+                      disabled={createReminderRule.isPending || !newRuleDays || parseInt(newRuleDays) < 1}
+                      onClick={() => {
+                        if (!currentOrgId) return;
+                        createReminderRule.mutate(
+                          {
+                            orgId: currentOrgId,
+                            data: {
+                              triggerType: newRuleTrigger,
+                              daysOffset: parseInt(newRuleDays),
+                            },
+                          },
+                          {
+                            onSuccess: () => {
+                              toast({ title: 'Reminder rule added!' });
+                              setNewRuleDays('3');
+                              setNewRuleTrigger('BEFORE_DUE');
+                            },
+                            onError: (error: any) =>
+                              toast({
+                                title: 'Error',
+                                description: error.message || 'Failed to create rule',
+                                variant: 'destructive',
+                              }),
+                          },
+                        );
+                      }}
+                    >
+                      {createReminderRule.isPending ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Plus className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </MotionCardContent>

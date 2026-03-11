@@ -3,8 +3,9 @@
 import Link from 'next/link';
 import { ArrowRight, Users, Receipt, AlertTriangle, AlertCircle, Circle, Check, TrendingUp, Sparkles } from 'lucide-react';
 import { useDashboard } from '@/lib/queries/organizations';
+import { useInsights } from '@/lib/queries/insights';
 import { useAuthStore } from '@/lib/stores/auth';
-import { formatCents, formatRelativeDate } from '@/lib/utils';
+import { cn, formatCents, formatRelativeDate } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatCard } from '@/components/ui/stat-card';
@@ -40,6 +41,8 @@ function StatCardSkeleton() {
 export default function DashboardPage() {
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
   const { data: stats, isLoading, isError, refetch } = useDashboard(currentOrgId);
+  const { data: insightsData } = useInsights(currentOrgId);
+  const insights = Array.isArray(insightsData) ? insightsData as any[] : [];
 
   if (isLoading) {
     return (
@@ -158,6 +161,38 @@ export default function DashboardPage() {
           color="rose"
         />
       </div>
+
+      {/* Insights */}
+      {insights.length > 0 && (
+        <FadeIn delay={0.15}>
+          <MotionCard hover={false} className="border-amber-500/20">
+            <MotionCardHeader>
+              <MotionCardTitle className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-amber-500/10">
+                  <Sparkles className="h-4 w-4 text-amber-500" />
+                </div>
+                Insights
+              </MotionCardTitle>
+            </MotionCardHeader>
+            <MotionCardContent className="space-y-2">
+              {insights.map((insight: any, i: number) => (
+                <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-secondary/30">
+                  <AlertTriangle className={cn(
+                    'h-4 w-4 mt-0.5 shrink-0',
+                    insight.severity === 'warning' ? 'text-amber-500' : 'text-muted-foreground',
+                  )} />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{insight.title}</p>
+                    {insight.detail && (
+                      <p className="text-xs text-muted-foreground mt-0.5">{insight.detail}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </MotionCardContent>
+          </MotionCard>
+        </FadeIn>
+      )}
 
       {/* Recent Payments */}
       <MotionCard hover={false}>

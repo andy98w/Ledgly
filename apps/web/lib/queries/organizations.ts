@@ -14,12 +14,11 @@ interface Organization {
 }
 
 interface OrganizationDetails extends Organization {
-  autoApprovePayments: boolean;
-  autoApproveExpenses: boolean;
   enabledPaymentSources: string[];
   joinCode: string | null;
   joinCodeEnabled: boolean;
   joinRequiresApproval: boolean;
+  paymentInstructions: string | null;
   memberCount: number;
   chargeCount: number;
 }
@@ -85,7 +84,7 @@ export function useUpdateOrganization(orgId: string | null) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: Partial<Pick<OrganizationDetails, 'name' | 'timezone' | 'autoApprovePayments' | 'autoApproveExpenses' | 'enabledPaymentSources'>>) =>
+    mutationFn: (data: Partial<Pick<OrganizationDetails, 'name' | 'timezone' | 'enabledPaymentSources' | 'paymentInstructions'>>) =>
       api.patch<OrganizationDetails>(`/organizations/${orgId}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['organizations', orgId] });

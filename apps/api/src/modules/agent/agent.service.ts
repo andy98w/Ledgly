@@ -431,9 +431,136 @@ export class AgentService {
           }));
       }
 
+      case 'get_insights': {
+        return this.getInsightsForAgent(orgId);
+      }
+
+      case 'generate_report': {
+        return this.generateReportForAgent(orgId, args);
+      }
+
       default:
         throw new Error(`Unknown read tool: ${toolName}`);
     }
+  }
+
+  private async getInsightsForAgent(orgId: string) {
+    const now = new Date();
+    const sixtyDaysAgo = new Date(now);
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+    const thirtyDaysAgo = new Date(now);
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const insights: Array<{ type: string; severity: string; title: string; detail: string }> = [];
+
+    // Delinquent members
+    const delinquent = await this.prisma.$queryRaw<Array<{ member_name: string }>>`
+      SELECT COALESCE(m.name, u.name, u.email, 'Unknown') as member_name
+      FROM memberships m LEFT JOIN users u ON m.user_id = u.id
+      WHERE m.org_id = ${orgId} AND m.status = 'ACTIVE'
+      AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.membership_id = m.id AND p.deleted_at IS NULL AND p.paid_at >= ${sixtyDaysAgo})
+      AND EXISTS (SELECT 1 FROM charges c WHERE c.membership_id = m.id AND c.status IN ('OPEN', 'PARTIALLY_PAID'))
+    `;
+    if (delinquent.length > 0) {
+      insights.push({
+        type: 'delinquent_members', severity: 'warning',
+        title: `${delinquent.length} member(s) with no payment in 60+ days`,
+        detail: delinquent.slice(0, 5).map(m => m.member_name).join(', '),
+      });
+    }
+
+    // Overdue charges
+    const overdueCount = await this.prisma.charge.count({
+      where: { orgId, status: { in: ['OPEN', 'PARTIALLY_PAID'] }, dueDate: { lt: thirtyDaysAgo } },
+    });
+    if (overdueCount > 0) {
+      insights.push({
+        type: 'overdue_charges', severity: 'warning',
+        title: `${overdueCount} charge(s) overdue by 30+ days`,
+        detail: 'Consider sending reminders.',
+      });
+    }
+
+    return insights;
+  }
+
+  private async generateReportForAgent(orgId: string, args: Record<string, any>) {
+    const now = new Date();
+    let startDate: string;
+    let endDate: string;
+
+    switch (args.period) {
+      case 'THIS_MONTH':
+        startDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+        endDate = now.toISOString().split('T')[0];
+        break;
+      case 'LAST_MONTH': {
+        const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const lastDay = new Date(now.getFullYear(), now.getMonth(), 0);
+        startDate = lastMonth.toISOString().split('T')[0];
+        endDate = lastDay.toISOString().split('T')[0];
+        break;
+      }
+      case 'THIS_QUARTER': {
+        const qMonth = Math.floor(now.getMonth() / 3) * 3;
+        startDate = `${now.getFullYear()}-${String(qMonth + 1).padStart(2, '0')}-01`;
+        endDate = now.toISOString().split('T')[0];
+        break;
+      }
+      case 'THIS_YEAR':
+        startDate = `${now.getFullYear()}-01-01`;
+        endDate = now.toISOString().split('T')[0];
+        break;
+      case 'CUSTOM':
+        startDate = args.startDate || `${now.getFullYear()}-01-01`;
+        endDate = args.endDate || now.toISOString().split('T')[0];
+        break;
+      default:
+        startDate = `${now.getFullYear()}-01-01`;
+        endDate = now.toISOString().split('T')[0];
+    }
+
+    // Collection summary
+    const charges = await this.prisma.charge.findMany({
+      where: {
+        orgId, status: { not: 'VOID' },
+        createdAt: { gte: new Date(startDate + 'T00:00:00'), lte: new Date(endDate + 'T23:59:59') },
+      },
+      include: { allocations: { select: { amountCents: true } } },
+    });
+
+    const totalCharged = charges.reduce((s, c) => s + c.amountCents, 0);
+    const totalCollected = charges.reduce((s, c) => s + c.allocations.reduce((a, al) => a + al.amountCents, 0), 0);
+
+    // Outstanding by member
+    const members = await this.prisma.membership.findMany({
+      where: { orgId, status: 'ACTIVE' },
+      include: {
+        user: { select: { name: true, email: true } },
+        chargesAssigned: {
+          where: { status: { not: 'VOID' } },
+          include: { allocations: { select: { amountCents: true } } },
+        },
+      },
+    });
+
+    const outstanding = members.map(m => {
+      const charged = m.chargesAssigned.reduce((s, c) => s + c.amountCents, 0);
+      const paid = m.chargesAssigned.reduce((s, c) => s + c.allocations.reduce((a, al) => a + al.amountCents, 0), 0);
+      return { name: m.name || m.user?.name || m.user?.email || 'Unknown', chargedCents: charged, paidCents: paid, balanceCents: charged - paid };
+    }).filter(m => m.balanceCents > 0).sort((a, b) => b.balanceCents - a.balanceCents);
+
+    return {
+      period: { start: startDate, end: endDate },
+      collectionSummary: {
+        totalChargedCents: totalCharged,
+        totalCollectedCents: totalCollected,
+        outstandingCents: totalCharged - totalCollected,
+        collectionRate: totalCharged > 0 ? Math.round((totalCollected / totalCharged) * 100) : 0,
+        chargesCount: charges.length,
+      },
+      outstandingByMember: outstanding.slice(0, 20),
+    };
   }
 
   private async executeWriteTool(
@@ -1114,7 +1241,23 @@ export class AgentService {
 
     let csvInstruction = '';
     if (csvContent) {
-      csvInstruction = `\n\nThe user has attached CSV data. Here is the raw content:\n\`\`\`\n${csvContent}\n\`\`\`\nParse this CSV data and use the import_csv tool with the appropriate type and parsed rows. Infer the type (members, charges, payments, or expenses) from the column headers. Convert amounts to cents (multiply dollar amounts by 100).`;
+      csvInstruction = `\n\nThe user has attached CSV data. Here is the raw content:\n\`\`\`\n${csvContent}\n\`\`\`\nParse this CSV data and use the import_csv tool with the appropriate type and parsed rows.
+
+### CSV Column Auto-Detection
+Apply these header mappings (case-insensitive):
+- **Name columns**: "Full Name", "Name", "Member", "Student", "Person" → member name
+- **Amount columns**: "Amount", "Amount ($)", "Cost", "Price", "Fee", "Total" → amountCents (multiply dollars by 100)
+- **Date columns**: "Due Date", "Due", "Deadline", "Date", "Paid Date" → date field (ISO format)
+- **Category columns**: "Category", "Type", "Charge Type" → category enum (DUES/EVENT/FINE/MERCH/OTHER for charges; EVENT/SUPPLIES/FOOD/VENUE/MARKETING/SERVICES/OTHER for expenses)
+- **Email columns**: "Email", "E-mail", "Email Address" → email
+- **Role columns**: "Role", "Position" → role enum
+
+### Data Conversion Rules
+- Dollar amounts with $ or commas: strip symbols, parse float, multiply by 100 for cents
+- Dates in any common format (MM/DD/YYYY, YYYY-MM-DD, "March 15, 2026"): convert to YYYY-MM-DD
+- If column headers are ambiguous, mention the mapping you chose to the user
+
+Infer the type (members, charges, payments, or expenses) from the column headers. Convert amounts to cents (multiply dollar amounts by 100).`;
     }
 
     const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
@@ -1133,6 +1276,11 @@ Today's date is ${today}.
 - Query the activity/audit log
 - Import CSV data (members, charges, payments, or expenses)
 - Look up members, charges, payments, expenses, and balances
+- Get smart insights (delinquent members, overdue trends, unallocated payments)
+- Generate financial reports for any period (collection summary, outstanding by member)
+
+## Multi-step workflows
+When a user requests a multi-step task (e.g., "import these members then charge them all $50"), plan the steps sequentially. Execute step 1, and use its output (e.g., created member IDs) as input for step 2. Present all steps in one confirmation when possible.
 
 Do NOT answer general knowledge questions, write code, or discuss topics outside organization financial management.
 

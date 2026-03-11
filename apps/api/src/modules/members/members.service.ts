@@ -190,6 +190,12 @@ export class MembersService {
       throw new NotFoundException('Member not found');
     }
 
+    // Get org payment instructions for portal display
+    const org = await this.prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { paymentInstructions: true },
+    });
+
     // Get payments for this member
     const payments = await this.prisma.payment.findMany({
       where: { orgId, membershipId, deletedAt: null },
@@ -248,6 +254,7 @@ export class MembersService {
       totalChargedCents,
       totalPaidCents,
       overdueCharges,
+      paymentInstructions: org?.paymentInstructions || null,
       charges,
       payments: payments.map((p) => ({
         id: p.id,

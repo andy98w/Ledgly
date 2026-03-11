@@ -98,7 +98,7 @@ export default function DashboardLayout({
       <Sidebar />
       <Header />
       <main
-        className={`pb-20 md:pb-0 transition-all duration-300 ${isCollapsed ? 'md:pl-[68px]' : 'md:pl-64'}`}
+        className={`pb-20 md:pb-0 transition-all duration-300 max-md:!pr-0 ${isCollapsed ? 'md:pl-[68px]' : 'md:pl-64'}`}
         style={{ paddingRight: isAISidebarOpen && pathname !== '/agent' && !pathname.startsWith('/settings') ? `${aiSidebarWidth}px` : undefined }}
       >
         {pathname === '/agent' ? (

@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { History, Receipt, CreditCard, Users, TrendingDown, Building2, Link2, Filter, Undo2, Redo2, Loader2, ChevronDown, ChevronRight, Search, Sparkles, AlertCircle } from 'lucide-react';
+import { History, Receipt, CreditCard, Users, TrendingDown, Building2, Link2, Filter, Undo2, Redo2, Loader2, ChevronDown, ChevronRight, Search, Sparkles, AlertCircle, List, Clock } from 'lucide-react';
+import { TimelineView } from '@/components/audit/timeline-view';
 import { useAuditLogs, useUndoAuditLog, useUndoBatch, useRedoAuditLog, useRedoBatch, type AuditLogEntry, type BatchedAuditLogEntry, type AuditLogItem } from '@/lib/queries/audit';
 import { useAuthStore, useIsAdminOrTreasurer } from '@/lib/stores/auth';
 import { formatRelativeDate } from '@/lib/utils';
@@ -569,6 +570,7 @@ export default function AuditLogPage() {
   const [pageSize, setPageSize] = useState(20);
   const [searchQuery, setSearchQuery] = useState('');
   const [dateRange, setDateRange] = useState<{ from?: string; to?: string }>({});
+  const [viewMode, setViewMode] = useState<'list' | 'timeline'>('list');
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
   const { toast } = useToast();
   const isAdmin = useIsAdminOrTreasurer();
@@ -687,6 +689,30 @@ export default function AuditLogPage() {
         <PageHeader
           title="Activity"
           helpText="Track all changes made in your organization. You can undo and redo actions directly from here."
+          actions={
+            <div className="flex items-center rounded-lg border border-border/50 bg-secondary/30 p-0.5">
+              <button
+                onClick={() => setViewMode('list')}
+                className={cn(
+                  'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                  viewMode === 'list' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                <List className="h-3.5 w-3.5" />
+                List
+              </button>
+              <button
+                onClick={() => setViewMode('timeline')}
+                className={cn(
+                  'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                  viewMode === 'timeline' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                <Clock className="h-3.5 w-3.5" />
+                Timeline
+              </button>
+            </div>
+          }
         />
       </FadeIn>
 
@@ -759,6 +785,13 @@ export default function AuditLogPage() {
             description="Try adjusting your filters or search."
             className="rounded-xl border border-border/50 bg-card/50"
           />
+        </FadeIn>
+      ) : viewMode === 'timeline' ? (
+        <FadeIn delay={0.2}>
+          <TimelineView logs={paginatedLogs as any} />
+          {logs.length > pageSize && (
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} className="justify-center pt-4" />
+          )}
         </FadeIn>
       ) : (
         <>

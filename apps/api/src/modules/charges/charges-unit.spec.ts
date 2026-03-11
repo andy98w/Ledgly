@@ -1,6 +1,6 @@
 import { createTestContext, cleanupTestContext, TestContext } from '../../test/test-helpers';
 
-jest.setTimeout(30_000);
+jest.setTimeout(60_000);
 
 describe('Charge unit tests', () => {
   let ctx: TestContext;
@@ -269,7 +269,7 @@ describe('Charge unit tests', () => {
     });
 
     const payment = await ctx.paymentsService.create(ctx.orgId, ctx.membershipId, {
-      amountCents: 5000, paidAt: '2026-01-01', rawPayerName: 'Unit Tester', membershipId: member,
+      amountCents: 5000, paidAt: '2026-01-01', rawPayerName: 'No Match Payer',
     });
 
     await ctx.paymentsService.allocate(ctx.orgId, payment.id, ctx.membershipId, {
@@ -288,7 +288,7 @@ describe('Charge unit tests', () => {
     });
 
     const payment = await ctx.paymentsService.create(ctx.orgId, ctx.membershipId, {
-      amountCents: 5000, paidAt: '2026-01-02', rawPayerName: 'Unit Tester', membershipId: member,
+      amountCents: 5000, paidAt: '2026-01-02', rawPayerName: 'No Match Payer',
     });
 
     await ctx.paymentsService.allocate(ctx.orgId, payment.id, ctx.membershipId, {

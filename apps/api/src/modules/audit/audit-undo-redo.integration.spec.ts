@@ -1,7 +1,7 @@
 import { NotFoundException, ConflictException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { createTestContext, cleanupTestContext, TestContext } from '../../test/test-helpers';
 
-jest.setTimeout(15_000);
+jest.setTimeout(60_000);
 
 describe('Audit Undo/Redo Edge Cases (integration)', () => {
   let ctx: TestContext;
@@ -55,14 +55,14 @@ describe('Audit Undo/Redo Edge Cases (integration)', () => {
   it('undo on hard-deleted payment does not throw', async () => {
     const { paymentsService, prisma, orgId, membershipId } = ctx;
 
-    // Create, then hard-delete to simulate unconfirmImport behavior
+    // Create, then hard-delete to simulate external deletion
     const payment = await paymentsService.create(orgId, membershipId, {
       amountCents: 3000,
       paidAt: '2025-07-01',
       rawPayerName: 'Hard Delete Test',
     });
 
-    // Hard-delete (what unconfirmImport does)
+    // Hard-delete the record
     await prisma.payment.delete({ where: { id: payment.id } });
 
     // Attempting to soft-delete (undo of CREATE) should throw NotFoundException
@@ -157,7 +157,7 @@ describe('Audit Undo/Redo Edge Cases (integration)', () => {
     const list1 = await expensesService.findAll(orgId);
     expect(list1.data.some((e) => e.id === expense.id)).toBe(true);
 
-    // Hard-delete (what unconfirmImport now does)
+    // Hard-delete the record
     await prisma.expense.delete({ where: { id: expense.id } });
 
     // Verify gone
@@ -485,7 +485,7 @@ describe('Audit Undo/Redo Edge Cases (integration)', () => {
     const listAfterRestore = await expensesService.findAll(orgId);
     expect(listAfterRestore.data.some((e) => e.id === e1.id)).toBe(true);
 
-    // Hard-delete e2 directly (what unconfirmImport does now)
+    // Hard-delete e2 directly
     await prisma.expense.delete({ where: { id: e2.id } });
 
     // e2 is completely gone

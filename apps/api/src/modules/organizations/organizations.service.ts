@@ -11,9 +11,8 @@ interface CreateOrganizationDto {
 interface UpdateOrganizationDto {
   name?: string;
   timezone?: string;
-  autoApprovePayments?: boolean;
-  autoApproveExpenses?: boolean;
   enabledPaymentSources?: string[];
+  paymentInstructions?: string | null;
 }
 
 // Safe alphabet: no ambiguous chars (0/O, 1/I/L)
@@ -36,7 +35,6 @@ export class OrganizationsService {
   ) {}
 
   async create(userId: string, dto: CreateOrganizationDto) {
-    // Prevent duplicate org names within user's memberships
     const existingMembership = await this.prisma.membership.findFirst({
       where: {
         userId,
@@ -52,7 +50,6 @@ export class OrganizationsService {
       );
     }
 
-    // Look up the user's name so the membership record has it
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { name: true, email: true },
@@ -117,9 +114,8 @@ export class OrganizationsService {
       id: org.id,
       name: org.name,
       timezone: org.timezone,
-      autoApprovePayments: org.autoApprovePayments,
-      autoApproveExpenses: org.autoApproveExpenses,
       enabledPaymentSources: org.enabledPaymentSources,
+      paymentInstructions: org.paymentInstructions,
       joinCode: org.joinCode,
       joinCodeEnabled: org.joinCodeEnabled,
       joinRequiresApproval: org.joinRequiresApproval,
@@ -136,9 +132,8 @@ export class OrganizationsService {
       data: {
         ...(dto.name && { name: dto.name }),
         ...(dto.timezone && { timezone: dto.timezone }),
-        ...(dto.autoApprovePayments !== undefined && { autoApprovePayments: dto.autoApprovePayments }),
-        ...(dto.autoApproveExpenses !== undefined && { autoApproveExpenses: dto.autoApproveExpenses }),
         ...(dto.enabledPaymentSources !== undefined && { enabledPaymentSources: dto.enabledPaymentSources }),
+        ...(dto.paymentInstructions !== undefined && { paymentInstructions: dto.paymentInstructions }),
       },
     });
 
@@ -302,7 +297,6 @@ export class OrganizationsService {
       throw new BadRequestException('Invalid or disabled join code');
     }
 
-    // Check if user is already a member
     const existing = await this.prisma.membership.findFirst({
       where: { orgId: org.id, userId },
     });
@@ -311,7 +305,6 @@ export class OrganizationsService {
       if (existing.status === 'ACTIVE' || existing.status === 'PENDING') {
         throw new ConflictException('You are already a member of this organization');
       }
-      // Reactivate LEFT/INACTIVE membership
       const status = org.joinRequiresApproval ? 'PENDING' : 'ACTIVE';
       const updated = await this.prisma.membership.update({
         where: { id: existing.id },
@@ -327,7 +320,6 @@ export class OrganizationsService {
       return { membershipId: updated.id, orgId: org.id, orgName: org.name, status };
     }
 
-    // Look up user name
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { name: true, email: true },
@@ -353,34 +345,131 @@ export class OrganizationsService {
     return { membershipId: membership.id, orgId: org.id, orgName: org.name, status };
   }
 
+  async getInsights(orgId: string) {
+    const insights: Array<{ type: string; severity: 'warning' | 'info'; title: string; detail: string }> = [];
+    const now = new Date();
+    const sixtyDaysAgo = new Date(now);
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+    const thirtyDaysAgo = new Date(now);
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    // 1) Members with no payment in 60+ days
+    const delinquentMembers = await this.prisma.$queryRaw<
+      Array<{ member_id: string; member_name: string }>
+    >`
+      SELECT m.id as member_id, COALESCE(m.name, u.name, u.email, 'Unknown') as member_name
+      FROM memberships m
+      LEFT JOIN users u ON m.user_id = u.id
+      WHERE m.org_id = ${orgId} AND m.status = 'ACTIVE'
+      AND NOT EXISTS (
+        SELECT 1 FROM payments p
+        WHERE p.membership_id = m.id
+        AND p.deleted_at IS NULL
+        AND p.paid_at >= ${sixtyDaysAgo}
+      )
+      AND EXISTS (
+        SELECT 1 FROM charges c
+        WHERE c.membership_id = m.id
+        AND c.status IN ('OPEN', 'PARTIALLY_PAID')
+      )
+    `;
+
+    if (delinquentMembers.length > 0) {
+      insights.push({
+        type: 'delinquent_members',
+        severity: 'warning',
+        title: `${delinquentMembers.length} member${delinquentMembers.length > 1 ? 's' : ''} with no payment in 60+ days`,
+        detail: delinquentMembers.slice(0, 5).map((m) => m.member_name).join(', ') +
+          (delinquentMembers.length > 5 ? ` and ${delinquentMembers.length - 5} more` : ''),
+      });
+    }
+
+    // 2) Charges overdue > 30 days
+    const overdueCharges = await this.prisma.charge.count({
+      where: {
+        orgId,
+        status: { in: ['OPEN', 'PARTIALLY_PAID'] },
+        dueDate: { lt: thirtyDaysAgo },
+      },
+    });
+
+    if (overdueCharges > 0) {
+      insights.push({
+        type: 'overdue_charges',
+        severity: 'warning',
+        title: `${overdueCharges} charge${overdueCharges > 1 ? 's' : ''} overdue by 30+ days`,
+        detail: 'Consider sending reminders or following up with members.',
+      });
+    }
+
+    // 3) Large unallocated payments
+    const unallocatedPayments = await this.prisma.$queryRaw<
+      Array<{ payment_id: string; amount_cents: number; unallocated_cents: number; raw_payer_name: string }>
+    >`
+      SELECT p.id as payment_id, p.amount_cents,
+        p.amount_cents - COALESCE(SUM(pa.amount_cents), 0) as unallocated_cents,
+        COALESCE(p.raw_payer_name, 'Unknown') as raw_payer_name
+      FROM payments p
+      LEFT JOIN payment_allocations pa ON pa.payment_id = p.id
+      WHERE p.org_id = ${orgId} AND p.deleted_at IS NULL
+      GROUP BY p.id
+      HAVING p.amount_cents - COALESCE(SUM(pa.amount_cents), 0) >= 10000
+    `;
+
+    if (unallocatedPayments.length > 0) {
+      const totalUnallocated = unallocatedPayments.reduce((sum, p) => sum + Number(p.unallocated_cents), 0);
+      insights.push({
+        type: 'unallocated_payments',
+        severity: 'info',
+        title: `$${(totalUnallocated / 100).toFixed(0)} in unallocated payments`,
+        detail: `${unallocatedPayments.length} payment${unallocatedPayments.length > 1 ? 's' : ''} of $100+ not matched to charges.`,
+      });
+    }
+
+    // 4) Collection rate trend (current vs previous month)
+    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+
+    const [currentMonthPayments, prevMonthPayments] = await Promise.all([
+      this.prisma.payment.aggregate({
+        where: { orgId, deletedAt: null, paidAt: { gte: thisMonthStart } },
+        _sum: { amountCents: true },
+      }),
+      this.prisma.payment.aggregate({
+        where: { orgId, deletedAt: null, paidAt: { gte: prevMonthStart, lte: prevMonthEnd } },
+        _sum: { amountCents: true },
+      }),
+    ]);
+
+    const currentTotal = currentMonthPayments._sum.amountCents || 0;
+    const prevTotal = prevMonthPayments._sum.amountCents || 0;
+
+    if (prevTotal > 0) {
+      const changePercent = Math.round(((currentTotal - prevTotal) / prevTotal) * 100);
+      if (Math.abs(changePercent) >= 20) {
+        insights.push({
+          type: 'collection_trend',
+          severity: changePercent < 0 ? 'warning' : 'info',
+          title: `Collections ${changePercent > 0 ? 'up' : 'down'} ${Math.abs(changePercent)}% vs last month`,
+          detail: `This month: $${(currentTotal / 100).toFixed(0)} vs last month: $${(prevTotal / 100).toFixed(0)}`,
+        });
+      }
+    }
+
+    return insights;
+  }
+
   async delete(orgId: string) {
-    // Delete all related data in a transaction
     await this.prisma.$transaction(async (tx) => {
-      // Delete payment allocations
       await tx.paymentAllocation.deleteMany({ where: { orgId } });
-
-      // Delete payments
       await tx.payment.deleteMany({ where: { orgId } });
-
-      // Delete charges
       await tx.charge.deleteMany({ where: { orgId } });
-
-      // Delete expenses
       await tx.expense.deleteMany({ where: { orgId } });
-
-      // Delete email imports
       await tx.emailImport.deleteMany({ where: { orgId } });
-
-      // Delete gmail connections
       await tx.gmailConnection.deleteMany({ where: { orgId } });
-
-      // Delete audit logs
       await tx.auditLog.deleteMany({ where: { orgId } });
-
-      // Delete memberships
       await tx.membership.deleteMany({ where: { orgId } });
-
-      // Delete the organization
       await tx.organization.delete({ where: { id: orgId } });
     });
 

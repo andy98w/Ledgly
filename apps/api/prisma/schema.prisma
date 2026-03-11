@@ -16,8 +16,6 @@ model Organization {
   auditLogs       AuditLog[]
   charges         Charge[]
   expenses        Expense[]
-  autoApprovePayments     Boolean          @default(true) @map("auto_approve_payments")
-  autoApproveExpenses     Boolean          @default(true) @map("auto_approve_expenses")
   enabledPaymentSources   String[]         @default(["venmo", "zelle", "cashapp", "paypal"]) @map("enabled_payment_sources")
   joinCode                String?          @unique @map("join_code")
   joinCodeEnabled         Boolean          @default(true) @map("join_code_enabled")
@@ -27,6 +25,9 @@ model Organization {
   notifications       Notification[]
   payments            Payment[]
   agentSessions       AgentSession[]
+  paymentInstructions String?          @map("payment_instructions")
+  chargeSchedules     ChargeSchedule[]
+  reminderRules       ReminderRule[]
 
   @@map("organizations")
 }
@@ -112,6 +113,7 @@ model Membership {
   allocationsCreated PaymentAllocation[] @relation("AllocationCreatedBy")
   paymentsCreated    Payment[]           @relation("PaymentCreatedBy")
   agentSessions      AgentSession[]
+  chargeSchedulesCreated ChargeSchedule[] @relation("ScheduleCreator")
 
   @@unique([orgId, userId])
   @@index([orgId])
@@ -241,7 +243,7 @@ model EmailImport {
   parsedPayerName     String?           @map("parsed_payer_name")
   parsedPayerEmail    String?           @map("parsed_payer_email")
   parsedMemo          String?           @map("parsed_memo")
-  status              EmailImportStatus @default(PENDING)
+  status              EmailImportStatus @default(AUTO_CONFIRMED)
   paymentId           String?           @unique @map("payment_id")
   reviewedAt          DateTime?         @map("reviewed_at")
   createdAt           DateTime          @default(now()) @map("created_at")
@@ -249,7 +251,6 @@ model EmailImport {
   derivedCategory     String?           @map("derived_category")
   matchConfidence     Float?            @map("match_confidence")
   matchedMembershipId String?           @map("matched_membership_id")
-  needsReviewReason   String?           @map("needs_review_reason")
   expenseId           String?           @unique @map("expense_id")
   parsedDirection     String            @default("incoming") @map("parsed_direction")
   matchedExpenseId    String?           @map("matched_expense_id")
@@ -318,11 +319,9 @@ enum ChargeStatus {
 }
 
 enum EmailImportStatus {
-  PENDING
-  CONFIRMED
+  AUTO_CONFIRMED
   IGNORED
   DUPLICATE
-  AUTO_CONFIRMED
 }
 
 enum ExpenseCategory {
@@ -339,6 +338,12 @@ enum MagicTokenType {
   SIGN_IN
   PASSWORD_RESET
   EMAIL_VERIFY
+}
+
+enum ScheduleFrequency {
+  MONTHLY
+  QUARTERLY
+  YEARLY
 }
 
 model Notification {
@@ -381,4 +386,65 @@ enum NotificationType {
   EXPENSE_CREATED
   CHARGE_CREATED
   SYSTEM
+}
+
+model ChargeSchedule {
+  id          String            @id @default(cuid())
+  orgId       String            @map("org_id")
+  title       String
+  category    ChargeCategory
+  amountCents Int               @map("amount_cents")
+  frequency   ScheduleFrequency
+  dayOfMonth  Int               @default(1) @map("day_of_month")
+  monthOfYear Int?              @map("month_of_year")
+  targetScope String            @default("ALL_ACTIVE") @map("target_scope")
+  targetIds   String[]          @default([]) @map("target_ids")
+  isActive    Boolean           @default(true) @map("is_active")
+  nextRunAt   DateTime          @map("next_run_at")
+  lastRunAt   DateTime?         @map("last_run_at")
+  createdById String            @map("created_by_id")
+  createdAt   DateTime          @default(now()) @map("created_at")
+  org         Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  createdBy   Membership        @relation("ScheduleCreator", fields: [createdById], references: [id])
+
+  @@index([orgId, isActive])
+  @@index([nextRunAt])
+  @@map("charge_schedules")
+}
+
+model ReminderRule {
+  id          String       @id @default(cuid())
+  orgId       String       @map("org_id")
+  triggerType String       @map("trigger_type")
+  daysOffset  Int          @map("days_offset")
+  isActive    Boolean      @default(true) @map("is_active")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, isActive])
+  @@map("reminder_rules")
+}
+
+model ReminderLog {
+  id             String   @id @default(cuid())
+  orgId          String   @map("org_id")
+  chargeId       String   @map("charge_id")
+  ruleId         String   @map("rule_id")
+  sentAt         DateTime @default(now()) @map("sent_at")
+  recipientEmail String   @map("recipient_email")
+
+  @@unique([ruleId, chargeId])
+  @@index([orgId, sentAt])
+  @@map("reminder_logs")
+}
+
+model MatchConfirmation {
+  id              String   @id @default(cuid())
+  orgId           String   @map("org_id")
+  rawPayerName    String   @map("raw_payer_name")
+  matchedMemberId String   @map("matched_member_id")
+  confirmedAt     DateTime @default(now()) @map("confirmed_at")
+
+  @@index([orgId, rawPayerName])
+  @@map("match_confirmations")
 }

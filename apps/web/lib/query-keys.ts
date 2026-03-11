@@ -54,10 +54,25 @@ export const queryKeys = {
   gmail: {
     all: (orgId: string | null) => ['organizations', orgId, 'gmail'] as const,
     status: (orgId: string | null) => ['organizations', orgId, 'gmail', 'status'] as const,
-    imports: (orgId: string | null, status?: string) =>
-      status
-        ? (['organizations', orgId, 'gmail', 'imports', status] as const)
-        : (['organizations', orgId, 'gmail', 'imports'] as const),
-    stats: (orgId: string | null) => ['organizations', orgId, 'gmail', 'imports', 'stats'] as const,
+  },
+  schedules: {
+    all: (orgId: string | null) => ['organizations', orgId, 'schedules'] as const,
+    list: (orgId: string | null) => ['organizations', orgId, 'schedules', 'list'] as const,
+  },
+  reminders: {
+    all: (orgId: string | null) => ['organizations', orgId, 'reminders'] as const,
+    rules: (orgId: string | null) => ['organizations', orgId, 'reminders', 'rules'] as const,
+  },
+  reports: {
+    all: (orgId: string | null) => ['organizations', orgId, 'reports'] as const,
+    collection: (orgId: string | null, params: Record<string, any>) =>
+      ['organizations', orgId, 'reports', 'collection', params] as const,
+    outstanding: (orgId: string | null) =>
+      ['organizations', orgId, 'reports', 'outstanding'] as const,
+    comparison: (orgId: string | null, params: Record<string, any>) =>
+      ['organizations', orgId, 'reports', 'comparison', params] as const,
+  },
+  insights: {
+    all: (orgId: string | null) => ['organizations', orgId, 'insights'] as const,
   },
 };

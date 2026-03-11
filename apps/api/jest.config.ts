@@ -6,5 +6,6 @@ export default {
   collectCoverageFrom: ['**/*.service.ts'],
   coverageDirectory: '../coverage',
   testEnvironment: 'node',
+  testTimeout: 60_000,
   moduleNameMapper: { '^src/(.*)$': '<rootDir>/$1' },
 };

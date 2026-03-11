@@ -2,13 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ChargeCategory } from '@prisma/client';
 import { deriveCategoryFromMemo } from '../../common/utils/category-matcher';
+import { resolveNicknames } from '../../common/utils/nickname-map';
 
 export interface MatchResult {
   membershipId: string | null;
   confidence: number; // 0.0 to 1.0
-  needsReview: boolean;
   shouldAutoAllocate: boolean; // >= 0.9 + category match + charges found
-  reviewReason: string | null;
   derivedCategory: ChargeCategory | null;
   suggestedChargeIds: string[];
 }
@@ -34,7 +33,6 @@ export class PaymentMatcherService {
     memo: string | null,
     amountCents: number,
   ): Promise<MatchResult> {
-    // Get all active members for this org
     const members = await this.prisma.membership.findMany({
       where: { orgId, status: 'ACTIVE' },
       include: {
@@ -52,17 +50,28 @@ export class PaymentMatcherService {
       aliases: m.paymentAliases || [],
     }));
 
-    // Try to match by name
+    // 1) History-based matching: check MatchConfirmation for previously confirmed payer names
     let bestMatch: { membershipId: string; confidence: number } | null = null;
 
     if (payerName) {
+      const confirmation = await this.prisma.matchConfirmation.findFirst({
+        where: { orgId, rawPayerName: payerName },
+        orderBy: { confirmedAt: 'desc' },
+      });
+      if (confirmation) {
+        bestMatch = { membershipId: confirmation.matchedMemberId, confidence: 0.98 };
+      }
+    }
+
+    // 2) Name matching
+    if (!bestMatch && payerName) {
       const nameMatch = this.findBestNameMatch(payerName, candidates);
       if (nameMatch) {
         bestMatch = nameMatch;
       }
     }
 
-    // Try to match by email if no name match
+    // 3) Email matching
     if (!bestMatch && payerEmail) {
       const emailMatch = candidates.find(
         (c) => c.userEmail?.toLowerCase() === payerEmail.toLowerCase(),
@@ -72,10 +81,8 @@ export class PaymentMatcherService {
       }
     }
 
-    // Derive category from memo
     const derivedCategory = memo ? deriveCategoryFromMemo(memo) : null;
 
-    // Find matching charges if we have a member (category-strict)
     let suggestedChargeIds: string[] = [];
     if (bestMatch) {
       suggestedChargeIds = await this.findMatchingCharges(
@@ -86,21 +93,8 @@ export class PaymentMatcherService {
       );
     }
 
-    // Determine if manual review is needed
-    let needsReview = false;
-    let reviewReason: string | null = null;
-
-    if (!bestMatch) {
-      needsReview = true;
-      reviewReason = 'Could not match payer name to any member';
-    } else if (bestMatch.confidence < 0.8) {
-      needsReview = true;
-      reviewReason = `Low confidence match (${Math.round(bestMatch.confidence * 100)}%)`;
-    }
-
     // Auto-allocate requires: high confidence (>= 0.9) + category derived + matching charges found
     const shouldAutoAllocate =
-      !needsReview &&
       bestMatch !== null &&
       bestMatch.confidence >= 0.9 &&
       derivedCategory !== null &&
@@ -109,9 +103,7 @@ export class PaymentMatcherService {
     return {
       membershipId: bestMatch?.membershipId || null,
       confidence: bestMatch?.confidence || 0,
-      needsReview,
       shouldAutoAllocate,
-      reviewReason,
       derivedCategory,
       suggestedChargeIds,
     };
@@ -125,7 +117,6 @@ export class PaymentMatcherService {
     let bestMatch: { membershipId: string; confidence: number } | null = null;
 
     for (const candidate of candidates) {
-      // Check membership name
       if (candidate.name) {
         const similarity = this.calculateNameSimilarity(
           normalizedPayerName,
@@ -136,7 +127,6 @@ export class PaymentMatcherService {
         }
       }
 
-      // Check user name
       if (candidate.userName) {
         const similarity = this.calculateNameSimilarity(
           normalizedPayerName,
@@ -147,7 +137,6 @@ export class PaymentMatcherService {
         }
       }
 
-      // Check aliases
       for (const alias of candidate.aliases) {
         const normalizedAlias = this.normalizeName(alias);
         if (normalizedAlias === normalizedPayerName) {
@@ -175,39 +164,67 @@ export class PaymentMatcherService {
   }
 
   private calculateNameSimilarity(name1: string, name2: string): number {
-    // Exact match
     if (name1 === name2) return 1.0;
 
     const parts1 = name1.split(' ').filter(Boolean);
     const parts2 = name2.split(' ').filter(Boolean);
 
-    // Check if all parts of one name are contained in the other
-    const allParts1InParts2 = parts1.every((p1) =>
-      parts2.some((p2) => p2.includes(p1) || p1.includes(p2)),
-    );
-    const allParts2InParts1 = parts2.every((p2) =>
-      parts1.some((p1) => p1.includes(p2) || p2.includes(p1)),
-    );
+    // Check if the shorter name's parts all appear (as substrings) in order
+    // within the longer name's parts. Ordered matching prevents false positives
+    // like "John Williams" ↔ "William Johnson" where cross-position substring
+    // overlap would otherwise produce a spurious 0.95.
+    const [shorter, longer] = parts1.length <= parts2.length
+      ? [parts1, parts2]
+      : [parts2, parts1];
 
-    if (allParts1InParts2 && allParts2InParts1) {
+    let j = 0;
+    let orderedMatchCount = 0;
+    for (const part of shorter) {
+      while (j < longer.length) {
+        if (longer[j].includes(part) || part.includes(longer[j])) {
+          orderedMatchCount++;
+          j++;
+          break;
+        }
+        j++;
+      }
+    }
+
+    if (orderedMatchCount === shorter.length) {
       return 0.95;
     }
 
-    // First and last name match (handles middle name differences)
     if (parts1.length >= 2 && parts2.length >= 2) {
       const firstMatch = parts1[0] === parts2[0];
       const lastMatch = parts1[parts1.length - 1] === parts2[parts2.length - 1];
       if (firstMatch && lastMatch) {
         return 0.9;
       }
+
+      // Nickname matching: check if first names are nickname variants
+      if (lastMatch && !firstMatch) {
+        const nicknames1 = resolveNicknames(parts1[0]);
+        if (nicknames1.includes(parts2[0])) {
+          return 0.85;
+        }
+        const nicknames2 = resolveNicknames(parts2[0]);
+        if (nicknames2.includes(parts1[0])) {
+          return 0.85;
+        }
+      }
     }
 
-    // First name only match
     if (parts1[0] === parts2[0]) {
       return 0.6;
     }
 
-    // Last name only match
+    if (parts1.length === 1 || parts2.length === 1) {
+      const nicknames = resolveNicknames(parts1[0]);
+      if (nicknames.includes(parts2[0])) {
+        return 0.6;
+      }
+    }
+
     if (
       parts1.length > 0 &&
       parts2.length > 0 &&
@@ -216,12 +233,57 @@ export class PaymentMatcherService {
       return 0.5;
     }
 
-    // Levenshtein distance for fuzzy matching
-    const distance = this.levenshteinDistance(name1, name2);
-    const maxLength = Math.max(name1.length, name2.length);
-    const similarity = 1 - distance / maxLength;
+    // Use the better of Levenshtein and Jaro-Winkler for fuzzy matching
+    const levenshteinSim = 1 - this.levenshteinDistance(name1, name2) / Math.max(name1.length, name2.length);
+    const jaroWinklerSim = this.jaroWinklerDistance(name1, name2);
 
-    return Math.max(0, similarity);
+    return Math.max(0, Math.max(levenshteinSim, jaroWinklerSim));
+  }
+
+  private jaroWinklerDistance(s1: string, s2: string): number {
+    if (s1 === s2) return 1.0;
+    if (s1.length === 0 || s2.length === 0) return 0;
+
+    const matchDistance = Math.floor(Math.max(s1.length, s2.length) / 2) - 1;
+    const s1Matches = new Array(s1.length).fill(false);
+    const s2Matches = new Array(s2.length).fill(false);
+
+    let matches = 0;
+    let transpositions = 0;
+
+    for (let i = 0; i < s1.length; i++) {
+      const start = Math.max(0, i - matchDistance);
+      const end = Math.min(i + matchDistance + 1, s2.length);
+
+      for (let j = start; j < end; j++) {
+        if (s2Matches[j] || s1[i] !== s2[j]) continue;
+        s1Matches[i] = true;
+        s2Matches[j] = true;
+        matches++;
+        break;
+      }
+    }
+
+    if (matches === 0) return 0;
+
+    let k = 0;
+    for (let i = 0; i < s1.length; i++) {
+      if (!s1Matches[i]) continue;
+      while (!s2Matches[k]) k++;
+      if (s1[i] !== s2[k]) transpositions++;
+      k++;
+    }
+
+    const jaro = (matches / s1.length + matches / s2.length + (matches - transpositions / 2) / matches) / 3;
+
+    // Winkler modification: boost for common prefix (up to 4 chars)
+    let prefix = 0;
+    for (let i = 0; i < Math.min(4, Math.min(s1.length, s2.length)); i++) {
+      if (s1[i] === s2[i]) prefix++;
+      else break;
+    }
+
+    return jaro + prefix * 0.1 * (1 - jaro);
   }
 
   private levenshteinDistance(str1: string, str2: string): number {
@@ -256,7 +318,6 @@ export class PaymentMatcherService {
     // If no category derived, don't guess — return empty
     if (!category) return [];
 
-    // Find open charges for this member matching the derived category
     const charges = await this.prisma.charge.findMany({
       where: {
         orgId,

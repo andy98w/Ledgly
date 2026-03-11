@@ -2,8 +2,9 @@
 
 import { useCallback, useMemo, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Plus, Receipt, TrendingUp, Percent, Search, Trash2, Circle, CheckCircle2, Mail, Upload, MoreVertical, Download, FileSpreadsheet, FileText, ArrowUpDown, AlertCircle } from 'lucide-react';
+import { Plus, Receipt, TrendingUp, Percent, Search, Trash2, Circle, CheckCircle2, Mail, Upload, MoreVertical, Download, FileSpreadsheet, FileText, ArrowUpDown, AlertCircle, Calendar, Repeat } from 'lucide-react';
 import { useCharges, useUpdateCharge, useVoidCharge, useRestoreCharge, useCreateCharge, useBulkVoidCharges, useSendChargeReminders, useBulkCreateCharges } from '@/lib/queries/charges';
+import { useSchedules, useCreateSchedule, useUpdateSchedule, useDeleteSchedule } from '@/lib/queries/schedules';
 import { useMembers, useCreateMembers } from '@/lib/queries/members';
 import { usePayments, useAutoAllocateToCharge, useRemoveAllocation, useAllocatePayment } from '@/lib/queries/payments';
 import { useAuthStore, useIsAdminOrTreasurer } from '@/lib/stores/auth';
@@ -26,6 +27,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { StatCard } from '@/components/ui/stat-card';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
+import { MotionCard } from '@/components/ui/motion-card';
 import { FadeIn } from '@/components/ui/page-transition';
 import { AnimatedList } from '@/components/ui/animated-list';
 import { PageHeader } from '@/components/ui/page-header';
@@ -79,6 +85,15 @@ export default function ChargesPage() {
   const [allocatingCharge, setAllocatingCharge] = useState<any | null>(null);
   const [showImport, setShowImport] = useState(false);
   const [showBulkVoidConfirm, setShowBulkVoidConfirm] = useState(false);
+  const [showScheduleDialog, setShowScheduleDialog] = useState(false);
+  const [scheduleForm, setScheduleForm] = useState({
+    title: '',
+    amountCents: '',
+    category: 'DUES' as string,
+    frequency: 'MONTHLY' as string,
+    dayOfMonth: '1',
+    targetScope: 'ALL_ACTIVE' as string,
+  });
 
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
   const isAdmin = useIsAdminOrTreasurer();
@@ -103,6 +118,13 @@ export default function ChargesPage() {
   const members = membersData?.data || [];
   const createMembers = useCreateMembers();
   const bulkCreateCharges = useBulkCreateCharges();
+
+  // Schedules
+  const { data: schedulesData } = useSchedules(currentOrgId);
+  const createSchedule = useCreateSchedule();
+  const updateSchedule = useUpdateSchedule();
+  const deleteSchedule = useDeleteSchedule();
+  const schedules = (schedulesData as any)?.data || schedulesData || [];
 
   const handleImportCharges = async (records: Record<string, string>[]) => {
     if (!currentOrgId) throw new Error('No org selected');
@@ -576,6 +598,59 @@ export default function ChargesPage() {
     }
   };
 
+  const handleCreateSchedule = async () => {
+    if (!currentOrgId) return;
+    const amountCents = Math.round(parseFloat(scheduleForm.amountCents) * 100);
+    if (isNaN(amountCents) || amountCents <= 0) {
+      toast({ title: 'Please enter a valid amount', variant: 'destructive' });
+      return;
+    }
+    if (!scheduleForm.title.trim()) {
+      toast({ title: 'Please enter a title', variant: 'destructive' });
+      return;
+    }
+    try {
+      await createSchedule.mutateAsync({
+        orgId: currentOrgId,
+        data: {
+          title: scheduleForm.title,
+          amountCents,
+          category: scheduleForm.category,
+          frequency: scheduleForm.frequency,
+          dayOfMonth: parseInt(scheduleForm.dayOfMonth, 10),
+          targetScope: scheduleForm.targetScope,
+        },
+      });
+      toast({ title: 'Schedule created' });
+      setShowScheduleDialog(false);
+      setScheduleForm({ title: '', amountCents: '', category: 'DUES', frequency: 'MONTHLY', dayOfMonth: '1', targetScope: 'ALL_ACTIVE' });
+    } catch (error: any) {
+      toast({ title: 'Error creating schedule', description: error.message || 'Please try again', variant: 'destructive' });
+    }
+  };
+
+  const handleToggleSchedule = (schedule: any) => {
+    if (!currentOrgId) return;
+    updateSchedule.mutate(
+      { orgId: currentOrgId, id: schedule.id, data: { isActive: !schedule.isActive } },
+      {
+        onSuccess: () => toast({ title: schedule.isActive ? 'Schedule paused' : 'Schedule activated' }),
+        onError: (error: any) => toast({ title: 'Error updating schedule', description: error.message, variant: 'destructive' }),
+      },
+    );
+  };
+
+  const handleDeleteSchedule = (scheduleId: string) => {
+    if (!currentOrgId) return;
+    deleteSchedule.mutate(
+      { orgId: currentOrgId, id: scheduleId },
+      {
+        onSuccess: () => toast({ title: 'Schedule deleted' }),
+        onError: (error: any) => toast({ title: 'Error deleting schedule', description: error.message, variant: 'destructive' }),
+      },
+    );
+  };
+
   const handleExportCharges = (format: 'csv' | 'pdf') => {
     const headers = ['Member', 'Category', 'Title', 'Amount', 'Status', 'Due Date'];
     const rows = filteredCharges.map((c: any) => [
@@ -638,6 +713,83 @@ export default function ChargesPage() {
           }
         />
       </FadeIn>
+
+      {/* Recurring Schedules */}
+      {(Array.isArray(schedules) && schedules.length > 0 || isAdmin) && (
+        <FadeIn delay={0.1}>
+          <MotionCard className="border border-border/50">
+            <div className="p-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Repeat className="w-4 h-4 text-muted-foreground" />
+                <h3 className="text-sm font-semibold">Recurring Schedules</h3>
+                {Array.isArray(schedules) && schedules.length > 0 && (
+                  <Badge variant="secondary" className="text-xs">{schedules.length}</Badge>
+                )}
+              </div>
+              {isAdmin && (
+                <Button size="sm" variant="outline" onClick={() => setShowScheduleDialog(true)} className="h-7 text-xs">
+                  <Plus className="w-3.5 h-3.5 mr-1" />
+                  New Schedule
+                </Button>
+              )}
+            </div>
+            <div className="px-4 pb-4">
+              {!Array.isArray(schedules) || schedules.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">No recurring schedules set up</p>
+              ) : (
+                <div className="space-y-2">
+                  {schedules.map((schedule: any) => (
+                    <div
+                      key={schedule.id}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-secondary/20 px-3 py-2.5"
+                    >
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium truncate">{schedule.title}</span>
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">
+                              {schedule.frequency === 'MONTHLY' ? 'Monthly' : schedule.frequency === 'QUARTERLY' ? 'Quarterly' : 'Yearly'}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-xs text-muted-foreground">{formatCents(schedule.amountCents)}</span>
+                            {schedule.nextRunAt && (
+                              <>
+                                <span className="text-xs text-muted-foreground">·</span>
+                                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                  <Calendar className="w-3 h-3" />
+                                  Next: {new Date(schedule.nextRunAt).toLocaleDateString()}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Switch
+                          checked={schedule.isActive}
+                          onCheckedChange={() => handleToggleSchedule(schedule)}
+                          aria-label={`Toggle ${schedule.title}`}
+                          className="scale-75"
+                        />
+                        {isAdmin && (
+                          <button
+                            onClick={() => handleDeleteSchedule(schedule.id)}
+                            className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                            aria-label={`Delete ${schedule.title}`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </MotionCard>
+        </FadeIn>
+      )}
 
       {/* Stats */}
       {totalCharges > 0 && (
@@ -789,6 +941,103 @@ export default function ChargesPage() {
         fields={CHARGE_IMPORT_FIELDS}
         onImport={handleImportCharges}
       />
+
+      {/* New Schedule Dialog */}
+      <Dialog open={showScheduleDialog} onOpenChange={setShowScheduleDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>New Recurring Schedule</DialogTitle>
+            <DialogDescription>
+              Automatically create charges on a recurring basis.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="schedule-title">Title</Label>
+              <Input
+                id="schedule-title"
+                placeholder="e.g. Monthly Dues"
+                value={scheduleForm.title}
+                onChange={(e) => setScheduleForm((f) => ({ ...f, title: e.target.value }))}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="schedule-amount">Amount</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                <Input
+                  id="schedule-amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={scheduleForm.amountCents}
+                  onChange={(e) => setScheduleForm((f) => ({ ...f, amountCents: e.target.value }))}
+                  className="pl-7"
+                />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label>Category</Label>
+              <Select value={scheduleForm.category} onValueChange={(v) => setScheduleForm((f) => ({ ...f, category: v }))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="DUES">Dues</SelectItem>
+                  <SelectItem value="EVENT">Event</SelectItem>
+                  <SelectItem value="FINE">Fine</SelectItem>
+                  <SelectItem value="MERCH">Merchandise</SelectItem>
+                  <SelectItem value="OTHER">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label>Frequency</Label>
+                <Select value={scheduleForm.frequency} onValueChange={(v) => setScheduleForm((f) => ({ ...f, frequency: v }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="MONTHLY">Monthly</SelectItem>
+                    <SelectItem value="QUARTERLY">Quarterly</SelectItem>
+                    <SelectItem value="YEARLY">Yearly</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="schedule-day">Day of Month</Label>
+                <Input
+                  id="schedule-day"
+                  type="number"
+                  min="1"
+                  max="28"
+                  value={scheduleForm.dayOfMonth}
+                  onChange={(e) => setScheduleForm((f) => ({ ...f, dayOfMonth: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label>Target</Label>
+              <Select value={scheduleForm.targetScope} onValueChange={(v) => setScheduleForm((f) => ({ ...f, targetScope: v }))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL_ACTIVE">All Active Members</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowScheduleDialog(false)}>Cancel</Button>
+            <Button onClick={handleCreateSchedule} disabled={createSchedule.isPending}>
+              {createSchedule.isPending ? 'Creating...' : 'Create Schedule'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <BatchActionsBar selectedCount={selectedCharges.size} onClear={clearSelection}>
         <Button variant="outline" size="sm" onClick={handleSendReminders} className="h-8" disabled={sendReminders.isPending}>

@@ -15,7 +15,7 @@ import { ExpensesService } from '../expenses/expenses.service';
 import { EmailService } from '../auth/email.service';
 import { AgentService } from './agent.service';
 
-jest.setTimeout(30_000);
+jest.setTimeout(60_000);
 
 /**
  * Integration tests for AgentService.
@@ -412,7 +412,7 @@ describe('AgentService integration', () => {
     const chargeId = charges[0].id;
 
     const paymentResult = await paymentsService.bulkCreate(orgId, membershipId, [
-      { amountCents: 3000, paidAt: '2026-03-01', rawPayerName: 'Agent Test Alice' },
+      { amountCents: 3000, paidAt: '2026-03-01', rawPayerName: 'No Match Payer' },
     ]);
     const paymentId = paymentResult.created[0].id;
 

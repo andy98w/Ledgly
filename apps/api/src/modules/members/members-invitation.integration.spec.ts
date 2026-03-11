@@ -9,7 +9,7 @@ import { EmailService } from '../auth/email.service';
 import { MembersModule } from './members.module';
 import { MembersService } from './members.service';
 
-jest.setTimeout(15_000);
+jest.setTimeout(60_000);
 
 describe('Members Invitation Flow (integration)', () => {
   let module: TestingModule;

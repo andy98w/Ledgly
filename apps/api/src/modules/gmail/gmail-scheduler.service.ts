@@ -12,13 +12,11 @@ export class GmailSchedulerService {
     private gmailService: GmailService,
   ) {}
 
-  // Run every 15 minutes
   @Cron(CronExpression.EVERY_10_MINUTES)
   async syncAllOrganizations() {
     this.logger.log('Starting scheduled Gmail sync for all organizations...');
 
     try {
-      // Find all organizations with connected Gmail
       const gmailConnections = await this.prisma.gmailConnection.findMany({
         where: {
           isActive: true,
@@ -49,7 +47,7 @@ export class GmailSchedulerService {
           this.logger.log(`Syncing Gmail for org: ${org.name} (${org.id})`);
           const result = await this.gmailService.syncEmails(org.id);
           this.logger.log(
-            `Synced org ${org.name}: ${result.imported} imported, ${result.autoConfirmed} auto-confirmed, ${result.needsReview} needs review`,
+            `Synced org ${org.name}: ${result.imported} imported, ${result.skipped} skipped`,
           );
         } catch (error: any) {
           this.logger.error(`Failed to sync org ${org.name}: ${error.message}`);

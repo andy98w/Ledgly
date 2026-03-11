@@ -585,6 +585,47 @@ export const agentTools: AgentTool[] = [
     },
   },
 
+  {
+    requiresConfirmation: false,
+    definition: {
+      name: 'get_insights',
+      description:
+        'Get smart insights about the organization: delinquent members, overdue charges, unallocated payments, collection trends.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {},
+        required: [],
+      },
+    },
+  },
+  {
+    requiresConfirmation: false,
+    definition: {
+      name: 'generate_report',
+      description:
+        'Generate a financial report for a period. Returns collection summary, outstanding by member, and period metrics.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          period: {
+            type: 'string',
+            enum: ['THIS_MONTH', 'LAST_MONTH', 'THIS_QUARTER', 'THIS_YEAR', 'CUSTOM'],
+            description: 'Report period',
+          },
+          startDate: {
+            type: 'string',
+            description: 'Custom start date (YYYY-MM-DD). Required when period is CUSTOM.',
+          },
+          endDate: {
+            type: 'string',
+            description: 'Custom end date (YYYY-MM-DD). Required when period is CUSTOM.',
+          },
+        },
+        required: ['period'],
+      },
+    },
+  },
+
   // ── New tools ───────────────────────────────────────────────
   {
     requiresConfirmation: false,

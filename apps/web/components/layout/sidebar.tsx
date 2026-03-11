@@ -22,6 +22,7 @@ import {
   PanelLeftClose,
   PanelLeft,
   Sparkles,
+  BarChart3,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MEMBERSHIP_ROLE_LABELS } from '@ledgly/shared';
@@ -65,6 +66,7 @@ const primaryNavItems: NavItem[] = [
   { href: '/charges', label: 'Charges', icon: Receipt },
   { href: '/payments', label: 'Payments', icon: CreditCard },
   { href: '/expenses', label: 'Expenses', icon: TrendingDown },
+  { href: '/reports', label: 'Reports', icon: BarChart3 },
 ];
 
 const secondaryNavItems: NavItem[] = [

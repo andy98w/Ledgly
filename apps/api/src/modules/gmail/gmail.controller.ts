@@ -5,7 +5,6 @@ import {
   Delete,
   Param,
   Query,
-  Body,
   Res,
   Req,
   UseGuards,
@@ -14,26 +13,10 @@ import {
 import { AuthGuard } from '@nestjs/passport';
 import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
-import { IsString, IsOptional } from 'class-validator';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Roles } from '../../common/decorators';
 import { RolesGuard } from '../../common/guards';
 import { GmailService } from './gmail.service';
-
-class ConfirmImportDto {
-  @IsString()
-  @IsOptional()
-  membershipId?: string;
-}
-
-class ConfirmExpenseImportDto {
-  @IsString()
-  @IsOptional()
-  linkToExpenseId?: string;
-
-  @IsOptional()
-  createNew?: boolean;
-}
 
 // OAuth flow routes — connect requires auth, callback must be public (Google redirect)
 @Controller('gmail')
@@ -44,7 +27,6 @@ export class GmailPublicController {
     private readonly configService: ConfigService,
   ) {}
 
-  // Initiates OAuth flow — requires JWT auth + org membership
   @Get('connect/:orgId')
   @UseGuards(AuthGuard('jwt'))
   async connect(
@@ -53,7 +35,6 @@ export class GmailPublicController {
     @Req() req: any,
     @Res() res: Response,
   ) {
-    // Verify user is an active admin/owner of this org
     const membership = await this.prisma.membership.findFirst({
       where: { orgId, userId: req.user.id, status: 'ACTIVE', role: { in: ['OWNER', 'ADMIN'] } },
       select: { id: true },
@@ -66,7 +47,6 @@ export class GmailPublicController {
     res.redirect(authUrl);
   }
 
-  // OAuth callback from Google (must be public — Google redirects here)
   @Get('callback')
   async callback(
     @Query('code') code: string,
@@ -133,12 +113,7 @@ export class GmailController {
   ) {
     const limitNum = limit ? parseInt(limit, 10) : 50;
 
-    if (status === 'auto_confirmed') {
-      const imports = await this.gmailService.getRecentAutoConfirmed(orgId, limitNum);
-      return { data: imports };
-    }
-
-    if (status === 'confirmed') {
+    if (status === 'auto_confirmed' || status === 'confirmed') {
       const imports = await this.gmailService.getRecentConfirmed(orgId, limitNum);
       return { data: imports };
     }
@@ -148,34 +123,13 @@ export class GmailController {
       return { data: imports };
     }
 
-    if (status === 'pending' || !status) {
-      const imports = await this.gmailService.getPendingImports(orgId, limitNum);
-      return { data: imports };
-    }
-
-    return { data: [] };
+    const imports = await this.gmailService.getRecentConfirmed(orgId, limitNum);
+    return { data: imports };
   }
 
   @Get('imports/stats')
   async getImportStats(@Param('orgId') orgId: string) {
     return this.gmailService.getImportStats(orgId);
-  }
-
-  @Post('imports/:importId/confirm')
-  @Roles('ADMIN', 'TREASURER')
-  async confirmImport(
-    @Param('orgId') orgId: string,
-    @Param('importId') importId: string,
-    @Body() dto: ConfirmImportDto,
-    @Req() req: any,
-  ) {
-    const membershipId = req.membership.id;
-    const payment = await this.gmailService.confirmImport(
-      importId,
-      dto.membershipId || null,
-      membershipId,
-    );
-    return payment;
   }
 
   @Post('imports/:importId/ignore')
@@ -190,37 +144,5 @@ export class GmailController {
   async restoreImport(@Param('importId') importId: string) {
     await this.gmailService.restoreImport(importId);
     return { success: true };
-  }
-
-  @Post('imports/:importId/unconfirm')
-  @Roles('ADMIN', 'TREASURER')
-  async unconfirmImport(@Param('importId') importId: string) {
-    await this.gmailService.unconfirmImport(importId);
-    return { success: true };
-  }
-
-  @Get('imports/:importId/expense-matches')
-  async getExpenseMatches(@Param('importId') importId: string) {
-    const matches = await this.gmailService.getPotentialExpenseMatches(importId);
-    return { data: matches };
-  }
-
-  @Post('imports/:importId/confirm-expense')
-  @Roles('ADMIN', 'TREASURER')
-  async confirmExpenseImport(
-    @Param('importId') importId: string,
-    @Body() dto: ConfirmExpenseImportDto,
-    @Req() req: any,
-  ) {
-    const actorId = req.membership.id;
-    const result = await this.gmailService.confirmExpenseImport(
-      importId,
-      actorId,
-      {
-        linkToExpenseId: dto.linkToExpenseId,
-        createNew: dto.createNew,
-      },
-    );
-    return result;
   }
 }
