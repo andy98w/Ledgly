@@ -62,6 +62,7 @@ type NavItem = {
 
 const primaryNavItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/spreadsheet', label: 'Spreadsheet', icon: Table2 },
   { href: '/members', label: 'Members', icon: Users },
   { href: '/charges', label: 'Charges', icon: Receipt },
   { href: '/payments', label: 'Payments', icon: CreditCard },
@@ -70,7 +71,6 @@ const primaryNavItems: NavItem[] = [
 ];
 
 const secondaryNavItems: NavItem[] = [
-  { href: '/spreadsheet', label: 'Spreadsheet', icon: Table2 },
   { href: '/audit', label: 'Activity', icon: History },
   { href: '/agent', label: 'AI Sessions', icon: Sparkles },
 ];

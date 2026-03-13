@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useMemo, useRef, useEffect, useLayoutEffect } from 'react';
-import { ArrowUpRight, ArrowDownRight, Download, Upload, Filter, Plus, DollarSign, Wallet, Search, Minus, ArrowUp, ArrowDown, Trash2, Circle, CheckCircle2, Check, Link2, Loader2, CreditCard, MoreVertical, FileSpreadsheet, ChevronDown, ChevronRight, Layers } from 'lucide-react';
+import { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
+import { ArrowUpRight, ArrowDownRight, Download, Upload, Filter, Plus, DollarSign, Wallet, Search, Minus, ArrowUp, ArrowDown, Trash2, Circle, CheckCircle2, Check, Link2, Loader2, CreditCard, MoreVertical, FileSpreadsheet, ChevronDown, ChevronRight, Layers, Sparkles, Ban, Zap } from 'lucide-react';
 import { useCharges, useUpdateCharge, useCreateCharge, useCreateMultiCharge, useVoidCharge, useRestoreCharge, useBulkCreateCharges } from '@/lib/queries/charges';
 import { useExpenses, useUpdateExpense, useCreateExpense, useCreateMultiExpense, useDeleteExpense, useRestoreExpense } from '@/lib/queries/expenses';
-import { usePayments, useUpdatePayment, useCreatePayment, useDeletePayment, useRestorePayment, useAllocatePayment, useAutoAllocateToCharge, useBulkCreatePayments } from '@/lib/queries/payments';
+import { usePayments, useUpdatePayment, useCreatePayment, useDeletePayment, useRestorePayment, useAllocatePayment, useAutoAllocateToCharge, useBulkAutoAllocate, useBulkCreatePayments } from '@/lib/queries/payments';
 import { useMembers } from '@/lib/queries/members';
 import { useAuthStore, useIsAdminOrTreasurer, useCurrentMembership } from '@/lib/stores/auth';
 import { formatDate } from '@/lib/utils';
@@ -63,6 +63,13 @@ import { calculateNameSimilarity } from '@/lib/utils/name-similarity';
 import { ChargeCreateDialog } from '@/components/charges/charge-create-dialog';
 import { MultiExpenseCreateDialog } from '@/components/expenses/multi-expense-create-dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { useSpreadsheetContextStore } from '@/lib/stores/spreadsheet-context';
+import { useAISidebarStore } from '@/lib/stores/ai-sidebar';
+import { computeInsights, type RowInsight } from '@/lib/utils/spreadsheet-insights';
+import { getRowActions, type RowAction } from '@/lib/utils/row-actions';
+import { InsightsBanner } from '@/components/spreadsheet/insights-banner';
+import { FormulaBar } from '@/components/spreadsheet/formula-bar';
+import type { SpreadsheetQueryResult } from '@/lib/queries/agent';
 
 /** Strip "VENMO payment to " etc. prefixes from Gmail-imported expense titles */
 function cleanExpenseTitle(title: string): string {
@@ -452,6 +459,12 @@ export default function SpreadsheetPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'date' | 'amount' | 'type' | 'category' | 'member' | 'status' | 'income' | 'outstanding' | 'expense'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [formulaCategories, setFormulaCategories] = useState<string[] | null>(null);
+  const [formulaStatuses, setFormulaStatuses] = useState<string[] | null>(null);
+  const [formulaAmountMin, setFormulaAmountMin] = useState<number | null>(null);
+  const [formulaAmountMax, setFormulaAmountMax] = useState<number | null>(null);
+  const [formulaDateFrom, setFormulaDateFrom] = useState<string | null>(null);
+  const [formulaDateTo, setFormulaDateTo] = useState<string | null>(null);
   const [editingCell, setEditingCell] = useState<EditingCell>(null);
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -503,8 +516,12 @@ export default function SpreadsheetPage() {
   const restoreMember = useRestoreMember();
   const allocatePayment = useAllocatePayment();
   const autoAllocate = useAutoAllocateToCharge();
+  const bulkAutoAllocate = useBulkAutoAllocate();
   const bulkCreateCharges = useBulkCreateCharges();
   const bulkCreatePayments = useBulkCreatePayments();
+
+  const setSpreadsheetSelectedRows = useSpreadsheetContextStore((s) => s.setSelectedRows);
+  const openAISidebar = useAISidebarStore((s) => s.open);
 
   const [showImport, setShowImport] = useState(false);
   const [importType, setImportType] = useState<'charge' | 'expense' | 'payment'>('charge');
@@ -597,7 +614,7 @@ export default function SpreadsheetPage() {
               date: typeof child.date === 'string' ? child.date : new Date(child.date).toISOString(),
               type: 'expense' as const,
               category: child.category,
-              description: child.description || cleanExpenseTitle(child.title),
+              description: child.description || (child.title ? cleanExpenseTitle(child.title) : 'Expense'),
               member: child.vendor || undefined,
               incomeCents: 0,
               outstandingCents: 0,
@@ -628,9 +645,6 @@ export default function SpreadsheetPage() {
     if (paymentsData?.data) {
       for (const payment of paymentsData.data) {
         if (typeFilter !== 'all' && typeFilter !== 'payment') continue;
-        // Skip fully-unallocated payments
-        if (payment.unallocatedCents === payment.amountCents) continue;
-        // Use rawPayerName for payments
         const memberName = payment.rawPayerName || undefined;
         allRows.push({
           id: payment.id,
@@ -658,6 +672,38 @@ export default function SpreadsheetPage() {
         row.member?.toLowerCase().includes(query) ||
         row.category?.toLowerCase().includes(query)
       );
+    }
+
+    // Formula bar filters
+    if (formulaCategories) {
+      const cats = formulaCategories.map((c) => c.toLowerCase());
+      filteredRows = filteredRows.filter((row) => cats.includes(row.category.toLowerCase()));
+    }
+    if (formulaStatuses) {
+      const stats = formulaStatuses.map((s) => s.toLowerCase());
+      filteredRows = filteredRows.filter((row) => row.status && stats.includes(row.status.toLowerCase()));
+    }
+    if (formulaAmountMin !== null) {
+      const minCents = formulaAmountMin * 100;
+      filteredRows = filteredRows.filter((row) => {
+        const amt = row.type === 'expense' ? row.expenseCents : (row.outstandingCents || row.incomeCents);
+        return amt >= minCents;
+      });
+    }
+    if (formulaAmountMax !== null) {
+      const maxCents = formulaAmountMax * 100;
+      filteredRows = filteredRows.filter((row) => {
+        const amt = row.type === 'expense' ? row.expenseCents : (row.outstandingCents || row.incomeCents);
+        return amt <= maxCents;
+      });
+    }
+    if (formulaDateFrom) {
+      const from = new Date(formulaDateFrom).getTime();
+      filteredRows = filteredRows.filter((row) => new Date(row.date).getTime() >= from);
+    }
+    if (formulaDateTo) {
+      const to = new Date(formulaDateTo).getTime();
+      filteredRows = filteredRows.filter((row) => new Date(row.date).getTime() <= to);
     }
 
     // Sort
@@ -717,7 +763,23 @@ export default function SpreadsheetPage() {
     });
 
     return filteredRows;
-  }, [chargesData, expensesData, paymentsData, members, typeFilter, searchQuery, sortBy, sortOrder]);
+  }, [chargesData, expensesData, paymentsData, members, typeFilter, searchQuery, sortBy, sortOrder, formulaCategories, formulaStatuses, formulaAmountMin, formulaAmountMax, formulaDateFrom, formulaDateTo]);
+
+  // Phase 2: Anomaly detection
+  const insights = useMemo(() => computeInsights(rows), [rows]);
+  const insightsMap = useMemo(() => {
+    const map = new Map<string, RowInsight>();
+    for (const insight of insights) {
+      if (!map.has(insight.rowId)) map.set(insight.rowId, insight);
+    }
+    return map;
+  }, [insights]);
+
+  const INSIGHT_DOT_COLORS: Record<RowInsight['type'], string> = {
+    overdue: 'bg-destructive',
+    unmatched: 'bg-warning',
+    duplicate: 'bg-blue-500',
+  };
 
   // Pagination
   const totalPages = Math.ceil(rows.length / pageSize);
@@ -1250,6 +1312,128 @@ export default function SpreadsheetPage() {
     [paginatedRows, selectedRows],
   );
 
+  // Phase 1: Sync selected rows to context store for AI sidebar
+  useEffect(() => {
+    if (selectedRows.size === 0) {
+      setSpreadsheetSelectedRows([]);
+      return;
+    }
+    const contextRows = paginatedRows
+      .filter((r) => selectedRows.has(r.id))
+      .map((r) => ({
+        id: r.id,
+        type: r.type,
+        description: r.description,
+        member: r.member,
+        membershipId: r.membershipId,
+        category: r.category,
+        date: r.date,
+        incomeCents: r.incomeCents,
+        outstandingCents: r.outstandingCents,
+        expenseCents: r.expenseCents,
+        status: r.status,
+        allocatedCents: r.allocatedCents,
+        unallocatedCents: r.unallocatedCents,
+      }));
+    setSpreadsheetSelectedRows(contextRows);
+  }, [selectedRows, paginatedRows, setSpreadsheetSelectedRows]);
+
+  const handleAskAI = useCallback(() => {
+    openAISidebar();
+  }, [openAISidebar]);
+
+  // Phase 4: Row action handlers
+  const handleRowAction = useCallback(async (row: SpreadsheetRow, action: RowAction) => {
+    if (action.type === 'ai') {
+      setSpreadsheetSelectedRows([{
+        id: row.id,
+        type: row.type,
+        description: row.description,
+        member: row.member,
+        membershipId: row.membershipId,
+        category: row.category,
+        date: row.date,
+        incomeCents: row.incomeCents,
+        outstandingCents: row.outstandingCents,
+        expenseCents: row.expenseCents,
+        status: row.status,
+        allocatedCents: row.allocatedCents,
+        unallocatedCents: row.unallocatedCents,
+      }]);
+      openAISidebar();
+      return;
+    }
+
+    if (!currentOrgId) return;
+
+    if (action.action === 'auto-allocate' && row.type === 'charge') {
+      try {
+        await autoAllocate.mutateAsync({ orgId: currentOrgId, chargeId: row.id });
+        toast({ title: 'Auto-matched payment' });
+      } catch {
+        toast({ title: 'No matching payment found', variant: 'destructive' });
+      }
+    } else if (action.action === 'void') {
+      try {
+        await voidCharge.mutateAsync({ orgId: currentOrgId, chargeId: row.id });
+        toast({
+          title: 'Charge voided',
+          action: <ToastUndoButton onClick={() => restoreCharge.mutate({ orgId: currentOrgId!, chargeId: row.id })} />,
+        });
+      } catch (e: any) {
+        toast({ title: 'Failed to void', description: e.message, variant: 'destructive' });
+      }
+    } else if (action.action === 'delete' && row.type === 'expense') {
+      try {
+        await deleteExpense.mutateAsync({ orgId: currentOrgId, expenseId: row.id });
+        toast({
+          title: 'Expense deleted',
+          action: <ToastUndoButton onClick={() => restoreExpense.mutate({ orgId: currentOrgId!, expenseId: row.id })} />,
+        });
+      } catch (e: any) {
+        toast({ title: 'Failed to delete', description: e.message, variant: 'destructive' });
+      }
+    } else if (action.action === 'delete' && row.type === 'payment') {
+      try {
+        await deletePayment.mutateAsync({ orgId: currentOrgId, paymentId: row.id });
+        toast({
+          title: 'Payment deleted',
+          action: <ToastUndoButton onClick={() => restorePayment.mutate({ orgId: currentOrgId!, paymentId: row.id })} />,
+        });
+      } catch (e: any) {
+        toast({ title: 'Failed to delete', description: e.message, variant: 'destructive' });
+      }
+    } else if (action.action === 'auto-allocate' && row.type === 'payment') {
+      try {
+        await bulkAutoAllocate.mutateAsync({ orgId: currentOrgId, paymentIds: [row.id] });
+        toast({ title: 'Payment auto-allocated' });
+      } catch {
+        toast({ title: 'No matching charge found', variant: 'destructive' });
+      }
+    }
+  }, [currentOrgId, autoAllocate, bulkAutoAllocate, voidCharge, restoreCharge, deleteExpense, restoreExpense, deletePayment, restorePayment, openAISidebar, setSpreadsheetSelectedRows, toast]);
+
+  // Phase 3: Formula bar handlers
+  const handleFormulaFilter = useCallback((result: SpreadsheetQueryResult & { type: 'filter' }) => {
+    if (result.typeFilter) setTypeFilter(result.typeFilter);
+    if (result.search !== undefined) setSearchQuery(result.search || '');
+    setFormulaCategories(result.categories?.length ? result.categories : null);
+    setFormulaStatuses(result.statuses?.length ? result.statuses : null);
+    setFormulaAmountMin(result.amountMin ?? null);
+    setFormulaAmountMax(result.amountMax ?? null);
+    setFormulaDateFrom(result.dateFrom ?? null);
+    setFormulaDateTo(result.dateTo ?? null);
+  }, []);
+
+  const handleFormulaSort = useCallback((result: SpreadsheetQueryResult & { type: 'sort' }) => {
+    if (result.sortBy) {
+      setSortBy(result.sortBy as any);
+    }
+    if (result.sortOrder) {
+      setSortOrder(result.sortOrder);
+    }
+  }, []);
+
   const handleExportCSV = () => {
     const headers = ['Date', 'Type', 'Member/Vendor', 'Category', 'Title', 'Income', 'Unpaid', 'Expense'];
     const csvRows = [
@@ -1495,20 +1679,58 @@ export default function SpreadsheetPage() {
         </FadeIn>
       )}
 
-      {/* Search + Filter */}
+      {/* Phase 2: Insights Banner */}
+      {insights.length > 0 && (
+        <FadeIn delay={0.12}>
+          <InsightsBanner
+            insights={insights}
+            onFilterByType={(type) => {
+              const insightTypeMap: Record<string, string> = { overdue: 'charge', unmatched: 'payment' };
+              if (insightTypeMap[type]) setTypeFilter(insightTypeMap[type]);
+            }}
+          />
+        </FadeIn>
+      )}
+
+      {/* Phase 3: Formula Bar + Filters */}
       <FadeIn delay={0.15}>
         <div className="space-y-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            <Input
-              placeholder="Search transactions..."
-              aria-label="Search spreadsheet"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 h-9 bg-secondary/30 border-border/50"
+          {currentOrgId && isAdmin ? (
+            <FormulaBar
+              orgId={currentOrgId}
+              rows={rows}
+              viewMetadata={{
+                typeFilter,
+                rowCount: rows.length,
+                columns: ['date', 'type', 'category', 'description', 'member', 'income', 'outstanding', 'expense'],
+              }}
+              onFilter={handleFormulaFilter}
+              onSort={handleFormulaSort}
+              onSearchFallback={(q) => {
+                setSearchQuery(q);
+                if (!q) {
+                  setFormulaCategories(null);
+                  setFormulaStatuses(null);
+                  setFormulaAmountMin(null);
+                  setFormulaAmountMax(null);
+                  setFormulaDateFrom(null);
+                  setFormulaDateTo(null);
+                }
+              }}
             />
-          </div>
-          <div className="flex gap-2">
+          ) : (
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <Input
+                placeholder="Search transactions..."
+                aria-label="Search spreadsheet"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 h-9 bg-secondary/30 border-border/50"
+              />
+            </div>
+          )}
+          <div className="flex items-center gap-2">
             <Select value={typeFilter} onValueChange={setTypeFilter}>
               <SelectTrigger className="w-[120px] sm:w-[150px] h-8 bg-secondary/30 border-border/50 text-xs">
                 <SelectValue />
@@ -1520,6 +1742,18 @@ export default function SpreadsheetPage() {
                 <SelectItem value="payment">Payments Only</SelectItem>
               </SelectContent>
             </Select>
+            {/* Phase 1: Ask AI button — visible when rows are selected */}
+            {isAdmin && selectedRows.size > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleAskAI}
+                className="h-8 text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/10"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                Ask AI about {selectedRows.size} row{selectedRows.size !== 1 ? 's' : ''}
+              </Button>
+            )}
           </div>
         </div>
       </FadeIn>
@@ -1683,6 +1917,7 @@ export default function SpreadsheetPage() {
                       )}
                     </span>
                   </th>
+                  {isAdmin && <th className="w-8" />}
                 </tr>
               </thead>
               <tbody>
@@ -1899,7 +2134,7 @@ export default function SpreadsheetPage() {
                     <tr
                       key={row.id}
                       className={cn(
-                        'animate-in-up',
+                        'animate-in-up group/row',
                         'border-b border-border/50 hover:bg-secondary/30 transition-colors',
                         row.type === 'charge' && 'bg-warning/5',
                         row.type === 'expense' && 'bg-destructive/5',
@@ -1927,6 +2162,21 @@ export default function SpreadsheetPage() {
                             )}
                             {!row.isChild && (
                               <>
+                                {/* Phase 2: Insight dot indicator */}
+                                {insightsMap.has(row.id) ? (
+                                  <TooltipProvider delayDuration={200}>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <div className={cn('w-2 h-2 rounded-full shrink-0', INSIGHT_DOT_COLORS[insightsMap.get(row.id)!.type])} />
+                                      </TooltipTrigger>
+                                      <TooltipContent side="right" className="max-w-[200px] text-xs">
+                                        {insightsMap.get(row.id)!.message}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                ) : (
+                                  <div className="w-2" />
+                                )}
                                 <button
                                   onClick={() => handleDeleteRow(row)}
                                   className="w-6 h-6 flex items-center justify-center transition-colors hover:text-destructive"
@@ -2136,6 +2386,40 @@ export default function SpreadsheetPage() {
                           <span className="text-muted-foreground/30">-</span>
                         )}
                       </td>
+                      {/* Phase 4: Row context menu */}
+                      {isAdmin && !row.isChild && (
+                        <td className="w-8 px-1 py-3">
+                          {(() => {
+                            const actions = getRowActions(row);
+                            if (actions.length === 0) return null;
+                            return (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button className="w-6 h-6 flex items-center justify-center rounded transition-colors opacity-0 group-hover/row:opacity-100 hover:bg-secondary">
+                                    <MoreVertical className="w-3.5 h-3.5 text-muted-foreground" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-56">
+                                  {actions.map((action, i) => (
+                                    <DropdownMenuItem
+                                      key={i}
+                                      onClick={() => handleRowAction(row, action)}
+                                      className={cn('cursor-pointer text-xs gap-2', action.destructive && 'text-destructive focus:text-destructive')}
+                                    >
+                                      {action.type === 'ai' && <Sparkles className="h-3.5 w-3.5" />}
+                                      {action.icon === 'match' && <Link2 className="h-3.5 w-3.5" />}
+                                      {action.icon === 'void' && <Ban className="h-3.5 w-3.5" />}
+                                      {action.icon === 'delete' && <Trash2 className="h-3.5 w-3.5" />}
+                                      {action.icon === 'allocate' && <Zap className="h-3.5 w-3.5" />}
+                                      {action.label}
+                                    </DropdownMenuItem>
+                                  ))}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            );
+                          })()}
+                        </td>
+                      )}
                     </tr>
                   ))
                 )}
@@ -2144,7 +2428,7 @@ export default function SpreadsheetPage() {
               {!isLoading && rows.length > 0 && (
                 <tfoot>
                   <tr className="bg-secondary/50 font-medium">
-                    <td className="px-3 py-3" colSpan={isAdmin ? 5 : 4}>
+                    <td className="px-3 py-3" colSpan={isAdmin ? 6 : 4}>
                       <span className="text-muted-foreground">Total ({rows.length} transactions)</span>
                     </td>
                     <td className="px-3 py-3 text-right">

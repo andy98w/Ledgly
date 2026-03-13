@@ -39,6 +39,7 @@ export function calculateNameSimilarity(name1: string, name2: string): number {
   const n2 = normalizeName(name2);
 
   if (n1 === n2) return 1.0;
+  if (!n1 || !n2) return 0;
 
   const parts1 = n1.split(' ').filter(Boolean);
   const parts2 = n2.split(' ').filter(Boolean);
@@ -92,13 +93,13 @@ export function deriveCategoryFromMemo(memo: string): DerivedCategory {
 
   const duesPatterns = [
     /dues/i, /membership/i, /monthly\s*fee/i, /annual\s*fee/i,
-    /semester/i, /quarter(?:ly)?/i, /spring|fall|winter|summer/i,
+    /semester/i, /quarter(?:ly)?/i, /(?:spring|fall|winter|summer)\s*(?:dues|fee|payment|\d)/i,
   ];
   if (duesPatterns.some((p) => p.test(lowerMemo))) return 'DUES';
 
   const eventPatterns = [
     /event/i, /party/i, /formal/i, /ticket/i, /concert/i, /trip/i,
-    /retreat/i, /mixer/i, /social/i, /rush/i, /date\s*night/i, /tailgate/i,
+    /retreat/i, /mixer/i, /social/i, /rush\s*(?:event|week|party)/i, /date\s*night/i, /tailgate/i,
   ];
   if (eventPatterns.some((p) => p.test(lowerMemo))) return 'EVENT';
 

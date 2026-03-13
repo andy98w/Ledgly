@@ -15,15 +15,15 @@ import {
 
 const primaryItems = [
   { href: '/dashboard', label: 'Home', icon: LayoutDashboard },
+  { href: '/spreadsheet', label: 'Sheet', icon: Table2 },
   { href: '/members', label: 'Members', icon: Users },
-  { href: '/charges', label: 'Charges', icon: Receipt },
 ];
 
 const moreItems = [
+  { href: '/charges', label: 'Charges', icon: Receipt },
   { href: '/payments', label: 'Payments', icon: CreditCard },
   { href: '/expenses', label: 'Expenses', icon: TrendingDown },
   { href: '/reports', label: 'Reports', icon: BarChart3 },
-  { href: '/spreadsheet', label: 'Spreadsheet', icon: Table2 },
   { href: '/audit', label: 'Activity', icon: History },
 ];
 

@@ -49,14 +49,61 @@ export class AgentService {
     this.anthropic = new Anthropic({ apiKey: apiKey || 'missing' });
   }
 
+  async querySpreadsheet(
+    orgId: string,
+    query: string,
+    viewMetadata?: { typeFilter: string; rowCount: number; columns: string[] },
+  ): Promise<any> {
+    const systemPrompt = `You are a spreadsheet query parser. The user is viewing a financial spreadsheet with ${viewMetadata?.rowCount || 0} rows.
+Current filter: ${viewMetadata?.typeFilter || 'all'}.
+Available columns: ${viewMetadata?.columns?.join(', ') || 'date, type, category, description, member, income, outstanding, expense'}.
+
+Parse the user's natural language query and return JSON with one of these structures:
+
+1. Filter: {"type":"filter","typeFilter":"charge"|"expense"|"payment"|"all","search":"text","categories":["DUES"],"statuses":["OPEN"],"amountMin":0,"amountMax":10000,"dateFrom":"2026-01-01","dateTo":"2026-12-31"}
+2. Sort: {"type":"sort","sortBy":"date"|"amount"|"member"|"category"|"outstanding","sortOrder":"asc"|"desc"}
+3. Compute: {"type":"compute","expression":"sum","field":"outstandingCents","explanation":"Total outstanding across all charges","filters":{"type":"charge","status":"OPEN"}}
+
+For compute, return an expression the frontend can evaluate against the loaded rows:
+- expression: "sum"|"count"|"avg"|"min"|"max"
+- field: "incomeCents"|"outstandingCents"|"expenseCents" (the numeric field to aggregate)
+- filters: optional row filters to apply before aggregating — {"type":"charge"|"expense"|"payment","status":"OPEN"|"PAID"|"VOID","category":"DUES"}
+- explanation: human-readable description of what's being computed
+
+Only include fields that are relevant. For filters, omit fields that aren't constrained.
+Category enums for charges: DUES, EVENT, FINE, MERCH, OTHER. For expenses: EVENT, SUPPLIES, FOOD, VENUE, MARKETING, SERVICES, OTHER.
+Status enums: OPEN, PARTIALLY_PAID, PAID, VOID.
+Return ONLY the JSON object, no markdown or explanation.`;
+
+    try {
+      const response = await this.anthropic.messages.create({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 512,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: query }],
+      });
+
+      const text = response.content
+        .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+        .map((b) => b.text)
+        .join('');
+
+      return JSON.parse(text);
+    } catch (err: any) {
+      this.logger.error(`Query parse error: ${err.message}`);
+      return { type: 'filter', search: query };
+    }
+  }
+
   async *chat(
     orgId: string,
     actorId: string,
     messages: ChatMessage[],
     csvContent?: string,
+    spreadsheetContext?: { selectedRows: Array<Record<string, any>> },
   ): AsyncGenerator<SSEEvent> {
     try {
-      const systemPrompt = await this.buildSystemPrompt(orgId, csvContent);
+      const systemPrompt = await this.buildSystemPrompt(orgId, csvContent, spreadsheetContext);
 
       const anthropicMessages: Anthropic.MessageParam[] = messages.map((m) => ({
         role: m.role,
@@ -1224,7 +1271,7 @@ export class AgentService {
     return this.prisma.agentSession.delete({ where: { id: sessionId } });
   }
 
-  private async buildSystemPrompt(orgId: string, csvContent?: string): Promise<string> {
+  private async buildSystemPrompt(orgId: string, csvContent?: string, spreadsheetContext?: { selectedRows: Array<Record<string, any>> }): Promise<string> {
     let orgContext = '';
     try {
       const org = await this.prisma.organization.findUnique({ where: { id: orgId } });
@@ -1331,6 +1378,23 @@ When the user says "undo", "undo that", "undo last action", or similar:
 ## Cross-entity suggestions
 - If a search for charges/expenses/payments returns nothing, proactively check the related entity type. For example, if the user says "delete the dues charge" and no charges match, also check expenses — they may have meant "expense" instead of "charge", and vice versa. Suggest what you found: "I didn't find a dues charge, but I found a dues expense — would you like me to delete that instead?"
 
-${orgContext}${csvInstruction}`;
+${orgContext}${csvInstruction}${this.buildSpreadsheetContextSection(spreadsheetContext)}`;
+  }
+
+  private buildSpreadsheetContextSection(ctx?: { selectedRows: Array<Record<string, any>> }): string {
+    if (!ctx?.selectedRows?.length) return '';
+
+    const rows = ctx.selectedRows;
+    const summary = rows.map((r) => {
+      const amount = r.type === 'expense'
+        ? `$${(r.expenseCents / 100).toFixed(2)} expense`
+        : r.outstandingCents > 0
+          ? `$${(r.outstandingCents / 100).toFixed(2)} outstanding`
+          : `$${(r.incomeCents / 100).toFixed(2)} income`;
+      return `- [${r.type}] "${r.description}" ${r.member ? `(${r.member})` : ''} — ${amount} (ID: ${r.id})`;
+    }).join('\n');
+
+    return `\n\n## Spreadsheet selection context
+The user has ${rows.length} row${rows.length !== 1 ? 's' : ''} selected in the spreadsheet:\n${summary}\n\nUse the IDs above when calling tools for these specific items. Reference rows by their description and member name, never by ID.`;
   }
 }

@@ -30,8 +30,10 @@ import {
   useConfirmAgentActions,
   type ChatMessage,
   type ProposedAction,
+  type SpreadsheetContext,
 } from '@/lib/queries/agent';
 import { queryKeys } from '@/lib/query-keys';
+import { useSpreadsheetContextStore } from '@/lib/stores/spreadsheet-context';
 
 function getStorageKey(orgId: string) {
   return `ai-sidebar-${orgId}`;
@@ -46,7 +48,13 @@ function stripWizardHints(text: string): string {
   return result.trim();
 }
 
-function getContextSuggestions(pathname: string): string[] {
+function getContextSuggestions(pathname: string, hasSelectedRows: boolean): string[] {
+  if (pathname.startsWith('/spreadsheet') && hasSelectedRows) {
+    return ['Send reminders to selected', 'Total outstanding for these', 'Void these charges'];
+  }
+  if (pathname.startsWith('/spreadsheet')) {
+    return ['Show unpaid charges', 'Match all unmatched payments'];
+  }
   if (pathname.startsWith('/payments')) {
     return ['Match all unmatched payments', "Who hasn't paid?"];
   }
@@ -68,6 +76,9 @@ function getContextSuggestions(pathname: string): string[] {
 export function AISidebar() {
   const pathname = usePathname();
   const isAdmin = useIsAdminOrTreasurer();
+  const spreadsheetRows = useSpreadsheetContextStore((s) => s.selectedRows);
+  const isOnSpreadsheet = pathname.startsWith('/spreadsheet');
+  const hasSpreadsheetContext = isOnSpreadsheet && spreadsheetRows.length > 0;
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
   const user = useAuthStore((s) => s.user);
   const userName = user?.name || user?.email || 'You';
@@ -355,6 +366,10 @@ export function AISidebar() {
       setMessages(updated);
     };
 
+    const ssContext: SpreadsheetContext | undefined = hasSpreadsheetContext
+      ? { selectedRows: spreadsheetRows }
+      : undefined;
+
     try {
       await streamAgentChat(
         currentOrgId,
@@ -379,12 +394,13 @@ export function AISidebar() {
           setIsStreaming(false);
           saveMessages(finalMessages, sid);
         },
+        ssContext,
       );
     } catch {
       isMutatingRef.current = false;
       setIsStreaming(false);
     }
-  }, [input, csvFile, isStreaming, currentOrgId, messages, sessionId, createSession, saveMessages]);
+  }, [input, csvFile, isStreaming, currentOrgId, messages, sessionId, createSession, saveMessages, hasSpreadsheetContext, spreadsheetRows]);
 
   const handleConfirm = async (messageId: string, modifiedActions?: ProposedAction[]) => {
     if (!currentOrgId) return;
@@ -517,7 +533,7 @@ export function AISidebar() {
             </div>
           )}
           {messages.length === 0 && (() => {
-            const suggestions = getContextSuggestions(pathname);
+            const suggestions = getContextSuggestions(pathname, hasSpreadsheetContext);
             return (
               <div className="flex flex-col items-center justify-center h-full text-center">
                 <div className="p-3 rounded-xl bg-primary/10 mb-3">
@@ -605,6 +621,15 @@ export function AISidebar() {
 
         {/* Input */}
         <div className="border-t border-border shrink-0">
+          {/* Spreadsheet context chip */}
+          {hasSpreadsheetContext && (
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50 bg-primary/5">
+              <Sparkles className="h-3.5 w-3.5 text-primary shrink-0" />
+              <span className="text-xs text-primary">
+                Asking about {spreadsheetRows.length} selected row{spreadsheetRows.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+          )}
           {/* Inline wizard bar */}
           {wizardOpen && (
             <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border/50 bg-secondary/20">
@@ -773,7 +798,7 @@ export function AISidebar() {
               </div>
             )}
             {messages.length === 0 && (() => {
-              const suggestions = getContextSuggestions(pathname);
+              const suggestions = getContextSuggestions(pathname, hasSpreadsheetContext);
               return (
                 <div className="flex flex-col items-center justify-center h-full text-center">
                   <div className="p-3 rounded-xl bg-primary/10 mb-3">
@@ -854,6 +879,15 @@ export function AISidebar() {
 
           {/* Input */}
           <div className="border-t border-border pb-safe shrink-0">
+            {/* Spreadsheet context chip (mobile) */}
+            {hasSpreadsheetContext && (
+              <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50 bg-primary/5">
+                <Sparkles className="h-3.5 w-3.5 text-primary shrink-0" />
+                <span className="text-xs text-primary">
+                  Asking about {spreadsheetRows.length} selected row{spreadsheetRows.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+            )}
             {/* Inline wizard bar (mobile) */}
             {wizardOpen && (
               <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border/50 bg-secondary/20">

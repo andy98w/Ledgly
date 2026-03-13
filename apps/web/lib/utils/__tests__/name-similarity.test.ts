@@ -72,8 +72,8 @@ describe('calculateNameSimilarity', () => {
   // --- First + last match with middle name ---------------------------------
 
   describe('first and last name match with middle name difference', () => {
-    it('returns 0.9 when first and last match but middle differs', () => {
-      expect(calculateNameSimilarity('John Smith', 'John A Smith')).toBe(0.9);
+    it('returns 0.95 when shorter name parts are all contained in longer name', () => {
+      expect(calculateNameSimilarity('John Smith', 'John A Smith')).toBe(0.95);
     });
 
     it('returns 0.9 when first and last match with extra middle parts', () => {

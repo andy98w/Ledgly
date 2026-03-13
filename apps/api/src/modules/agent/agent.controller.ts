@@ -29,6 +29,33 @@ class AgentChatDto {
   @IsOptional()
   @MaxLength(500_000)
   csvContent?: string;
+
+  @IsOptional()
+  @Allow()
+  spreadsheetContext?: {
+    selectedRows: Array<{
+      id: string;
+      type: string;
+      description: string;
+      member?: string;
+      category: string;
+      incomeCents: number;
+      outstandingCents: number;
+      expenseCents: number;
+      status?: string;
+      unallocatedCents?: number;
+    }>;
+  };
+}
+
+class AgentQueryDto {
+  @IsString()
+  @MaxLength(1000)
+  query: string;
+
+  @IsOptional()
+  @Allow()
+  viewMetadata?: { typeFilter: string; rowCount: number; columns: string[] };
 }
 
 class ConfirmActionDto {
@@ -83,7 +110,7 @@ export class AgentController {
     res.flushHeaders();
 
     try {
-      for await (const event of this.agentService.chat(orgId, actorId, dto.messages, dto.csvContent)) {
+      for await (const event of this.agentService.chat(orgId, actorId, dto.messages, dto.csvContent, dto.spreadsheetContext)) {
         res.write(`data: ${JSON.stringify(event)}\n\n`);
       }
     } catch (err: any) {
@@ -91,6 +118,16 @@ export class AgentController {
     }
 
     res.end();
+  }
+
+  @Post('query')
+  @Roles('ADMIN', 'TREASURER')
+  @Throttle({ default: { limit: 60, ttl: 60000 } })
+  async query(
+    @Param('orgId') orgId: string,
+    @Body() dto: AgentQueryDto,
+  ) {
+    return this.agentService.querySpreadsheet(orgId, dto.query, dto.viewMetadata);
   }
 
   @Post('confirm')

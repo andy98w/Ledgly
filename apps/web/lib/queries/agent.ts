@@ -49,6 +49,64 @@ export interface AgentSessionSummary {
   actor?: { id: string; name: string };
 }
 
+export interface SpreadsheetContext {
+  selectedRows: Array<{
+    id: string;
+    type: 'charge' | 'expense' | 'payment';
+    description: string;
+    member?: string;
+    category: string;
+    incomeCents: number;
+    outstandingCents: number;
+    expenseCents: number;
+    status?: string;
+    unallocatedCents?: number;
+  }>;
+}
+
+export interface SpreadsheetQueryResult {
+  type: 'filter' | 'compute' | 'sort';
+  // filter
+  typeFilter?: string;
+  search?: string;
+  statuses?: string[];
+  categories?: string[];
+  amountMin?: number;
+  amountMax?: number;
+  dateFrom?: string;
+  dateTo?: string;
+  // compute — expression for client-side evaluation
+  expression?: 'sum' | 'count' | 'avg' | 'min' | 'max';
+  field?: string;
+  explanation?: string;
+  filters?: { type?: string; status?: string; category?: string };
+  // computed result (set by frontend after evaluation)
+  result?: string;
+  // sort
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+}
+
+export async function querySpreadsheet(
+  orgId: string,
+  query: string,
+  viewMetadata: { typeFilter: string; rowCount: number; columns: string[] },
+): Promise<SpreadsheetQueryResult> {
+  const response = await fetch(`${API_URL}/organizations/${orgId}/agent/query`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ query, viewMetadata }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ message: 'Query failed' }));
+    throw new Error(err.message || 'Query failed');
+  }
+
+  return response.json();
+}
+
 export async function streamAgentChat(
   orgId: string,
   messages: ChatMessage[],
@@ -57,12 +115,13 @@ export async function streamAgentChat(
   onToolCalls: (actions: ProposedAction[]) => void,
   onDone: () => void,
   onError: (error: string) => void,
+  spreadsheetContext?: SpreadsheetContext,
 ): Promise<void> {
   const response = await fetch(`${API_URL}/organizations/${orgId}/agent/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ messages, csvContent }),
+    body: JSON.stringify({ messages, csvContent, spreadsheetContext }),
   });
 
   if (!response.ok) {
