@@ -445,7 +445,7 @@ export class GmailService {
       data: {
         orgId: connection.orgId,
         category: 'OTHER',
-        title: parsed.payerName || 'Unknown',
+        title: parsed.memo || `${formatSourceName(parsed.source)} payment to ${parsed.payerName || 'Unknown'}`,
         description: parsed.memo || undefined,
         amountCents: parsed.amount,
         date: emailDate,
