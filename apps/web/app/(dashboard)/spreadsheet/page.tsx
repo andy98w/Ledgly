@@ -255,8 +255,12 @@ export default function SpreadsheetPage() {
             ? `${c.children.length} members`
             : (c.membership?.displayName || charge.membership?.name || charge.membership?.user?.name || undefined),
           membershipId: hasChildren ? undefined : charge.membershipId ?? undefined,
-          incomeCents: charge.amountCents,
-          outstandingCents: c.balanceDueCents ?? charge.amountCents,
+          incomeCents: hasChildren
+            ? c.children.reduce((sum: number, child: any) => sum + child.amountCents, 0)
+            : charge.amountCents,
+          outstandingCents: hasChildren
+            ? c.children.reduce((sum: number, child: any) => sum + (child.balanceDueCents ?? child.amountCents), 0)
+            : (c.balanceDueCents ?? charge.amountCents),
           expenseCents: 0,
           status: charge.status,
           allocatedCents: c.allocatedCents || 0,
@@ -300,7 +304,9 @@ export default function SpreadsheetPage() {
           member: expense.vendor || undefined,
           incomeCents: 0,
           outstandingCents: 0,
-          expenseCents: expense.amountCents,
+          expenseCents: hasChildren
+            ? e.children.reduce((sum: number, child: any) => sum + child.amountCents, 0)
+            : expense.amountCents,
           isParent: hasChildren,
           childCount: hasChildren ? e.children.length : undefined,
           children: hasChildren ? childRows : undefined,
@@ -562,6 +568,18 @@ export default function SpreadsheetPage() {
           chargeId: row.id,
           data: updateData,
         });
+
+        if (row.isParent && row.children && (column === 'category' || column === 'date')) {
+          await Promise.all(
+            row.children.map((child) =>
+              updateCharge.mutateAsync({
+                orgId: currentOrgId!,
+                chargeId: child.id,
+                data: updateData,
+              })
+            )
+          );
+        }
       } else if (row.type === 'expense') {
         const updateData: any = {};
 
@@ -582,6 +600,18 @@ export default function SpreadsheetPage() {
           expenseId: row.id,
           data: updateData,
         });
+
+        if (row.isParent && row.children && (column === 'category' || column === 'date')) {
+          await Promise.all(
+            row.children.map((child) =>
+              updateExpense.mutateAsync({
+                orgId: currentOrgId!,
+                expenseId: child.id,
+                data: updateData,
+              })
+            )
+          );
+        }
       } else if (row.type === 'payment') {
         const updateData: any = {};
 
@@ -2017,7 +2047,11 @@ export default function SpreadsheetPage() {
                             )}
                             style={width ? { width } : undefined}
                             onMouseDown={(e) => handleRowMouseDown(row.id, colId, e)}
-                            onDoubleClick={() => isAdmin && setEditingCell({ rowId: row.id, column: colId as any })}
+                            onDoubleClick={() => {
+                              if (!isAdmin) return;
+                              if (row.isParent && (colId === 'member' || colId === 'income' || colId === 'expense')) return;
+                              setEditingCell({ rowId: row.id, column: colId as any });
+                            }}
                           >
                             {renderCellContent(row, colId)}
                           </td>
