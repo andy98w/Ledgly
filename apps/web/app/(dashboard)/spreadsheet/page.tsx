@@ -1670,7 +1670,7 @@ export default function SpreadsheetPage() {
                   )}
                   {columnConfig.visibleColumns.map((colId, colIdx) => {
                     const def = columnConfig.getColumnDef(colId);
-                    const width = colId === 'description' ? undefined : columnConfig.getWidth(colId);
+                    const width = columnConfig.getWidth(colId);
                     return (
                       <th
                         key={colId}
@@ -1682,7 +1682,7 @@ export default function SpreadsheetPage() {
                           dropTargetId === colId && 'border-l-2 border-primary',
                           dragColumnId === colId && 'opacity-50',
                         )}
-                        style={width ? { width } : undefined}
+                        style={{ width }}
                         draggable={colId !== 'date'}
                         onDragStart={(e) => onDragStart(colId, e)}
                         onDragOver={(e) => onDragOver(colId, e)}
@@ -2001,7 +2001,7 @@ export default function SpreadsheetPage() {
                       )}
                       {columnConfig.visibleColumns.map((colId, colIdx) => {
                         const def = columnConfig.getColumnDef(colId);
-                        const width = colId === 'description' ? undefined : columnConfig.getWidth(colId);
+                        const width = columnConfig.getWidth(colId);
                         const isActive = activeCell?.rowId === row.id && activeCell?.column === colId;
                         return (
                           <td
@@ -2015,7 +2015,7 @@ export default function SpreadsheetPage() {
                               colId === 'date' && stickyDateBg(row),
                               colId === 'description' && row.isChild && 'pl-10',
                             )}
-                            style={width ? { width } : undefined}
+                            style={{ width }}
                             onMouseDown={(e) => handleRowMouseDown(row.id, colId, e)}
                             onDoubleClick={() => isAdmin && setEditingCell({ rowId: row.id, column: colId as any })}
                           >

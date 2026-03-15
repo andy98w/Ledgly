@@ -17,7 +17,7 @@ export const COLUMN_DEFS: ColumnDef[] = [
   { id: 'date', label: 'Date', defaultWidth: 96, minWidth: 72, maxWidth: 160, align: 'left', sortKey: 'date', filterable: true, hideable: false, frozen: true },
   { id: 'member', label: 'Member/Vendor', defaultWidth: 144, minWidth: 96, maxWidth: 300, align: 'left', sortKey: 'member', filterable: true, hideable: true },
   { id: 'category', label: 'Category', defaultWidth: 112, minWidth: 80, maxWidth: 200, align: 'left', sortKey: 'category', filterable: true, hideable: true },
-  { id: 'description', label: 'Title', defaultWidth: 0, minWidth: 100, maxWidth: 600, align: 'left', filterable: true, hideable: false },
+  { id: 'description', label: 'Title', defaultWidth: 200, minWidth: 100, maxWidth: 600, align: 'left', filterable: true, hideable: false },
   { id: 'income', label: 'Income', defaultWidth: 96, minWidth: 72, maxWidth: 160, align: 'right', sortKey: 'income', filterable: true, hideable: true },
   { id: 'expense', label: 'Expense', defaultWidth: 96, minWidth: 72, maxWidth: 160, align: 'right', sortKey: 'expense', filterable: true, hideable: true },
 ];
