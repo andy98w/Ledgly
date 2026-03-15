@@ -942,7 +942,7 @@ export default function ChargesPage() {
         currentMemberIds={editingGroup?.charges.map((c: any) => c.membershipId).filter(Boolean) || []}
       />
       <ChargeGroupDeleteDialog group={deletingGroup} onClose={() => setDeletingGroup(null)} onConfirm={handleConfirmDeleteGroup} isPending={voidCharge.isPending} />
-      <ChargeCreateDialog open={showCreateDialog} onClose={() => setShowCreateDialog(false)} onCreate={handleCreateCharge} members={members} loadingMembers={loadingMembers} isPending={createCharge.isPending} onAddMember={handleAddMember} isAddingMember={createMembers.isPending} />
+      <ChargeCreateDialog open={showCreateDialog} onClose={() => setShowCreateDialog(false)} onCreate={handleCreateCharge} members={members} loadingMembers={loadingMembers} isPending={createCharge.isPending} onAddMember={handleAddMember} isAddingMember={createMembers.isPending} recentCharges={data?.data} />
       <ChargeAllocatePaymentDialog charge={allocatingCharge} payments={paymentsData?.data || []} onClose={() => setAllocatingCharge(null)} onAllocate={handleAllocatePaymentToCharge} isPending={allocatePayment.isPending} />
 
       <CSVImportDialog

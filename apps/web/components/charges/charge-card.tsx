@@ -106,8 +106,8 @@ export const ChargeCard = memo(function ChargeCard({
                 </Tooltip>
               </div>
               {!isPaid && (
-                <p className="text-sm text-destructive">
-                  <Money cents={charge.balanceDueCents} size="xs" inline className="text-destructive" /> due
+                <p className={cn("text-sm", isOverdue ? "text-destructive" : "text-warning")}>
+                  <Money cents={charge.balanceDueCents} size="xs" inline className={isOverdue ? "text-destructive" : "text-warning"} /> due
                 </p>
               )}
             </div>

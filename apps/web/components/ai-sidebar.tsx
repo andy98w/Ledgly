@@ -32,6 +32,8 @@ import {
   type ProposedAction,
   type SpreadsheetContext,
 } from '@/lib/queries/agent';
+import { useDashboard } from '@/lib/queries/organizations';
+import { useAISuggestions } from '@/hooks/use-ai-suggestions';
 import { queryKeys } from '@/lib/query-keys';
 import { useSpreadsheetContextStore } from '@/lib/stores/spreadsheet-context';
 
@@ -82,6 +84,9 @@ export function AISidebar() {
   const user = useAuthStore((s) => s.user);
   const userName = user?.name || user?.email || 'You';
   const { isOpen, close, toggle, width, setWidth } = useAISidebarStore();
+
+  const { data: dashboardStats } = useDashboard(currentOrgId);
+  const suggestions = useAISuggestions(dashboardStats);
 
   const hidden = !isAdmin || !currentOrgId || pathname === '/agent' || pathname.startsWith('/settings');
 
@@ -1004,6 +1009,11 @@ export function AISidebar() {
           title="Open AI sidebar"
         >
           <Sparkles className="h-5 w-5 text-primary" />
+          {suggestions.length > 0 && (
+            <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold">
+              {suggestions.length}
+            </span>
+          )}
         </button>
       )}
 

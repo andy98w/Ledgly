@@ -1,22 +1,22 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, Users, Receipt, AlertTriangle, AlertCircle, Circle, Check, TrendingUp, Sparkles } from 'lucide-react';
+import { ArrowRight, Users, Receipt, AlertTriangle, AlertCircle, TrendingUp, Sparkles } from 'lucide-react';
 import { useDashboard } from '@/lib/queries/organizations';
 import { useInsights } from '@/lib/queries/insights';
 import { useAuthStore } from '@/lib/stores/auth';
-import { cn, formatCents, formatRelativeDate } from '@/lib/utils';
+import { useAISidebarStore } from '@/lib/stores/ai-sidebar';
+import { useAISuggestions } from '@/hooks/use-ai-suggestions';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatCard } from '@/components/ui/stat-card';
-import { Money } from '@/components/ui/money';
-import { AvatarGradient } from '@/components/ui/avatar-gradient';
 import { MotionCard, MotionCardHeader, MotionCardTitle, MotionCardContent } from '@/components/ui/motion-card';
 import { FadeIn } from '@/components/ui/page-transition';
 import { PageHeader } from '@/components/ui/page-header';
 import { Alert } from '@/components/ui/alert';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { EmptyState } from '@/components/ui/empty-state';
+import { ActivityFeed } from '@/components/dashboard/activity-feed';
 import dynamic from 'next/dynamic';
 
 const RevenueChart = dynamic(() => import('@/components/charts/revenue-chart').then((m) => m.RevenueChart), {
@@ -43,6 +43,8 @@ export default function DashboardPage() {
   const { data: stats, isLoading, isError, refetch } = useDashboard(currentOrgId);
   const { data: insightsData } = useInsights(currentOrgId);
   const insights = Array.isArray(insightsData) ? insightsData as any[] : [];
+  const suggestions = useAISuggestions(stats);
+  const openAISidebar = useAISidebarStore((s) => s.open);
 
   if (isLoading) {
     return (
@@ -162,6 +164,39 @@ export default function DashboardPage() {
         />
       </div>
 
+      {/* AI Suggestions */}
+      {suggestions.length > 0 && (
+        <FadeIn delay={0.12}>
+          <div className="rounded-xl border bg-card p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Sparkles className="w-4 h-4 text-primary" />
+              <span className="text-sm font-medium">Suggestions</span>
+            </div>
+            <div className="space-y-1">
+              {suggestions.map((s) => (
+                <div key={s.type} className="flex items-center justify-between py-2 px-1">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className={cn(
+                      'shrink-0 w-1.5 h-1.5 rounded-full',
+                      s.priority === 'high' ? 'bg-rose-500' : s.priority === 'medium' ? 'bg-amber-500' : 'bg-muted-foreground/40',
+                    )} />
+                    <span className="text-sm text-muted-foreground truncate">{s.message}</span>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-xs shrink-0 ml-3"
+                    onClick={openAISidebar}
+                  >
+                    {s.action}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </FadeIn>
+      )}
+
       {/* Insights */}
       {insights.length > 0 && (
         <FadeIn delay={0.15}>
@@ -194,65 +229,9 @@ export default function DashboardPage() {
         </FadeIn>
       )}
 
-      {/* Recent Payments */}
-      <MotionCard hover={false}>
-        <MotionCardHeader className="flex flex-row items-center justify-between">
-          <MotionCardTitle className="text-lg">Recent Payments</MotionCardTitle>
-          <Button variant="ghost" size="sm" asChild className="text-primary">
-            <Link href="/payments">
-              View all
-              <ArrowRight className="ml-1 h-4 w-4" />
-            </Link>
-          </Button>
-        </MotionCardHeader>
-        <MotionCardContent>
-          {stats.recentPayments.length === 0 ? (
-            <EmptyState
-              icon={TrendingUp}
-              title="No payments yet"
-              description="Payments will appear here once recorded"
-            />
-          ) : (
-            <div className="space-y-3">
-              {stats.recentPayments.slice(0, 5).map((payment: any) => (
-                <div key={payment.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors duration-150">
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <AvatarGradient
-                      name={payment.rawPayerName || 'Unknown'}
-                      size="sm"
-                    />
-                    <div className="min-w-0">
-                      <p className="font-medium text-sm truncate">
-                        {payment.rawPayerName || 'Payment'}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatRelativeDate(payment.paidAt)}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Money cents={payment.amountCents} size="sm" />
-                    <TooltipProvider delayDuration={0}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span>
-                            {payment.unallocatedCents > 0 ? (
-                              <Circle className="w-4 h-4 text-muted-foreground" />
-                            ) : (
-                              <Check className="w-4 h-4 text-success" />
-                            )}
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent>{payment.unallocatedCents > 0 ? 'Unmatched' : 'Matched'}</TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </MotionCardContent>
-      </MotionCard>
+      <FadeIn delay={0.2}>
+        <ActivityFeed />
+      </FadeIn>
 
       {/* Charts */}
       <div className="grid gap-6 lg:grid-cols-2">

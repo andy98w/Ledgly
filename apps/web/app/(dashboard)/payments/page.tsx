@@ -140,7 +140,7 @@ const PaymentCard = memo(function PaymentCard({
               </div>
             </div>
             <div className="flex items-center gap-3 shrink-0">
-              <Money cents={payment.amountCents} size="sm" />
+              <Money cents={payment.amountCents} size="sm" className="text-success" />
               <TooltipProvider delayDuration={0}>
                 <Tooltip>
                   <TooltipTrigger asChild>

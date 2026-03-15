@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ArrowLeft, Check, Receipt, Search } from 'lucide-react';
-import { useCreateCharge } from '@/lib/queries/charges';
+import { useCreateCharge, useCharges } from '@/lib/queries/charges';
 import { useMembers } from '@/lib/queries/members';
 import { useAutoAllocateToCharge } from '@/lib/queries/payments';
 import { formatCents } from '@/lib/utils';
@@ -31,6 +31,7 @@ import { AvatarGradient } from '@/components/ui/avatar-gradient';
 import { MotionCard, MotionCardContent, MotionCardHeader, MotionCardTitle } from '@/components/ui/motion-card';
 import { FadeIn, StaggerChildren, StaggerItem } from '@/components/ui/page-transition';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
+import { ChargeTemplates, type ChargeTemplate } from '@/components/charges/charge-templates';
 
 const schema = z.object({
   category: z.enum(CHARGE_CATEGORIES),
@@ -51,7 +52,9 @@ export default function NewChargePage() {
     status: 'ACTIVE',
     limit: 100,
   });
+  const { data: chargesData } = useCharges(currentOrgId);
 
+  const [showForm, setShowForm] = useState(false);
   const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
   const [memberSearch, setMemberSearch] = useState('');
@@ -80,6 +83,15 @@ export default function NewChargePage() {
   });
 
   const category = watch('category');
+
+  const handleSelectTemplate = (template: ChargeTemplate) => {
+    setValue('category', template.category);
+    setValue('title', template.title);
+    if (template.suggestedAmountCents) {
+      setValue('amount', (template.suggestedAmountCents / 100).toFixed(2));
+    }
+    setShowForm(true);
+  };
 
   const toggleMember = (memberId: string) => {
     const newSelected = new Set(selectedMembers);

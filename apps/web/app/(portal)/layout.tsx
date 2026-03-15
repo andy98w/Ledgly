@@ -39,7 +39,6 @@ export default function PortalLayout({
     }
   }, [user, currentOrgId, setCurrentOrgId]);
 
-  // Redirect admins/treasurers to dashboard
   useEffect(() => {
     if (!user || !currentOrgId) return;
     const membership = user.memberships.find((m) => m.orgId === currentOrgId);
@@ -78,28 +77,26 @@ export default function PortalLayout({
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="sticky top-0 z-40 border-b border-border bg-card/80 backdrop-blur-xl">
-        <div className="mx-auto max-w-3xl flex items-center justify-between h-16 px-4">
-          <div className="flex items-center gap-3">
+        <div className="mx-auto max-w-lg flex items-center justify-between h-14 px-4">
+          <div className="flex items-center gap-2.5">
             <Image
               src="/logo.png"
               alt="Ledgly"
-              width={32}
-              height={32}
+              width={28}
+              height={28}
               className="shrink-0"
             />
-            <span className="font-bold text-lg tracking-tight">Ledgly</span>
+            <span className="font-bold text-base tracking-tight">Ledgly</span>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* Org Switcher (only if multiple orgs) */}
+          <div className="flex items-center gap-2">
             {hasMultipleOrgs && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="flex items-center gap-2 px-3 py-2 rounded-xl bg-secondary/50 hover:bg-secondary transition-colors text-sm">
+                  <button className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-secondary/50 hover:bg-secondary active:bg-secondary/80 transition-colors text-sm">
                     <Building2 className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium max-w-[140px] truncate">
+                    <span className="font-medium max-w-[100px] truncate">
                       {currentMembership?.orgName}
                     </span>
                     <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
@@ -117,7 +114,9 @@ export default function PortalLayout({
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{m.orgName}</p>
-                        <p className="text-xs text-muted-foreground">{m.role === 'OWNER' ? 'Owner' : m.role === 'ADMIN' ? 'Admin' : m.role === 'TREASURER' ? 'Treasurer' : 'Member'}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {m.role === 'OWNER' ? 'Owner' : m.role === 'ADMIN' ? 'Admin' : m.role === 'TREASURER' ? 'Treasurer' : 'Member'}
+                        </p>
                       </div>
                       {m.orgId === currentOrgId && (
                         <Check className="h-4 w-4 text-primary" />
@@ -128,10 +127,9 @@ export default function PortalLayout({
               </DropdownMenu>
             )}
 
-            {/* User avatar + logout */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="rounded-full hover:ring-2 hover:ring-primary/20 transition-all">
+                <button className="rounded-full hover:ring-2 hover:ring-primary/20 active:ring-2 active:ring-primary/30 transition-all">
                   <AvatarGradient name={user.name || user.email} size="md" />
                 </button>
               </DropdownMenuTrigger>
@@ -154,8 +152,7 @@ export default function PortalLayout({
         </div>
       </header>
 
-      {/* Content */}
-      <main className="mx-auto max-w-3xl py-8 px-4">
+      <main className="mx-auto max-w-lg py-6 px-4 pb-12">
         {children}
       </main>
     </div>

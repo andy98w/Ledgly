@@ -155,8 +155,8 @@ export const ChargeGroupCard = memo(function ChargeGroupCard({
                   </Tooltip>
                 </div>
                 {!allPaid && (
-                  <p className="text-sm text-destructive">
-                    <Money cents={balanceDue} size="xs" inline className="text-destructive" /> due
+                  <p className={cn("text-sm", isOverdue ? "text-destructive" : "text-warning")}>
+                    <Money cents={balanceDue} size="xs" inline className={isOverdue ? "text-destructive" : "text-warning"} /> due
                   </p>
                 )}
               </div>
