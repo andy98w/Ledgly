@@ -77,8 +77,7 @@ export function AISidebar() {
   const pathname = usePathname();
   const isAdmin = useIsAdminOrTreasurer();
   const spreadsheetRows = useSpreadsheetContextStore((s) => s.selectedRows);
-  const isOnSpreadsheet = pathname.startsWith('/spreadsheet');
-  const hasSpreadsheetContext = isOnSpreadsheet && spreadsheetRows.length > 0;
+  const hasSpreadsheetContext = spreadsheetRows.length > 0;
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
   const user = useAuthStore((s) => s.user);
   const userName = user?.name || user?.email || 'You';

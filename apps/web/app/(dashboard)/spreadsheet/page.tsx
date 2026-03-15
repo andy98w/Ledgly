@@ -1385,7 +1385,7 @@ export default function SpreadsheetPage() {
     [paginatedRows, selectedRows],
   );
 
-  // Phase 1: Sync selected rows to context store for AI sidebar
+  // Sync selected rows to context store for AI sidebar
   useEffect(() => {
     if (selectedRows.size === 0) {
       setSpreadsheetSelectedRows([]);
@@ -1410,6 +1410,11 @@ export default function SpreadsheetPage() {
       }));
     setSpreadsheetSelectedRows(contextRows);
   }, [selectedRows, paginatedRows, setSpreadsheetSelectedRows]);
+
+  // Clear context store on unmount
+  useEffect(() => {
+    return () => setSpreadsheetSelectedRows([]);
+  }, [setSpreadsheetSelectedRows]);
 
   const handleAskAI = useCallback(() => {
     openAISidebar();
