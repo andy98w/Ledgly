@@ -26,6 +26,7 @@ model Organization {
   payments            Payment[]
   agentSessions       AgentSession[]
   paymentInstructions String?          @map("payment_instructions")
+  gmailSyncAfter      DateTime?        @map("gmail_sync_after")
   paymentHandles      Json?            @default("{}") @map("payment_handles")
   chargeSchedules     ChargeSchedule[]
   reminderRules       ReminderRule[]

@@ -20,6 +20,7 @@ interface OrganizationDetails extends Organization {
   joinRequiresApproval: boolean;
   paymentInstructions: string | null;
   paymentHandles: Record<string, string>;
+  gmailSyncAfter: string | null;
   memberCount: number;
   chargeCount: number;
 }
@@ -85,7 +86,7 @@ export function useUpdateOrganization(orgId: string | null) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: Partial<Pick<OrganizationDetails, 'name' | 'timezone' | 'enabledPaymentSources' | 'paymentInstructions' | 'paymentHandles'>>) =>
+    mutationFn: (data: Partial<Pick<OrganizationDetails, 'name' | 'timezone' | 'enabledPaymentSources' | 'paymentInstructions' | 'paymentHandles' | 'gmailSyncAfter'>>) =>
       api.patch<OrganizationDetails>(`/organizations/${orgId}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['organizations', orgId] });

@@ -201,14 +201,14 @@ export class GmailService {
 
     const org = await this.prisma.organization.findUnique({
       where: { id: orgId },
-      select: { enabledPaymentSources: true },
+      select: { enabledPaymentSources: true, gmailSyncAfter: true },
     });
 
     const enabledSources = org?.enabledPaymentSources ?? ['venmo', 'zelle', 'cashapp', 'paypal'];
 
     const gmail = await this.getGmailClient(connection);
 
-    const query = this.buildSearchQuery(enabledSources);
+    const query = this.buildSearchQuery(enabledSources, org?.gmailSyncAfter ?? undefined);
     if (!query) {
       return { imported: 0, skipped: 0, autoConfirmed: 0 };
     }
@@ -278,7 +278,7 @@ export class GmailService {
     return google.gmail({ version: 'v1', auth: this.oauth2Client });
   }
 
-  private buildSearchQuery(enabledSources: string[]): string {
+  private buildSearchQuery(enabledSources: string[], syncAfter?: Date): string {
     const sourceMap: Record<string, string[]> = {
       venmo: ['from:venmo.com', 'from:venmo@venmo.com'],
       zelle: ['from:zelle', 'from:zellepay'],
@@ -294,7 +294,13 @@ export class GmailService {
 
     const senderQuery = `(${senders.join(' OR ')})`;
 
-    // Extended to 30 days, no subject filter (parser will validate)
+    if (syncAfter) {
+      const y = syncAfter.getFullYear();
+      const m = syncAfter.getMonth() + 1;
+      const d = syncAfter.getDate();
+      return `${senderQuery} after:${y}/${m}/${d}`;
+    }
+
     return `${senderQuery} newer_than:30d`;
   }
 

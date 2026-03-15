@@ -14,6 +14,7 @@ interface UpdateOrganizationDto {
   enabledPaymentSources?: string[];
   paymentInstructions?: string | null;
   paymentHandles?: Record<string, string> | null;
+  gmailSyncAfter?: string;
 }
 
 // Safe alphabet: no ambiguous chars (0/O, 1/I/L)
@@ -118,6 +119,7 @@ export class OrganizationsService {
       enabledPaymentSources: org.enabledPaymentSources,
       paymentInstructions: org.paymentInstructions,
       paymentHandles: org.paymentHandles ?? {},
+      gmailSyncAfter: org.gmailSyncAfter,
       joinCode: org.joinCode,
       joinCodeEnabled: org.joinCodeEnabled,
       joinRequiresApproval: org.joinRequiresApproval,
@@ -137,6 +139,7 @@ export class OrganizationsService {
         ...(dto.enabledPaymentSources !== undefined && { enabledPaymentSources: dto.enabledPaymentSources }),
         ...(dto.paymentInstructions !== undefined && { paymentInstructions: dto.paymentInstructions }),
         ...(dto.paymentHandles !== undefined && { paymentHandles: dto.paymentHandles as any }),
+        ...(dto.gmailSyncAfter !== undefined && { gmailSyncAfter: new Date(dto.gmailSyncAfter) }),
       },
     });
 

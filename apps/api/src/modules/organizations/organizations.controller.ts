@@ -35,6 +35,10 @@ class UpdateOrganizationDto {
   @IsObject()
   @IsOptional()
   paymentHandles?: Record<string, string>;
+
+  @IsString()
+  @IsOptional()
+  gmailSyncAfter?: string;
 }
 
 class UpdateJoinCodeSettingsDto {

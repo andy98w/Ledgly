@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { Moon, Sun, Monitor, User, Building2, Shield, Loader2, Camera, Plus, AlertTriangle, Mail, GraduationCap, KeyRound, Eye, EyeOff, Link2, Copy, Check, RefreshCw, ArrowRightLeft, Banknote, Bell, Trash2 } from 'lucide-react';
@@ -9,6 +9,7 @@ import { useUpdateProfile, useChangePassword } from '@/lib/queries/auth';
 import { useCreateOrganization, useDeleteOrganization, useOrganization, useUpdateOrganization, useGenerateJoinCode, useDisableJoinCode, useUpdateJoinCodeSettings } from '@/lib/queries/organizations';
 import { useMembers, useTransferOwnership } from '@/lib/queries/members';
 import { useReminderRules, useCreateReminderRule, useDeleteReminderRule } from '@/lib/queries/reminders';
+import { useGmailStatus, useDisconnectGmail, getGmailConnectUrl } from '@/lib/queries/gmail';
 import { uploadAvatar } from '@/lib/supabase';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
@@ -44,6 +45,138 @@ const themeOptions = [
   { value: 'dark', label: 'Dark', icon: Moon },
   { value: 'system', label: 'System', icon: Monitor },
 ];
+
+function GmailSyncSection({ orgId }: { orgId: string | null }) {
+  const { data: gmailStatus } = useGmailStatus(orgId);
+  const disconnectGmail = useDisconnectGmail();
+  const { data: org } = useOrganization(orgId);
+  const updateOrg = useUpdateOrganization(orgId);
+  const { toast } = useToast();
+
+  const [syncAfterInput, setSyncAfterInput] = useState('');
+
+  useEffect(() => {
+    if (org?.gmailSyncAfter) {
+      const d = new Date(org.gmailSyncAfter);
+      setSyncAfterInput(`${d.getMonth() + 1}/${d.getDate()}/${(d.getFullYear() % 100).toString().padStart(2, '0')}`);
+    }
+  }, [org?.gmailSyncAfter]);
+
+  const handleDisconnect = async () => {
+    if (!orgId) return;
+    try {
+      await disconnectGmail.mutateAsync({ orgId });
+      toast({ title: 'Gmail disconnected' });
+    } catch {
+      toast({ title: 'Failed to disconnect', variant: 'destructive' });
+    }
+  };
+
+  const handleSaveSyncDate = async () => {
+    if (!orgId) return;
+    const match = syncAfterInput.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (!match) {
+      toast({ title: 'Enter a valid date (mm/dd/yy)', variant: 'destructive' });
+      return;
+    }
+    let year = parseInt(match[3]);
+    if (year < 100) year += 2000;
+    const date = new Date(year, parseInt(match[1]) - 1, parseInt(match[2]));
+    if (isNaN(date.getTime())) {
+      toast({ title: 'Invalid date', variant: 'destructive' });
+      return;
+    }
+    try {
+      await updateOrg.mutateAsync({ gmailSyncAfter: date.toISOString() });
+      toast({ title: 'Sync date updated' });
+    } catch {
+      toast({ title: 'Failed to update', variant: 'destructive' });
+    }
+  };
+
+  return (
+    <FadeIn delay={0.45}>
+      <MotionCard hover={false}>
+        <MotionCardHeader>
+          <MotionCardTitle className="flex items-center gap-2">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Mail className="h-4 w-4 text-primary" />
+            </div>
+            Gmail Sync
+          </MotionCardTitle>
+        </MotionCardHeader>
+        <MotionCardContent>
+          <div className="space-y-4">
+            {gmailStatus?.connected ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium">{gmailStatus.email}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {gmailStatus.lastSyncAt
+                        ? `Last synced ${new Date(gmailStatus.lastSyncAt).toLocaleDateString()}`
+                        : 'Connected, waiting for first sync'}
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDisconnect}
+                    disabled={disconnectGmail.isPending}
+                    className="text-destructive hover:text-destructive"
+                  >
+                    {disconnectGmail.isPending ? 'Disconnecting...' : 'Disconnect'}
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm">Sync emails after</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="mm/dd/yy"
+                      value={syncAfterInput}
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/[^\d/]/g, '');
+                        setSyncAfterInput(raw);
+                      }}
+                      className="h-9 w-32 text-sm"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleSaveSyncDate}
+                      disabled={updateOrg.isPending}
+                    >
+                      Save
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Only import payment emails sent after this date. Leave blank for the last 30 days.
+                  </p>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Connect Gmail to automatically import payment notifications from Venmo, Zelle, Cash App, and PayPal.
+                </p>
+                {orgId && (
+                  <Button
+                    onClick={() => { window.location.href = getGmailConnectUrl(orgId, '/settings'); }}
+                  >
+                    <Mail className="w-4 h-4 mr-2" />
+                    Connect Gmail
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        </MotionCardContent>
+      </MotionCard>
+    </FadeIn>
+  );
+}
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -679,27 +812,7 @@ export default function SettingsPage() {
       )}
 
       {/* Gmail Sync Section — admin/owner only */}
-      {isAdminRole && (
-        <FadeIn delay={0.45}>
-          <MotionCard hover={false}>
-            <MotionCardHeader>
-              <MotionCardTitle className="flex items-center gap-2">
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <Mail className="h-4 w-4 text-primary" />
-                </div>
-                Gmail Sync
-              </MotionCardTitle>
-            </MotionCardHeader>
-            <MotionCardContent>
-              <div className="space-y-1">
-                <p className="text-sm text-muted-foreground">
-                  All email imports automatically create payments and expenses. Manage them from their respective pages.
-                </p>
-              </div>
-            </MotionCardContent>
-          </MotionCard>
-        </FadeIn>
-      )}
+      {isAdminRole && <GmailSyncSection orgId={currentOrgId} />}
 
       {/* Payment Instructions — admin/owner only */}
       {isAdminRole && (
