@@ -1668,7 +1668,7 @@ export default function SpreadsheetPage() {
                       </div>
                     </th>
                   )}
-                  {columnConfig.visibleColumns.map((colId) => {
+                  {columnConfig.visibleColumns.map((colId, colIdx) => {
                     const def = columnConfig.getColumnDef(colId);
                     const width = colId === 'description' ? undefined : columnConfig.getWidth(colId);
                     return (
@@ -1677,6 +1677,7 @@ export default function SpreadsheetPage() {
                         className={cn(
                           'px-2 py-2 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none relative',
                           def.align === 'right' ? 'text-right' : 'text-left',
+                          colIdx % 2 === 0 && 'bg-black/[0.015] dark:bg-white/[0.015]',
                           colId === 'date' && (isAdmin ? 'sticky left-14 z-20 bg-secondary/30' : 'sticky left-0 z-20 bg-secondary/30'),
                           dropTargetId === colId && 'border-l-2 border-primary',
                           dragColumnId === colId && 'opacity-50',
@@ -1998,7 +1999,7 @@ export default function SpreadsheetPage() {
                           </div>
                         </td>
                       )}
-                      {columnConfig.visibleColumns.map((colId) => {
+                      {columnConfig.visibleColumns.map((colId, colIdx) => {
                         const def = columnConfig.getColumnDef(colId);
                         const width = colId === 'description' ? undefined : columnConfig.getWidth(colId);
                         const isActive = activeCell?.rowId === row.id && activeCell?.column === colId;
@@ -2009,6 +2010,7 @@ export default function SpreadsheetPage() {
                               'px-2 py-2 cursor-default',
                               def.align === 'right' && 'text-right',
                               isActive && 'ring-2 ring-inset ring-primary/50',
+                              colIdx % 2 === 0 && 'bg-black/[0.02] dark:bg-white/[0.02]',
                               colId === 'date' && (isAdmin ? 'sticky left-14 z-10' : 'sticky left-0 z-10'),
                               colId === 'date' && stickyDateBg(row),
                               colId === 'description' && row.isChild && 'pl-10',
@@ -2337,6 +2339,7 @@ export default function SpreadsheetPage() {
           return id ? { id, displayName: name } : null;
         }}
         isAddingMember={createMembers.isPending}
+        recentCharges={chargesData?.data}
       />
 
       {/* Multi-expense Create Dialog */}
