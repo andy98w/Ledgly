@@ -8,16 +8,10 @@ import { MobileNav } from '@/components/layout/mobile-nav';
 import { Header } from '@/components/layout/header';
 import { AISidebar } from '@/components/ai-sidebar';
 import { useAISidebarStore } from '@/lib/stores/ai-sidebar';
-import dynamic from 'next/dynamic';
-
-const TourOverlay = dynamic(() => import('@/components/tour/tour-overlay').then((m) => m.TourOverlay), {
-  ssr: false,
-});
 import { CommandPalette } from '@/components/command-palette';
 import { KeyboardShortcutsDialog } from '@/components/keyboard-shortcuts-dialog';
 import { useMe } from '@/lib/queries/auth';
 import { useAuthStore } from '@/lib/stores/auth';
-import { useTutorialStore } from '@/lib/stores/tutorial';
 import { useSidebarStore } from '@/lib/stores/sidebar';
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -32,8 +26,6 @@ export default function DashboardLayout({
   const { data: user, isLoading, error } = useMe();
   const setCurrentOrgId = useAuthStore((s) => s.setCurrentOrgId);
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
-  const hasSeenTutorial = useTutorialStore((s) => s.hasSeenTutorial);
-  const startTutorial = useTutorialStore((s) => s.start);
   const isCollapsed = useSidebarStore((s) => s.isCollapsed);
   const isAISidebarOpen = useAISidebarStore((s) => s.isOpen);
   const aiSidebarWidth = useAISidebarStore((s) => s.width);
@@ -52,13 +44,6 @@ export default function DashboardLayout({
     }
   }, [user, currentOrgId, setCurrentOrgId]);
 
-  // Auto-launch tutorial on first login
-  useEffect(() => {
-    if (user && !hasSeenTutorial) {
-      startTutorial();
-    }
-  }, [user, hasSeenTutorial, startTutorial]);
-
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -75,13 +60,11 @@ export default function DashboardLayout({
     return null;
   }
 
-  // If user has no organizations, show onboarding
   if (user.memberships.length === 0) {
     router.push('/onboarding');
     return null;
   }
 
-  // If user is a plain MEMBER in the current org, redirect to portal
   const currentMembership = user.memberships.find((m) => m.orgId === currentOrgId);
   if (currentMembership?.role === 'MEMBER') {
     router.push('/portal');
@@ -109,7 +92,6 @@ export default function DashboardLayout({
       </main>
       <MobileNav />
       <AISidebar />
-      <TourOverlay />
       <CommandPalette />
       <KeyboardShortcutsDialog open={showHelp} onOpenChange={setShowHelp} />
     </div>

@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { Moon, Sun, Monitor, User, Building2, Shield, Loader2, Camera, Plus, AlertTriangle, Mail, GraduationCap, KeyRound, Eye, EyeOff, Link2, Copy, Check, RefreshCw, ArrowRightLeft, Banknote, Bell, Trash2 } from 'lucide-react';
 import { useAuthStore, useIsOwner } from '@/lib/stores/auth';
-import { useTutorialStore } from '@/lib/stores/tutorial';
 import { useUpdateProfile, useChangePassword } from '@/lib/queries/auth';
 import { useCreateOrganization, useDeleteOrganization, useOrganization, useUpdateOrganization, useGenerateJoinCode, useDisableJoinCode, useUpdateJoinCodeSettings } from '@/lib/queries/organizations';
 import { useMembers, useTransferOwnership } from '@/lib/queries/members';
@@ -52,7 +51,6 @@ export default function SettingsPage() {
   const { toast } = useToast();
   const user = useAuthStore((s) => s.user);
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
-  const startTutorial = useTutorialStore((s) => s.start);
   const currentOrg = user?.memberships.find((m) => m.orgId === currentOrgId);
   const updateProfile = useUpdateProfile();
   const createOrganization = useCreateOrganization();
@@ -517,11 +515,10 @@ export default function SettingsPage() {
                   </Button>
                   <Button
                     variant="outline"
-                    onClick={startTutorial}
-                    data-tour="launch-tutorial"
+                    onClick={() => router.push('/onboarding?orgId=' + currentOrgId + '&step=1')}
                   >
                     <GraduationCap className="w-4 h-4 mr-2" />
-                    Launch Tutorial
+                    Launch Setup Wizard
                   </Button>
                 </div>
               </div>
