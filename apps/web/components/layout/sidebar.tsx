@@ -17,6 +17,9 @@ import {
   PanelLeftClose,
   PanelLeft,
   FileSpreadsheet,
+  Receipt,
+  CreditCard,
+  TrendingDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MEMBERSHIP_ROLE_LABELS } from '@ledgly/shared';
@@ -58,6 +61,12 @@ const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Home', icon: LayoutDashboard },
   { href: '/spreadsheet', label: 'Ledger', icon: FileSpreadsheet },
   { href: '/members', label: 'Members', icon: Users },
+];
+
+const secondaryNavItems: NavItem[] = [
+  { href: '/charges', label: 'Charges', icon: Receipt },
+  { href: '/payments', label: 'Payments', icon: CreditCard },
+  { href: '/expenses', label: 'Expenses', icon: TrendingDown },
 ];
 
 export function Sidebar() {
@@ -216,14 +225,17 @@ export function Sidebar() {
         {/* Navigation */}
         <nav data-tour="sidebar-nav" className={cn('flex-1 py-4 space-y-1', isCollapsed ? 'px-2' : 'px-3')}>
           <TooltipProvider delayDuration={0}>
-            {navItems.map((item) => {
+            {[...navItems, ...secondaryNavItems].map((item, i) => {
               const isActive = item.href === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(item.href);
+              const isSecondary = i >= navItems.length;
+              const showDivider = i === navItems.length;
               const link = (
                 <Link
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    'relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
+                    'relative flex items-center gap-3 px-3 rounded-xl text-sm font-medium transition-all',
+                    isSecondary ? 'py-2' : 'py-2.5',
                     isCollapsed && 'justify-center px-0',
                     isActive
                       ? 'text-primary'
@@ -236,8 +248,8 @@ export function Sidebar() {
                       <div className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-primary" />
                     </>
                   )}
-                  <item.icon className={cn('h-5 w-5 relative z-10 shrink-0', isActive && 'text-primary')} />
-                  {!isCollapsed && <span className="relative z-10">{item.label}</span>}
+                  <item.icon className={cn(isSecondary ? 'h-4 w-4' : 'h-5 w-5', 'relative z-10 shrink-0', isActive && 'text-primary')} />
+                  {!isCollapsed && <span className={cn('relative z-10', isSecondary && 'text-xs')}>{item.label}</span>}
                   {!isCollapsed && item.badge && (
                     <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-primary/20 text-primary font-medium relative z-10">
                       {item.badge}
@@ -246,16 +258,23 @@ export function Sidebar() {
                 </Link>
               );
 
-              if (isCollapsed) {
+              const el = isCollapsed ? (
+                <Tooltip key={item.href}>
+                  <TooltipTrigger asChild>{link}</TooltipTrigger>
+                  <TooltipContent side="right">{item.label}</TooltipContent>
+                </Tooltip>
+              ) : link;
+
+              if (showDivider) {
                 return (
-                  <Tooltip key={item.href}>
-                    <TooltipTrigger asChild>{link}</TooltipTrigger>
-                    <TooltipContent side="right">{item.label}</TooltipContent>
-                  </Tooltip>
+                  <div key={item.href}>
+                    <div className={cn('my-2 border-t border-border/50', isCollapsed ? 'mx-1' : 'mx-2')} />
+                    {el}
+                  </div>
                 );
               }
 
-              return link;
+              return el;
             })}
           </TooltipProvider>
         </nav>
