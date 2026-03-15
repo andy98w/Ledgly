@@ -71,6 +71,14 @@ import { InsightsBanner } from '@/components/spreadsheet/insights-banner';
 import { FormulaBar } from '@/components/spreadsheet/formula-bar';
 import type { SpreadsheetQueryResult } from '@/lib/queries/agent';
 
+function formatShortDate(date: string | Date): string {
+  const d = new Date(date);
+  const m = d.getMonth() + 1;
+  const day = d.getDate();
+  const y = d.getFullYear() % 100;
+  return `${m}/${day}/${y.toString().padStart(2, '0')}`;
+}
+
 /** Strip "VENMO payment to " etc. prefixes from Gmail-imported expense titles */
 function cleanExpenseTitle(title: string): string {
   const match = title.match(/^[A-Z]+ payment to (.+)$/);
@@ -348,7 +356,7 @@ function EditableCell({
           onChange={(e) => setEditValue(e.target.value)}
           onKeyDown={handleKeyDown}
           onBlur={handleSave}
-          className="h-6 text-sm bg-transparent shadow-none !ring-0 !outline-none !border-none rounded px-1"
+          className="h-5 text-xs bg-transparent shadow-none !ring-0 !outline-none !border-none rounded px-0 w-full"
           type="date"
           style={{ colorScheme: 'dark' }}
         />
@@ -358,14 +366,14 @@ function EditableCell({
     if (type === 'money') {
       return (
         <div className="inline-flex items-baseline justify-end w-full">
-          <span className="text-base font-semibold opacity-70 mr-0.5">$</span>
+          <span className="text-sm font-semibold opacity-70 mr-0.5">$</span>
           <input
             ref={inputRef}
             value={editValue}
             onChange={(e) => setEditValue(e.target.value)}
             onKeyDown={handleKeyDown}
             onBlur={handleSave}
-            className="w-16 text-right tabular-nums text-base font-semibold bg-transparent shadow-none !ring-0 !outline-none !border-none p-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            className="w-16 text-right tabular-nums text-sm font-semibold bg-transparent shadow-none !ring-0 !outline-none !border-none p-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             type="number"
             step="0.01"
             inputMode="decimal"
@@ -382,7 +390,7 @@ function EditableCell({
         onChange={(e) => setEditValue(e.target.value)}
         onKeyDown={handleKeyDown}
         onBlur={handleSave}
-        className="h-6 w-full text-sm bg-transparent shadow-none !ring-0 !outline-none !border-none rounded px-1"
+        className="h-5 w-full text-sm bg-transparent shadow-none !ring-0 !outline-none !border-none rounded px-0"
         type="text"
       />
     );
@@ -415,7 +423,7 @@ function EditableCell({
   // Non-editing display
   if (!isAdmin) {
     if (type === 'date') {
-      return <span className="text-muted-foreground">{formatDate(value as string)}</span>;
+      return <span className="text-muted-foreground whitespace-nowrap">{formatShortDate(value as string)}</span>;
     }
     if (type === 'member') {
       return <TruncatedText text={getMemberDisplayValue()} />;
@@ -428,7 +436,6 @@ function EditableCell({
 
   return (
     <div
-      onDoubleClick={onEdit}
       className={cn(
         'px-1 py-0.5 rounded -mx-1 transition-colors cursor-default w-full',
         type === 'money' ? 'text-right' : 'text-left',
@@ -443,7 +450,7 @@ function EditableCell({
             : EXPENSE_CATEGORY_LABELS[value as ExpenseCategory] || value}
         </Badge>
       ) : type === 'date' ? (
-        <span className="text-muted-foreground">{formatDate(value as string)}</span>
+        <span className="text-muted-foreground whitespace-nowrap">{formatShortDate(value as string)}</span>
       ) : type === 'member' ? (
         <TruncatedText text={getMemberDisplayValue()} className="font-medium" />
       ) : (
@@ -1856,7 +1863,7 @@ export default function SpreadsheetPage() {
               <thead>
                 <tr className="border-b bg-secondary/30">
                   {isAdmin && (
-                    <th className="w-12 pl-3 pr-1 py-3">
+                    <th className="w-10 pl-2 pr-1 py-2">
                       <div className="flex items-center gap-0.5">
                         {selectedRows.size > 0 && (
                           <button
@@ -1888,7 +1895,7 @@ export default function SpreadsheetPage() {
                     </th>
                   )}
                   <th
-                    className="text-left px-3 py-3 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none w-24"
+                    className="text-left px-2 py-2 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none w-24"
                     onClick={() => {
                       if (sortBy === 'date') {
                         setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -1906,7 +1913,7 @@ export default function SpreadsheetPage() {
                     </span>
                   </th>
                   <th
-                    className="text-left px-3 py-3 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none w-32"
+                    className="text-left px-2 py-2 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none w-32"
                     onClick={() => {
                       if (sortBy === 'member') {
                         setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -1924,7 +1931,7 @@ export default function SpreadsheetPage() {
                     </span>
                   </th>
                   <th
-                    className="text-left px-3 py-3 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none w-24"
+                    className="text-left px-2 py-2 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none w-24"
                     onClick={() => {
                       if (sortBy === 'category') {
                         setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -1941,9 +1948,9 @@ export default function SpreadsheetPage() {
                       )}
                     </span>
                   </th>
-                  <th className="text-left px-3 py-3 font-medium text-muted-foreground w-36">Title</th>
+                  <th className="text-left px-2 py-2 font-medium text-muted-foreground w-36">Title</th>
                   <th
-                    className="text-right px-3 py-3 font-medium text-success cursor-pointer hover:text-success/80 select-none w-24"
+                    className="text-right px-2 py-2 font-medium text-success cursor-pointer hover:text-success/80 select-none w-24"
                     onClick={() => {
                       if (sortBy === 'income') {
                         setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -1962,7 +1969,7 @@ export default function SpreadsheetPage() {
                     </span>
                   </th>
                   <th
-                    className="text-right px-3 py-3 font-medium text-warning cursor-pointer hover:text-warning/80 select-none w-24"
+                    className="text-right px-2 py-2 font-medium text-warning cursor-pointer hover:text-warning/80 select-none w-24"
                     onClick={() => {
                       if (sortBy === 'outstanding') {
                         setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -1981,7 +1988,7 @@ export default function SpreadsheetPage() {
                     </span>
                   </th>
                   <th
-                    className="text-right pl-3 pr-5 py-3 font-medium text-destructive cursor-pointer hover:text-destructive/80 select-none w-24"
+                    className="text-right pl-2 pr-2 py-2 font-medium text-destructive cursor-pointer hover:text-destructive/80 select-none w-24"
                     onClick={() => {
                       if (sortBy === 'expense') {
                         setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -2006,7 +2013,7 @@ export default function SpreadsheetPage() {
                 {/* Select All / Add Row */}
                 {isAdmin && !isLoading && (
                   <tr className="border-b border-border/50 bg-secondary/20 hover:bg-secondary/40 transition-colors">
-                    <td className="pl-3 pr-1 py-2">
+                    <td className="pl-2 pr-1 py-2">
                       <div className="flex items-center gap-1">
                         <div className="w-6 h-6" />
                         <div className="w-2" />
@@ -2036,7 +2043,7 @@ export default function SpreadsheetPage() {
                 {/* Inline New Row */}
                 {isAdmin && inlineNewRow && (
                   <tr className="border-b border-border/50 bg-primary/5 animate-in fade-in slide-in-from-top-1 duration-200">
-                    <td className="pl-3 pr-1 py-2">
+                    <td className="pl-2 pr-1 py-2">
                       <div className="flex items-center gap-1">
                         <button
                           onClick={handleSaveInlineRow}
@@ -2060,7 +2067,7 @@ export default function SpreadsheetPage() {
                       </div>
                     </td>
                     {/* Type selector */}
-                    <td className="px-3 py-2 w-24">
+                    <td className="px-2 py-2 w-24">
                       <Select value={newRowType} onValueChange={(v) => {
                         const val = v as typeof newRowType;
                         if (val === 'multi-charge') {
@@ -2090,7 +2097,7 @@ export default function SpreadsheetPage() {
                       </Select>
                     </td>
                     {/* Member */}
-                    <td className="px-3 py-2 w-32">
+                    <td className="px-2 py-2 w-32">
                       {newRowType === 'expense' ? (
                         <input
                           placeholder="Vendor..."
@@ -2122,7 +2129,7 @@ export default function SpreadsheetPage() {
                       )}
                     </td>
                     {/* Category */}
-                    <td className="px-3 py-2 w-24">
+                    <td className="px-2 py-2 w-24">
                       {newRowType === 'payment' ? (
                         <span className="text-xs text-muted-foreground">—</span>
                       ) : (
@@ -2142,7 +2149,7 @@ export default function SpreadsheetPage() {
                       )}
                     </td>
                     {/* Title */}
-                    <td className="px-3 py-2 w-36">
+                    <td className="px-2 py-2 w-36">
                       <input
                         placeholder={newRowType === 'payment' ? 'Memo...' : 'Title...'}
                         value={newRowType === 'payment' ? newRowData.memo : newRowData.description}
@@ -2161,7 +2168,7 @@ export default function SpreadsheetPage() {
                       />
                     </td>
                     {/* Amount cells (spans 3 columns) */}
-                    <td className="px-3 py-2 text-right w-24" colSpan={3}>
+                    <td className="px-2 py-2 text-right w-24" colSpan={3}>
                       <div className="flex items-center justify-end gap-1">
                         <span className="text-xs text-muted-foreground">$</span>
                         <input
@@ -2189,12 +2196,12 @@ export default function SpreadsheetPage() {
                   Array.from({ length: 5 }).map((_, i) => (
                     <tr key={i} className="border-b border-border/50">
                       {isAdmin && <td className="pl-3 pr-1 py-3"><Skeleton className="h-7 w-14" /></td>}
-                      <td className="px-3 py-3"><Skeleton className="h-4 w-20" /></td>
-                      <td className="px-3 py-3"><Skeleton className="h-5 w-20" /></td>
-                      <td className="px-3 py-3"><Skeleton className="h-4 w-40" /></td>
-                      <td className="px-3 py-3"><Skeleton className="h-4 w-24" /></td>
-                      <td className="px-3 py-3"><Skeleton className="h-4 w-16 ml-auto" /></td>
-                      <td className="px-3 py-3"><Skeleton className="h-4 w-16 ml-auto" /></td>
+                      <td className="px-2 py-2"><Skeleton className="h-4 w-20" /></td>
+                      <td className="px-2 py-2"><Skeleton className="h-5 w-20" /></td>
+                      <td className="px-2 py-2"><Skeleton className="h-4 w-40" /></td>
+                      <td className="px-2 py-2"><Skeleton className="h-4 w-24" /></td>
+                      <td className="px-2 py-2"><Skeleton className="h-4 w-16 ml-auto" /></td>
+                      <td className="px-2 py-2"><Skeleton className="h-4 w-16 ml-auto" /></td>
                       <td className="pl-3 pr-5 py-3"><Skeleton className="h-4 w-16 ml-auto" /></td>
                     </tr>
                   ))
@@ -2229,7 +2236,7 @@ export default function SpreadsheetPage() {
                       )}
                     >
                       {isAdmin && (
-                        <td className="pl-3 pr-1 py-2">
+                        <td className="pl-2 pr-1 py-2">
                           <div className="flex items-center gap-1">
                             {row.isParent ? (
                               <button
@@ -2276,10 +2283,11 @@ export default function SpreadsheetPage() {
                       )}
                       <td
                         className={cn(
-                          'px-3 py-3 w-24 cursor-default',
+                          'px-2 py-2 w-24 cursor-default',
                           activeCell?.rowId === row.id && activeCell?.column === 'date' && 'ring-2 ring-inset ring-primary/50',
                         )}
                         onMouseDown={(e) => handleRowMouseDown(row.id, 'date', e)}
+                        onDoubleClick={() => isAdmin && setEditingCell({ rowId: row.id, column: 'date' })}
                       >
                         <div className="flex items-center gap-1">
                           {!isAdmin && row.isParent && (
@@ -2310,10 +2318,11 @@ export default function SpreadsheetPage() {
                       </td>
                       <td
                         className={cn(
-                          'px-3 py-3 w-32 cursor-default',
+                          'px-2 py-2 w-32 cursor-default',
                           activeCell?.rowId === row.id && activeCell?.column === 'member' && 'ring-2 ring-inset ring-primary/50',
                         )}
                         onMouseDown={(e) => handleRowMouseDown(row.id, 'member', e)}
+                        onDoubleClick={() => isAdmin && setEditingCell({ rowId: row.id, column: 'member' })}
                       >
                         {row.type === 'charge' || row.type === 'payment' ? (
                           <EditableCell
@@ -2347,13 +2356,14 @@ export default function SpreadsheetPage() {
                       </td>
                       <td
                         className={cn(
-                          'px-3 py-3 w-24 cursor-default',
+                          'px-2 py-2 w-24 cursor-default',
                           activeCell?.rowId === row.id && activeCell?.column === 'category' && 'ring-2 ring-inset ring-primary/50',
                         )}
                         onMouseDown={(e) => handleRowMouseDown(row.id, 'category', e)}
+                        onDoubleClick={() => isAdmin && row.type !== 'payment' && setEditingCell({ rowId: row.id, column: 'category' })}
                       >
                         {row.type === 'payment' ? (
-                          <span className="text-xs text-muted-foreground">{row.category}</span>
+                          <Badge variant="outline" className="text-[10px] capitalize">{row.category}</Badge>
                         ) : (
                           <EditableCell
                             value={row.category}
@@ -2371,11 +2381,12 @@ export default function SpreadsheetPage() {
                       </td>
                       <td
                         className={cn(
-                          "px-3 py-3 w-36 cursor-default",
+                          "px-2 py-2 w-36 cursor-default",
                           row.isChild && "pl-10",
                           activeCell?.rowId === row.id && activeCell?.column === 'description' && 'ring-2 ring-inset ring-primary/50',
                         )}
                         onMouseDown={(e) => handleRowMouseDown(row.id, 'description', e)}
+                        onDoubleClick={() => isAdmin && setEditingCell({ rowId: row.id, column: 'description' })}
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           {row.isParent && (
@@ -2404,10 +2415,11 @@ export default function SpreadsheetPage() {
                       </td>
                       <td
                         className={cn(
-                          'px-3 py-3 text-right w-24 cursor-default',
+                          'px-2 py-2 text-right w-24 cursor-default',
                           activeCell?.rowId === row.id && activeCell?.column === 'income' && 'ring-2 ring-inset ring-primary/50',
                         )}
                         onMouseDown={(e) => handleRowMouseDown(row.id, 'income', e)}
+                        onDoubleClick={() => isAdmin && row.type !== 'charge' && row.incomeCents > 0 && setEditingCell({ rowId: row.id, column: 'amount' })}
                       >
                         {row.incomeCents > 0 ? (
                           row.type === 'charge' ? (
@@ -2457,10 +2469,11 @@ export default function SpreadsheetPage() {
                       </td>
                       <td
                         className={cn(
-                          'px-3 py-3 text-right w-24 cursor-default',
+                          'px-2 py-2 text-right w-24 cursor-default',
                           activeCell?.rowId === row.id && activeCell?.column === 'outstanding' && 'ring-2 ring-inset ring-primary/50',
                         )}
                         onMouseDown={(e) => handleRowMouseDown(row.id, 'outstanding', e)}
+                        onDoubleClick={() => isAdmin && row.outstandingCents > 0 && setEditingCell({ rowId: row.id, column: 'amount' })}
                       >
                         {row.outstandingCents > 0 ? (
                           <EditableCell
@@ -2481,10 +2494,11 @@ export default function SpreadsheetPage() {
                       </td>
                       <td
                         className={cn(
-                          'pl-3 pr-5 py-3 text-right w-24 cursor-default',
+                          'pl-3 pr-2 py-2 text-right w-24 cursor-default',
                           activeCell?.rowId === row.id && activeCell?.column === 'expense' && 'ring-2 ring-inset ring-primary/50',
                         )}
                         onMouseDown={(e) => handleRowMouseDown(row.id, 'expense', e)}
+                        onDoubleClick={() => isAdmin && row.expenseCents > 0 && setEditingCell({ rowId: row.id, column: 'amount' })}
                       >
                         {row.expenseCents > 0 ? (
                           <EditableCell
@@ -2545,16 +2559,16 @@ export default function SpreadsheetPage() {
               {!isLoading && displayRows.length > 0 && (
                 <tfoot>
                   <tr className="bg-secondary/50 font-medium">
-                    <td className="px-3 py-3" colSpan={isAdmin ? 6 : 4}>
+                    <td className="px-2 py-2" colSpan={isAdmin ? 6 : 4}>
                       <span className="text-muted-foreground">Total ({displayRows.length} transactions)</span>
                     </td>
-                    <td className="px-3 py-3 text-right">
+                    <td className="px-2 py-2 text-right">
                       <Money cents={totals.income} size="sm" className="text-success font-semibold" />
                     </td>
-                    <td className="px-3 py-3 text-right">
+                    <td className="px-2 py-2 text-right">
                       <Money cents={totals.outstanding} size="sm" className="text-warning font-semibold" />
                     </td>
-                    <td className="px-3 py-3 text-right">
+                    <td className="px-2 py-2 text-right">
                       <Money cents={totals.expenses} size="sm" className="text-destructive font-semibold" />
                     </td>
                   </tr>
