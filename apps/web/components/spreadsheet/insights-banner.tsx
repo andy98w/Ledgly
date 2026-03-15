@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 
 interface InsightsBannerProps {
   insights: RowInsight[];
+  activeFilter: RowInsight['type'] | null;
   onFilterByType: (type: RowInsight['type']) => void;
 }
 
@@ -16,7 +17,7 @@ const INSIGHT_CONFIG = {
   duplicate: { label: 'possible duplicate', icon: Copy, className: 'text-blue-500' },
 } as const;
 
-export function InsightsBanner({ insights, onFilterByType }: InsightsBannerProps) {
+export function InsightsBanner({ insights, activeFilter, onFilterByType }: InsightsBannerProps) {
   const [dismissed, setDismissed] = useState(false);
 
   if (dismissed || insights.length === 0) return null;
@@ -35,13 +36,17 @@ export function InsightsBanner({ insights, onFilterByType }: InsightsBannerProps
         {(Object.entries(counts) as [RowInsight['type'], number][]).map(([type, count]) => {
           const config = INSIGHT_CONFIG[type];
           const Icon = config.icon;
+          const isActive = activeFilter === type;
           return (
             <button
               key={type}
               onClick={() => onFilterByType(type)}
               className={cn(
-                'inline-flex items-center gap-1.5 hover:underline underline-offset-2 transition-colors',
+                'inline-flex items-center gap-1.5 underline-offset-2 transition-colors rounded-md px-2 py-1 -mx-1',
                 config.className,
+                isActive
+                  ? 'bg-secondary underline font-medium'
+                  : 'hover:underline hover:bg-secondary/50',
               )}
             >
               <Icon className="h-3.5 w-3.5" />

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
-import { ArrowUpRight, ArrowDownRight, Download, Upload, Filter, Plus, DollarSign, Wallet, Search, Minus, ArrowUp, ArrowDown, Trash2, Circle, CheckCircle2, Check, Link2, Loader2, CreditCard, MoreVertical, FileSpreadsheet, ChevronDown, ChevronRight, Layers, Sparkles, Ban, Zap } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Download, Upload, Filter, Plus, DollarSign, Wallet, Search, Minus, ArrowUp, ArrowDown, Trash2, Check, Link2, Loader2, CreditCard, MoreVertical, FileSpreadsheet, ChevronDown, ChevronRight, Layers, Sparkles, Ban, Zap } from 'lucide-react';
 import { useCharges, useUpdateCharge, useCreateCharge, useCreateMultiCharge, useVoidCharge, useRestoreCharge, useBulkCreateCharges } from '@/lib/queries/charges';
 import { useExpenses, useUpdateExpense, useCreateExpense, useCreateMultiExpense, useDeleteExpense, useRestoreExpense } from '@/lib/queries/expenses';
 import { usePayments, useUpdatePayment, useCreatePayment, useDeletePayment, useRestorePayment, useAllocatePayment, useAutoAllocateToCharge, useBulkAutoAllocate, useBulkCreatePayments } from '@/lib/queries/payments';
@@ -427,13 +427,12 @@ function EditableCell({
   }
 
   return (
-    <button
-      onClick={onEdit}
+    <div
+      onDoubleClick={onEdit}
       className={cn(
-        'hover:bg-secondary/50 px-1 py-0.5 rounded -mx-1 transition-colors cursor-pointer w-full',
+        'px-1 py-0.5 rounded -mx-1 transition-colors cursor-default w-full',
         type === 'money' ? 'text-right' : 'text-left',
       )}
-      title="Click to edit"
     >
       {type === 'money' ? (
         <Money cents={value as number} size="sm" className={column === 'income' ? 'text-success' : column === 'outstanding' ? 'text-warning' : 'text-destructive'} />
@@ -450,7 +449,7 @@ function EditableCell({
       ) : (
         <TruncatedText text={String(value || '-')} className="font-medium" />
       )}
-    </button>
+    </div>
   );
 }
 
@@ -467,6 +466,9 @@ export default function SpreadsheetPage() {
   const [formulaDateTo, setFormulaDateTo] = useState<string | null>(null);
   const [editingCell, setEditingCell] = useState<EditingCell>(null);
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
+  const [activeCell, setActiveCell] = useState<{ rowId: string; column: string } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStartRowId, setDragStartRowId] = useState<string | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showAllocateDialog, setShowAllocateDialog] = useState(false);
   const [inlineNewRow, setInlineNewRow] = useState(false);
@@ -478,6 +480,7 @@ export default function SpreadsheetPage() {
   const [showMultiChargeDialog, setShowMultiChargeDialog] = useState(false);
   const [showMultiExpenseDialog, setShowMultiExpenseDialog] = useState(false);
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [insightFilter, setInsightFilter] = useState<'overdue' | 'unmatched' | 'duplicate' | null>(null);
   const [newRowData, setNewRowData] = useState({
     date: new Date().toISOString().split('T')[0],
     category: '',
@@ -765,7 +768,7 @@ export default function SpreadsheetPage() {
     return filteredRows;
   }, [chargesData, expensesData, paymentsData, members, typeFilter, searchQuery, sortBy, sortOrder, formulaCategories, formulaStatuses, formulaAmountMin, formulaAmountMax, formulaDateFrom, formulaDateTo]);
 
-  // Phase 2: Anomaly detection
+  // Phase 2: Anomaly detection (computed from rows before insight filtering)
   const insights = useMemo(() => computeInsights(rows), [rows]);
   const insightsMap = useMemo(() => {
     const map = new Map<string, RowInsight>();
@@ -775,6 +778,15 @@ export default function SpreadsheetPage() {
     return map;
   }, [insights]);
 
+  // Apply insight filter to narrow down to matching rows only
+  const displayRows = useMemo(() => {
+    if (!insightFilter) return rows;
+    const insightRowIds = new Set(
+      insights.filter((i) => i.type === insightFilter).map((i) => i.rowId)
+    );
+    return rows.filter((row) => insightRowIds.has(row.id));
+  }, [rows, insights, insightFilter]);
+
   const INSIGHT_DOT_COLORS: Record<RowInsight['type'], string> = {
     overdue: 'bg-destructive',
     unmatched: 'bg-warning',
@@ -782,10 +794,10 @@ export default function SpreadsheetPage() {
   };
 
   // Pagination
-  const totalPages = Math.ceil(rows.length / pageSize);
+  const totalPages = Math.ceil(displayRows.length / pageSize);
   const paginatedRows = useMemo(() => {
     const start = (page - 1) * pageSize;
-    const sliced = rows.slice(start, start + pageSize);
+    const sliced = displayRows.slice(start, start + pageSize);
     // Inject child rows after expanded parents
     const result: SpreadsheetRow[] = [];
     for (const row of sliced) {
@@ -795,13 +807,13 @@ export default function SpreadsheetPage() {
       }
     }
     return result;
-  }, [rows, page, pageSize, expandedParents]);
+  }, [displayRows, page, pageSize, expandedParents]);
 
   // Reset to page 1 when filters change
   useEffect(() => {
     setPage(1);
     setSelectedRows(new Set());
-  }, [typeFilter, searchQuery, sortBy, sortOrder, pageSize]);
+  }, [typeFilter, searchQuery, sortBy, sortOrder, pageSize, insightFilter]);
 
   const toggleParentExpand = (parentId: string) => {
     setExpandedParents((prev) => {
@@ -817,7 +829,7 @@ export default function SpreadsheetPage() {
     let income = 0;
     let outstanding = 0;
     let expenses = 0;
-    for (const r of rows) {
+    for (const r of displayRows) {
       income += r.incomeCents;
       outstanding += r.outstandingCents;
       expenses += r.expenseCents;
@@ -828,7 +840,7 @@ export default function SpreadsheetPage() {
       expenses,
       net: income - expenses,
     };
-  }, [rows]);
+  }, [displayRows]);
 
   const editableColumns: Array<'date' | 'member' | 'category' | 'description' | 'amount'> = ['date', 'member', 'category', 'description', 'amount'];
 
@@ -1297,15 +1309,76 @@ export default function SpreadsheetPage() {
     });
   };
 
-  const toggleSelectAll = () => {
-    if (selectedRows.size === paginatedRows.length) {
-      setSelectedRows(new Set());
-    } else {
-      setSelectedRows(new Set(paginatedRows.map((r) => r.id)));
-    }
-  };
+  const handleRowMouseDown = useCallback((rowId: string, column: string, e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    // Don't interfere with editing cells or interactive elements
+    if (editingCell) return;
 
-  const isAllSelected = paginatedRows.length > 0 && selectedRows.size === paginatedRows.length;
+    setActiveCell({ rowId, column });
+
+    if (e.shiftKey && selectedRows.size > 0) {
+      // Shift+click: range select from last selected to this row
+      const lastSelectedId = Array.from(selectedRows).pop();
+      if (lastSelectedId) {
+        const startIdx = paginatedRows.findIndex((r) => r.id === lastSelectedId);
+        const endIdx = paginatedRows.findIndex((r) => r.id === rowId);
+        if (startIdx !== -1 && endIdx !== -1) {
+          const [lo, hi] = startIdx < endIdx ? [startIdx, endIdx] : [endIdx, startIdx];
+          const rangeIds = paginatedRows.slice(lo, hi + 1).filter((r) => !r.isChild).map((r) => r.id);
+          setSelectedRows(new Set([...Array.from(selectedRows), ...rangeIds]));
+        }
+      }
+      return;
+    }
+
+    if (e.metaKey || e.ctrlKey) {
+      // Cmd/Ctrl+click: toggle single row
+      toggleRowSelection(rowId);
+      return;
+    }
+
+    // Plain click: select single row, start potential drag
+    setSelectedRows(new Set([rowId]));
+    setIsDragging(true);
+    setDragStartRowId(rowId);
+  }, [editingCell, selectedRows, paginatedRows, toggleRowSelection]);
+
+  const handleRowMouseEnter = useCallback((rowId: string) => {
+    if (!isDragging || !dragStartRowId) return;
+    const startIdx = paginatedRows.findIndex((r) => r.id === dragStartRowId);
+    const endIdx = paginatedRows.findIndex((r) => r.id === rowId);
+    if (startIdx === -1 || endIdx === -1) return;
+    const [lo, hi] = startIdx < endIdx ? [startIdx, endIdx] : [endIdx, startIdx];
+    const rangeIds = paginatedRows.slice(lo, hi + 1).filter((r) => !r.isChild).map((r) => r.id);
+    setSelectedRows(new Set(rangeIds));
+  }, [isDragging, dragStartRowId, paginatedRows]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+    setDragStartRowId(null);
+  }, []);
+
+  // Global mouseup to end drag even if mouse leaves table
+  useEffect(() => {
+    if (isDragging) {
+      window.addEventListener('mouseup', handleMouseUp);
+      return () => window.removeEventListener('mouseup', handleMouseUp);
+    }
+  }, [isDragging, handleMouseUp]);
+
+  // Clear selection when clicking outside the table
+  const tableRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (tableRef.current && !tableRef.current.contains(e.target as Node)) {
+        if (!editingCell) {
+          setActiveCell(null);
+        }
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [editingCell]);
 
   const selectedOutstandingCharges = useMemo(
     () => paginatedRows.filter((r) => selectedRows.has(r.id) && r.type === 'charge' && r.outstandingCents > 0),
@@ -1641,7 +1714,7 @@ export default function SpreadsheetPage() {
       </FadeIn>
 
       {/* Summary Cards */}
-      {rows.length > 0 && (
+      {displayRows.length > 0 && (
         <FadeIn delay={0.1}>
           <div className="grid gap-4 md:grid-cols-4">
             <div className="rounded-xl border bg-card p-4">
@@ -1684,9 +1757,13 @@ export default function SpreadsheetPage() {
         <FadeIn delay={0.12}>
           <InsightsBanner
             insights={insights}
+            activeFilter={insightFilter}
             onFilterByType={(type) => {
-              const insightTypeMap: Record<string, string> = { overdue: 'charge', unmatched: 'payment' };
-              if (insightTypeMap[type]) setTypeFilter(insightTypeMap[type]);
+              if (insightFilter === type) {
+                setInsightFilter(null);
+              } else {
+                setInsightFilter(type);
+              }
             }}
           />
         </FadeIn>
@@ -1760,15 +1837,15 @@ export default function SpreadsheetPage() {
 
       {/* Spreadsheet Table */}
       <FadeIn delay={0.25}>
-        {!isLoading && rows.length > 0 && (
+        {!isLoading && displayRows.length > 0 && (
           <div className="flex items-center gap-2 mb-2 text-xs text-muted-foreground">
-            <span>Showing {rows.length} items</span>
+            <span>Showing {displayRows.length} items</span>
             {((chargesData?.data?.length ?? 0) >= 100 || (expensesData?.data?.length ?? 0) >= 100 || (paymentsData?.data?.length ?? 0) >= 100) && (
               <span>(limited to 100 per type)</span>
             )}
           </div>
         )}
-        <div className="rounded-xl border bg-card overflow-hidden">
+        <div ref={tableRef} className="rounded-xl border bg-card overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -1928,7 +2005,7 @@ export default function SpreadsheetPage() {
                       <div className="flex items-center gap-1">
                         <div className="w-6 h-6" />
                         <div className="w-2" />
-                        {!inlineNewRow ? (
+                        {!inlineNewRow && (
                           <button
                             onClick={handleStartInlineRow}
                             className="w-6 h-6 flex items-center justify-center transition-colors hover:text-primary"
@@ -1936,23 +2013,19 @@ export default function SpreadsheetPage() {
                           >
                             <Plus className="w-3.5 h-3.5 text-muted-foreground hover:text-primary" />
                           </button>
-                        ) : (
-                          <div className="w-6 h-6" />
                         )}
-                        <button
-                          onClick={toggleSelectAll}
-                          className="w-6 h-6 flex items-center justify-center transition-colors hover:text-primary"
-                          title={isAllSelected ? "Deselect all" : "Select all"}
-                        >
-                          {isAllSelected ? (
-                            <CheckCircle2 className="w-3.5 h-3.5 text-primary" />
-                          ) : (
-                            <Circle className="w-3.5 h-3.5 text-muted-foreground hover:text-primary" />
-                          )}
-                        </button>
                       </div>
                     </td>
-                    <td colSpan={7}></td>
+                    <td colSpan={7}>
+                      {selectedRows.size > 0 && (
+                        <button
+                          onClick={() => setSelectedRows(new Set())}
+                          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          {selectedRows.size} selected — click to clear
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 )}
                 {/* Inline New Row */}
@@ -2134,13 +2207,20 @@ export default function SpreadsheetPage() {
                   paginatedRows.map((row, index) => (
                     <tr
                       key={row.id}
+                      onMouseEnter={() => handleRowMouseEnter(row.id)}
                       className={cn(
                         'animate-in-up group/row',
-                        'border-b border-border/50 hover:bg-secondary/30 transition-colors',
-                        row.type === 'charge' && 'bg-warning/5',
-                        row.type === 'expense' && 'bg-destructive/5',
-                        row.type === 'payment' && 'bg-success/5',
-                        row.isChild && 'bg-secondary/20',
+                        'border-b border-border/50 transition-colors',
+                        selectedRows.has(row.id)
+                          ? 'bg-primary/10 hover:bg-primary/15'
+                          : cn(
+                              'hover:bg-secondary/30',
+                              row.type === 'charge' && 'bg-warning/5',
+                              row.type === 'expense' && 'bg-destructive/5',
+                              row.type === 'payment' && 'bg-success/5',
+                            ),
+                        row.isChild && !selectedRows.has(row.id) && 'bg-secondary/20',
+                        isDragging && 'select-none',
                       )}
                     >
                       {isAdmin && (
@@ -2163,7 +2243,6 @@ export default function SpreadsheetPage() {
                             )}
                             {!row.isChild && (
                               <>
-                                {/* Phase 2: Insight dot indicator */}
                                 {insightsMap.has(row.id) ? (
                                   <TooltipProvider delayDuration={200}>
                                     <Tooltip>
@@ -2185,23 +2264,18 @@ export default function SpreadsheetPage() {
                                 >
                                   <Minus className="w-3.5 h-3.5 text-muted-foreground hover:text-destructive" />
                                 </button>
-                                <button
-                                  onClick={() => toggleRowSelection(row.id)}
-                                  className="w-6 h-6 flex items-center justify-center transition-colors"
-                                  title={selectedRows.has(row.id) ? "Deselect" : "Select"}
-                                >
-                                  {selectedRows.has(row.id) ? (
-                                    <CheckCircle2 className="w-3.5 h-3.5 text-primary" />
-                                  ) : (
-                                    <Circle className="w-3.5 h-3.5 text-muted-foreground hover:text-primary" />
-                                  )}
-                                </button>
                               </>
                             )}
                           </div>
                         </td>
                       )}
-                      <td className="px-3 py-3 w-24">
+                      <td
+                        className={cn(
+                          'px-3 py-3 w-24 cursor-default',
+                          activeCell?.rowId === row.id && activeCell?.column === 'date' && 'ring-2 ring-inset ring-primary/50',
+                        )}
+                        onMouseDown={(e) => handleRowMouseDown(row.id, 'date', e)}
+                      >
                         <div className="flex items-center gap-1">
                           {!isAdmin && row.isParent && (
                             <button
@@ -2229,7 +2303,13 @@ export default function SpreadsheetPage() {
                           />
                         </div>
                       </td>
-                      <td className="px-3 py-3 w-32">
+                      <td
+                        className={cn(
+                          'px-3 py-3 w-32 cursor-default',
+                          activeCell?.rowId === row.id && activeCell?.column === 'member' && 'ring-2 ring-inset ring-primary/50',
+                        )}
+                        onMouseDown={(e) => handleRowMouseDown(row.id, 'member', e)}
+                      >
                         {row.type === 'charge' || row.type === 'payment' ? (
                           <EditableCell
                             value={row.membershipId || ''}
@@ -2260,7 +2340,13 @@ export default function SpreadsheetPage() {
                           />
                         )}
                       </td>
-                      <td className="px-3 py-3 w-24">
+                      <td
+                        className={cn(
+                          'px-3 py-3 w-24 cursor-default',
+                          activeCell?.rowId === row.id && activeCell?.column === 'category' && 'ring-2 ring-inset ring-primary/50',
+                        )}
+                        onMouseDown={(e) => handleRowMouseDown(row.id, 'category', e)}
+                      >
                         {row.type === 'payment' ? (
                           <span className="text-xs text-muted-foreground">{row.category}</span>
                         ) : (
@@ -2278,7 +2364,14 @@ export default function SpreadsheetPage() {
                           />
                         )}
                       </td>
-                      <td className={cn("px-3 py-3 w-36", row.isChild && "pl-10")}>
+                      <td
+                        className={cn(
+                          "px-3 py-3 w-36 cursor-default",
+                          row.isChild && "pl-10",
+                          activeCell?.rowId === row.id && activeCell?.column === 'description' && 'ring-2 ring-inset ring-primary/50',
+                        )}
+                        onMouseDown={(e) => handleRowMouseDown(row.id, 'description', e)}
+                      >
                         <div className="flex items-center gap-2 min-w-0">
                           {row.isParent && (
                             <Badge variant="outline" className="text-[10px] shrink-0 bg-primary/10 text-primary border-primary/30">
@@ -2304,7 +2397,13 @@ export default function SpreadsheetPage() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-3 py-3 text-right w-24">
+                      <td
+                        className={cn(
+                          'px-3 py-3 text-right w-24 cursor-default',
+                          activeCell?.rowId === row.id && activeCell?.column === 'income' && 'ring-2 ring-inset ring-primary/50',
+                        )}
+                        onMouseDown={(e) => handleRowMouseDown(row.id, 'income', e)}
+                      >
                         {row.incomeCents > 0 ? (
                           row.type === 'charge' ? (
                             // Charge income = allocated payments (not editable, show payer tooltip)
@@ -2351,7 +2450,13 @@ export default function SpreadsheetPage() {
                           <span className="text-muted-foreground/30">-</span>
                         )}
                       </td>
-                      <td className="px-3 py-3 text-right w-24">
+                      <td
+                        className={cn(
+                          'px-3 py-3 text-right w-24 cursor-default',
+                          activeCell?.rowId === row.id && activeCell?.column === 'outstanding' && 'ring-2 ring-inset ring-primary/50',
+                        )}
+                        onMouseDown={(e) => handleRowMouseDown(row.id, 'outstanding', e)}
+                      >
                         {row.outstandingCents > 0 ? (
                           <EditableCell
                             value={row.outstandingCents}
@@ -2369,7 +2474,13 @@ export default function SpreadsheetPage() {
                           <span className="text-muted-foreground/30">-</span>
                         )}
                       </td>
-                      <td className="pl-3 pr-5 py-3 text-right w-24">
+                      <td
+                        className={cn(
+                          'pl-3 pr-5 py-3 text-right w-24 cursor-default',
+                          activeCell?.rowId === row.id && activeCell?.column === 'expense' && 'ring-2 ring-inset ring-primary/50',
+                        )}
+                        onMouseDown={(e) => handleRowMouseDown(row.id, 'expense', e)}
+                      >
                         {row.expenseCents > 0 ? (
                           <EditableCell
                             value={row.expenseCents}
@@ -2426,11 +2537,11 @@ export default function SpreadsheetPage() {
                 )}
               </tbody>
               {/* Totals Row */}
-              {!isLoading && rows.length > 0 && (
+              {!isLoading && displayRows.length > 0 && (
                 <tfoot>
                   <tr className="bg-secondary/50 font-medium">
                     <td className="px-3 py-3" colSpan={isAdmin ? 6 : 4}>
-                      <span className="text-muted-foreground">Total ({rows.length} transactions)</span>
+                      <span className="text-muted-foreground">Total ({displayRows.length} transactions)</span>
                     </td>
                     <td className="px-3 py-3 text-right">
                       <Money cents={totals.income} size="sm" className="text-success font-semibold" />
@@ -2450,7 +2561,7 @@ export default function SpreadsheetPage() {
       </FadeIn>
 
       {/* Pagination Controls - Bottom */}
-      {rows.length > 0 && (
+      {displayRows.length > 0 && (
         <FadeIn delay={0.3}>
           <Pagination page={page} totalPages={totalPages} onPageChange={setPage} className="justify-center pt-4" />
         </FadeIn>
