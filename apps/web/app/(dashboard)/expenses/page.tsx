@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback, memo } from 'react';
 
-import { Plus, Receipt, TrendingDown, Trash2, MoreHorizontal, Loader2, Search, Pencil, Circle, CheckCircle2, Upload, MoreVertical, FileSpreadsheet, FileText, AlertCircle } from 'lucide-react';
+import { Plus, Receipt, TrendingDown, Trash2, MoreHorizontal, Loader2, Search, Pencil, Upload, MoreVertical, FileSpreadsheet, FileText, AlertCircle } from 'lucide-react';
 import { useExpenses, useExpenseSummary, useDeleteExpense, useCreateExpense, useUpdateExpense, useRestoreExpense, useBulkDeleteExpenses } from '@/lib/queries/expenses';
 
 /** Strip "VENMO payment to " etc. prefixes from Gmail-imported expense titles */
@@ -95,26 +95,15 @@ const ExpenseCard = memo(function ExpenseCard({
   onToggleSelect?: () => void;
 }) {
   return (
-    <MotionCard>
+    <MotionCard
+      className={cn(
+        onToggleSelect && 'cursor-pointer transition-colors',
+        isSelected && 'ring-2 ring-primary/50 bg-primary/5',
+      )}
+      onClick={onToggleSelect ? () => onToggleSelect() : undefined}
+    >
       <MotionCardContent className="p-4">
         <div className="flex items-center justify-between">
-          {isAdmin && onToggleSelect && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleSelect();
-                }}
-                className="mr-3 flex items-center justify-center transition-colors"
-                aria-label={isSelected ? "Deselect expense" : "Select expense"}
-                aria-pressed={isSelected}
-              >
-                {isSelected ? (
-                  <CheckCircle2 className="w-5 h-5 text-primary" />
-                ) : (
-                  <Circle className="w-5 h-5 text-muted-foreground hover:text-primary" />
-                )}
-              </button>
-            )}
             <div className="flex items-center gap-4 flex-1">
               <AvatarGradient
                 name={expense.vendor || cleanExpenseTitle(expense.title)}
@@ -152,7 +141,7 @@ const ExpenseCard = memo(function ExpenseCard({
               {isAdmin ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Expense actions">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Expense actions" onClick={(e) => e.stopPropagation()}>
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -754,33 +743,23 @@ export default function ExpensesPage() {
       ) : (
         <>
           <div className="space-y-3">
-            {/* Select All Row */}
             {isAdmin && paginatedExpenses.length > 0 && (
-              <div className="rounded-xl border border-border/50 bg-secondary/20 p-4 flex items-center justify-between">
+              <div className="flex items-center justify-between px-1">
                 <button
                   onClick={toggleSelectAllExpenses}
-                  className="flex items-center gap-3 transition-colors"
-                  title={isAllExpensesSelected ? "Deselect all" : "Select all"}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  {isAllExpensesSelected ? (
-                    <CheckCircle2 className="w-5 h-5 text-primary" />
-                  ) : (
-                    <Circle className="w-5 h-5 text-muted-foreground hover:text-primary" />
-                  )}
-                  <span className="text-sm text-muted-foreground">
-                    {isAllExpensesSelected ? 'Deselect all' : 'Select all'}
-                  </span>
+                  {isAllExpensesSelected ? 'Deselect all' : 'Select all'}
+                  {selectedExpenses.size > 0 && !isAllExpensesSelected && ` (${selectedExpenses.size} selected)`}
                 </button>
-                <button
-                  onClick={() => setShowBulkDeleteConfirm(true)}
-                  className={cn(
-                    "w-7 h-7 flex items-center justify-center transition-all hover:text-destructive",
-                    selectedExpenses.size === 0 && "invisible"
-                  )}
-                  title={`Delete ${selectedExpenses.size} selected`}
-                >
-                  <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
-                </button>
+                {selectedExpenses.size > 0 && (
+                  <button
+                    onClick={() => setShowBulkDeleteConfirm(true)}
+                    className="text-xs text-destructive hover:text-destructive/80 transition-colors"
+                  >
+                    Delete {selectedExpenses.size}
+                  </button>
+                )}
               </div>
             )}
             <AnimatedList

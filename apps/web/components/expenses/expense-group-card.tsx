@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, useState } from 'react';
-import { MoreHorizontal, Pencil, Trash2, ChevronDown, ChevronRight, Layers, Circle, CheckCircle2 } from 'lucide-react';
+import { MoreHorizontal, Pencil, Trash2, ChevronDown, ChevronRight, Layers } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { EXPENSE_CATEGORY_LABELS, type ExpenseCategory } from '@ledgly/shared';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ import {
 import { Money } from '@/components/ui/money';
 import { MotionCard, MotionCardContent } from '@/components/ui/motion-card';
 import { AvatarGradient } from '@/components/ui/avatar-gradient';
+import { cn } from '@/lib/utils';
 
 const categoryColors: Record<string, string> = {
   EVENT: 'bg-purple-500/10 text-purple-400 border-purple-500/30',
@@ -47,25 +48,17 @@ export const ExpenseGroupCard = memo(function ExpenseGroupCard({
   const children = expense.children || [];
 
   return (
-    <MotionCard>
+    <MotionCard
+      className={cn(
+        onToggleSelect && 'cursor-pointer transition-colors',
+        isSelected && 'ring-2 ring-primary/50 bg-primary/5',
+      )}
+      onClick={onToggleSelect ? () => onToggleSelect() : undefined}
+    >
       <MotionCardContent className="p-4">
         <div className="flex items-center justify-between">
-          {isAdmin && onToggleSelect && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onToggleSelect(); }}
-              className="mr-3 flex items-center justify-center transition-colors shrink-0"
-              aria-label={isSelected ? 'Deselect expense group' : 'Select expense group'}
-              aria-pressed={isSelected}
-            >
-              {isSelected ? (
-                <CheckCircle2 className="w-5 h-5 text-primary" />
-              ) : (
-                <Circle className="w-5 h-5 text-muted-foreground hover:text-primary" />
-              )}
-            </button>
-          )}
           <button
-            onClick={() => setExpanded(!expanded)}
+            onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
             className="flex items-center gap-4 text-left flex-1 min-w-0"
           >
             <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
@@ -102,7 +95,7 @@ export const ExpenseGroupCard = memo(function ExpenseGroupCard({
             {isAdmin ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Group actions">
+                  <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Group actions" onClick={(e) => e.stopPropagation()}>
                     <MoreHorizontal className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -124,7 +117,7 @@ export const ExpenseGroupCard = memo(function ExpenseGroupCard({
               <div className="w-8 h-8" />
             )}
             <button
-              onClick={() => setExpanded(!expanded)}
+              onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
               className="p-2 rounded-lg hover:bg-secondary/50 transition-colors"
               aria-label={expanded ? 'Collapse' : 'Expand'}
               aria-expanded={expanded}

@@ -965,7 +965,9 @@ export default function MembersPage() {
                 actorRole={currentMembership?.role}
                 isSelf={member.id === currentMembership?.id}
                 isSelected={selectedRows.has(member.id)}
-                onToggleSelect={() => toggleRowSelection(member.id)}
+                onToggleSelect={member.id === currentMembership?.id ? () => {
+                  toast({ title: 'You cannot remove yourself', variant: 'destructive' });
+                } : () => toggleRowSelection(member.id)}
               />
             )}
           />

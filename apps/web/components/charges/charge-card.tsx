@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { AlertCircle, Check, MoreHorizontal, Pencil, Trash2, Circle, CheckCircle2, X, Link2 } from 'lucide-react';
+import { AlertCircle, Check, MoreHorizontal, Pencil, Trash2, X, Link2 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { CHARGE_CATEGORY_LABELS } from '@ledgly/shared';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import {
 import { Money } from '@/components/ui/money';
 import { AvatarGradient } from '@/components/ui/avatar-gradient';
 import { MotionCard, MotionCardContent } from '@/components/ui/motion-card';
+import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { StaggerItem } from '@/components/ui/page-transition';
 
@@ -45,26 +46,16 @@ export const ChargeCard = memo(function ChargeCard({
   const allocations = charge.allocations || [];
 
   const content = (
-    <MotionCard className={nested ? 'border-border/30' : ''}>
+    <MotionCard
+      className={cn(
+        nested ? 'border-border/30' : '',
+        !nested && onToggleSelect && 'cursor-pointer transition-colors',
+        !nested && isSelected && 'ring-2 ring-primary/50 bg-primary/5',
+      )}
+      onClick={!nested && onToggleSelect ? () => onToggleSelect() : undefined}
+    >
       <MotionCardContent className="p-4">
         <div className="flex items-center justify-between">
-          {isAdmin && onToggleSelect && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleSelect();
-              }}
-              className="mr-3 p-2 flex items-center justify-center transition-colors"
-              aria-label={isSelected ? "Deselect charge" : "Select charge"}
-              aria-pressed={isSelected}
-            >
-              {isSelected ? (
-                <CheckCircle2 className="w-5 h-5 text-primary" />
-              ) : (
-                <Circle className="w-5 h-5 text-muted-foreground hover:text-primary" />
-              )}
-            </button>
-          )}
           <div className="flex items-center gap-3 flex-1 min-w-0">
             <AvatarGradient
               name={charge.membership?.displayName || charge.title || 'Unknown'}
@@ -123,7 +114,7 @@ export const ChargeCard = memo(function ChargeCard({
             {isAdmin ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Charge actions">
+                  <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Charge actions" onClick={(e) => e.stopPropagation()}>
                     <MoreHorizontal className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -150,8 +141,6 @@ export const ChargeCard = memo(function ChargeCard({
             ) : (
               <div className="w-8 h-8" />
             )}
-            {/* Spacer matching the chevron button in group cards for consistent alignment */}
-            {!nested && <div className="w-8 h-8 hidden sm:block" />}
           </div>
         </div>
         {isAdmin && allocations.length > 0 && onUnallocate && (

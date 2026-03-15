@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useCallback, memo } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Plus, CreditCard, AlertCircle, TrendingUp, Wallet, Search, MoreHorizontal, Pencil, Trash2, Loader2, ChevronDown, Link2, Check, Users, Circle, CheckCircle2, X, UserPlus, Receipt, MoreVertical, FileSpreadsheet, FileText, Mail, RefreshCw } from 'lucide-react';
+import { Plus, CreditCard, AlertCircle, TrendingUp, Wallet, Search, MoreHorizontal, Pencil, Trash2, Loader2, ChevronDown, Link2, Check, Users, X, UserPlus, Receipt, MoreVertical, FileSpreadsheet, FileText, Mail, RefreshCw } from 'lucide-react';
 import { useAutoAllocateToCharge, useRemoveAllocation, useBulkAutoAllocate } from '@/lib/queries/payments';
 import { cn } from '@/lib/utils';
 import { groupCharges } from '@/lib/utils/charge-grouping';
@@ -101,26 +101,15 @@ const PaymentCard = memo(function PaymentCard({
   const hasUnallocated = payment.unallocatedCents > 0;
 
   return (
-    <MotionCard>
+    <MotionCard
+      className={cn(
+        onToggleSelect && 'cursor-pointer transition-colors',
+        isSelected && 'ring-2 ring-primary/50 bg-primary/5',
+      )}
+      onClick={onToggleSelect ? () => onToggleSelect() : undefined}
+    >
       <MotionCardContent className="p-4">
         <div className="flex items-start gap-4">
-            {isAdmin && onToggleSelect && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleSelect();
-                }}
-                className="mt-1 flex items-center justify-center transition-colors shrink-0"
-                aria-label={isSelected ? "Deselect payment" : "Select payment"}
-                aria-pressed={isSelected}
-              >
-                {isSelected ? (
-                  <CheckCircle2 className="w-5 h-5 text-primary" />
-                ) : (
-                  <Circle className="w-5 h-5 text-muted-foreground hover:text-primary" />
-                )}
-              </button>
-            )}
             <AvatarGradient
               name={payment.rawPayerName || 'Unknown'}
               size="md"
@@ -169,7 +158,7 @@ const PaymentCard = memo(function PaymentCard({
               {isAdmin ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Payment actions">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Payment actions" onClick={(e) => e.stopPropagation()}>
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -1049,63 +1038,54 @@ export default function PaymentsPage() {
       ) : (
         <>
           <div className="space-y-3">
-            {/* Select All Row */}
             {isAdmin && paginatedPayments.length > 0 && (
-              <div className="rounded-xl border border-border/50 bg-secondary/20 p-4 flex items-center justify-between">
+              <div className="flex items-center justify-between px-1">
                 <button
                   onClick={toggleSelectAllPayments}
-                  className="flex items-center gap-3 transition-colors"
-                  title={isAllPaymentsSelected ? "Deselect all" : "Select all"}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  {isAllPaymentsSelected ? (
-                    <CheckCircle2 className="w-5 h-5 text-primary" />
-                  ) : (
-                    <Circle className="w-5 h-5 text-muted-foreground hover:text-primary" />
-                  )}
-                  <span className="text-sm text-muted-foreground">
-                    {isAllPaymentsSelected ? 'Deselect all' : 'Select all'}
-                  </span>
+                  {isAllPaymentsSelected ? 'Deselect all' : 'Select all'}
+                  {selectedPayments.size > 0 && !isAllPaymentsSelected && ` (${selectedPayments.size} selected)`}
                 </button>
-                <div className={cn(
-                  "flex items-center gap-1",
-                  selectedPayments.size === 0 && "invisible"
-                )}>
-                  <button
-                    onClick={handleBulkAutoAllocate}
-                    className="w-7 h-7 flex items-center justify-center transition-all hover:text-primary"
-                    title={`Auto-match ${selectedPayments.size} selected`}
-                    disabled={bulkAutoAllocate.isPending}
-                  >
-                    {bulkAutoAllocate.isPending ? (
-                      <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                    ) : (
-                      <Link2 className="w-4 h-4 text-muted-foreground hover:text-primary" />
-                    )}
-                  </button>
-                  <button
-                    onClick={handleBulkCreateCharges}
-                    className="w-7 h-7 flex items-center justify-center transition-all hover:text-primary"
-                    title={`Create charges for ${selectedPayments.size} selected`}
-                    disabled={bulkCreateCharges.isPending}
-                  >
-                    <Receipt className="w-4 h-4 text-muted-foreground hover:text-primary" />
-                  </button>
-                  <button
-                    onClick={handleBulkCreateMembers}
-                    className="w-7 h-7 flex items-center justify-center transition-all hover:text-primary"
-                    title={`Create members from ${selectedPayments.size} selected`}
-                    disabled={createMembers.isPending}
-                  >
-                    <UserPlus className="w-4 h-4 text-muted-foreground hover:text-primary" />
-                  </button>
-                  <button
-                    onClick={handleBulkDeletePayments}
-                    className="w-7 h-7 flex items-center justify-center transition-all hover:text-destructive"
-                    title={`Delete ${selectedPayments.size} selected`}
-                  >
-                    <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
-                  </button>
-                </div>
+                {selectedPayments.size > 0 && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={handleBulkAutoAllocate}
+                      className="w-7 h-7 flex items-center justify-center transition-all hover:text-primary"
+                      title={`Auto-match ${selectedPayments.size} selected`}
+                      disabled={bulkAutoAllocate.isPending}
+                    >
+                      {bulkAutoAllocate.isPending ? (
+                        <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                      ) : (
+                        <Link2 className="w-4 h-4 text-muted-foreground hover:text-primary" />
+                      )}
+                    </button>
+                    <button
+                      onClick={handleBulkCreateCharges}
+                      className="w-7 h-7 flex items-center justify-center transition-all hover:text-primary"
+                      title={`Create charges for ${selectedPayments.size} selected`}
+                      disabled={bulkCreateCharges.isPending}
+                    >
+                      <Receipt className="w-4 h-4 text-muted-foreground hover:text-primary" />
+                    </button>
+                    <button
+                      onClick={handleBulkCreateMembers}
+                      className="w-7 h-7 flex items-center justify-center transition-all hover:text-primary"
+                      title={`Create members from ${selectedPayments.size} selected`}
+                      disabled={createMembers.isPending}
+                    >
+                      <UserPlus className="w-4 h-4 text-muted-foreground hover:text-primary" />
+                    </button>
+                    <button
+                      onClick={handleBulkDeletePayments}
+                      className="w-7 h-7 flex items-center justify-center transition-all hover:text-destructive"
+                      title={`Delete ${selectedPayments.size} selected`}
+                    >
+                      <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
+                    </button>
+                  </div>
+                )}
               </div>
             )}
             <AnimatedList

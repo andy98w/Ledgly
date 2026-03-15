@@ -1318,13 +1318,14 @@ export default function SpreadsheetPage() {
 
   const handleRowMouseDown = useCallback((rowId: string, column: string, e: React.MouseEvent) => {
     if (e.button !== 0) return;
-    // Don't interfere with editing cells or interactive elements
     if (editingCell) return;
+
+    // Double-click: enter edit mode instead of selecting
+    if (e.detail === 2) return;
 
     setActiveCell({ rowId, column });
 
     if (e.shiftKey && selectedRows.size > 0) {
-      // Shift+click: range select from last selected to this row
       const lastSelectedId = Array.from(selectedRows).pop();
       if (lastSelectedId) {
         const startIdx = paginatedRows.findIndex((r) => r.id === lastSelectedId);
@@ -1339,13 +1340,14 @@ export default function SpreadsheetPage() {
     }
 
     if (e.metaKey || e.ctrlKey) {
-      // Cmd/Ctrl+click: toggle single row
       toggleRowSelection(rowId);
       return;
     }
 
-    // Plain click: select single row, start potential drag
-    setSelectedRows(new Set([rowId]));
+    // Only update selection if this isn't already the sole selected row
+    if (!(selectedRows.size === 1 && selectedRows.has(rowId))) {
+      setSelectedRows(new Set([rowId]));
+    }
     setIsDragging(true);
     setDragStartRowId(rowId);
   }, [editingCell, selectedRows, paginatedRows, toggleRowSelection]);
@@ -1948,7 +1950,7 @@ export default function SpreadsheetPage() {
                       )}
                     </span>
                   </th>
-                  <th className="text-left px-2 py-2 font-medium text-muted-foreground w-36">Title</th>
+                  <th className="text-left px-2 py-2 font-medium text-muted-foreground">Title</th>
                   <th
                     className="text-right px-2 py-2 font-medium text-success cursor-pointer hover:text-success/80 select-none w-24"
                     onClick={() => {

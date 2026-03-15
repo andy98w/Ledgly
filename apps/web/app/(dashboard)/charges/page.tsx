@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Plus, Receipt, TrendingUp, Percent, Search, Trash2, Circle, CheckCircle2, Mail, Upload, MoreVertical, Download, FileSpreadsheet, FileText, ArrowUpDown, AlertCircle, Calendar, Repeat } from 'lucide-react';
+import { Plus, Receipt, TrendingUp, Percent, Search, Trash2, Mail, Upload, MoreVertical, Download, FileSpreadsheet, FileText, ArrowUpDown, AlertCircle, Calendar, Repeat } from 'lucide-react';
 import { useCharges, useUpdateCharge, useVoidCharge, useRestoreCharge, useCreateCharge, useBulkVoidCharges, useSendChargeReminders, useBulkCreateCharges } from '@/lib/queries/charges';
 import { useSchedules, useCreateSchedule, useUpdateSchedule, useDeleteSchedule } from '@/lib/queries/schedules';
 import { useMembers, useCreateMembers } from '@/lib/queries/members';
@@ -877,14 +877,22 @@ export default function ChargesPage() {
         <>
           <div className="space-y-3">
             {isAdmin && paginatedGroups.length > 0 && (
-              <div className="rounded-xl border border-border/50 bg-secondary/20 p-4 flex items-center justify-between">
-                <button onClick={toggleSelectAllCharges} className="flex items-center gap-3 transition-colors" aria-label={isAllChargesSelected ? "Deselect all charges" : "Select all charges"} aria-pressed={isAllChargesSelected}>
-                  {isAllChargesSelected ? <CheckCircle2 className="w-5 h-5 text-primary" /> : <Circle className="w-5 h-5 text-muted-foreground hover:text-primary" />}
-                  <span className="text-sm text-muted-foreground">{isAllChargesSelected ? 'Deselect all' : 'Select all'}</span>
+              <div className="flex items-center justify-between px-1">
+                <button
+                  onClick={toggleSelectAllCharges}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {isAllChargesSelected ? 'Deselect all' : 'Select all'}
+                  {selectedCharges.size > 0 && !isAllChargesSelected && ` (${selectedCharges.size} selected)`}
                 </button>
-                <button onClick={() => setShowBulkVoidConfirm(true)} className={cn("w-7 h-7 flex items-center justify-center transition-all hover:text-destructive", selectedCharges.size === 0 && "invisible")} aria-label={`Delete ${selectedCharges.size} selected charges`}>
-                  <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
-                </button>
+                {selectedCharges.size > 0 && (
+                  <button
+                    onClick={() => setShowBulkVoidConfirm(true)}
+                    className="text-xs text-destructive hover:text-destructive/80 transition-colors"
+                  >
+                    Delete {selectedCharges.size}
+                  </button>
+                )}
               </div>
             )}
             <AnimatedList

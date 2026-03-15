@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, useState } from 'react';
-import { AlertCircle, Check, MoreHorizontal, Pencil, Trash2, ChevronDown, ChevronRight, Users, Circle, CheckCircle2 } from 'lucide-react';
+import { AlertCircle, Check, MoreHorizontal, Pencil, Trash2, ChevronDown, ChevronRight, Users } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { CHARGE_CATEGORY_LABELS } from '@ledgly/shared';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,7 @@ import { Money } from '@/components/ui/money';
 import { MotionCard, MotionCardContent } from '@/components/ui/motion-card';
 import { StaggerItem } from '@/components/ui/page-transition';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import { ChargeCard } from './charge-card';
 import type { ChargeGroup } from '@/lib/utils/charge-grouping';
 
@@ -76,28 +77,17 @@ export const ChargeGroupCard = memo(function ChargeGroupCard({
 
   return (
     <StaggerItem>
-      <MotionCard>
+      <MotionCard
+        className={cn(
+          onToggleSelectGroup && 'cursor-pointer transition-colors',
+          isGroupSelected && 'ring-2 ring-primary/50 bg-primary/5',
+        )}
+        onClick={onToggleSelectGroup ? () => onToggleSelectGroup(groupChargeIds) : undefined}
+      >
         <MotionCardContent className="p-4">
           <div className="flex items-center justify-between">
-            {isAdmin && onToggleSelectGroup && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleSelectGroup(groupChargeIds);
-                }}
-                className="mr-3 flex items-center justify-center transition-colors shrink-0"
-                aria-label={isGroupSelected ? "Deselect charge group" : "Select charge group"}
-                aria-pressed={isGroupSelected}
-              >
-                {isGroupSelected ? (
-                  <CheckCircle2 className="w-5 h-5 text-primary" />
-                ) : (
-                  <Circle className="w-5 h-5 text-muted-foreground hover:text-primary" />
-                )}
-              </button>
-            )}
             <button
-              onClick={() => setExpanded(!expanded)}
+              onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
               className="flex items-center gap-3 text-left flex-1 min-w-0"
             >
               <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
@@ -162,7 +152,7 @@ export const ChargeGroupCard = memo(function ChargeGroupCard({
               {isAdmin ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Group actions">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Group actions" onClick={(e) => e.stopPropagation()}>
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -184,7 +174,7 @@ export const ChargeGroupCard = memo(function ChargeGroupCard({
                 <div className="w-8 h-8" />
               )}
               <button
-                onClick={() => setExpanded(!expanded)}
+                onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
                 className="p-2 rounded-lg hover:bg-secondary/50 transition-colors"
                 aria-label={expanded ? 'Collapse group' : 'Expand group'}
                 aria-expanded={expanded}
