@@ -839,7 +839,6 @@ export default function SpreadsheetPage() {
     let outstanding = 0;
     let expenses = 0;
     for (const r of displayRows) {
-      if (r.isUnallocated) continue;
       income += r.incomeCents;
       outstanding += r.outstandingCents;
       expenses += r.expenseCents;
