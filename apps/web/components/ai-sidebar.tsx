@@ -83,7 +83,7 @@ export function AISidebar() {
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
   const user = useAuthStore((s) => s.user);
   const userName = user?.name || user?.email || 'You';
-  const { isOpen, close, toggle, width, setWidth } = useAISidebarStore();
+  const { isOpen, close, toggle, width, setWidth, consumePendingMessage } = useAISidebarStore();
 
   const { data: dashboardStats } = useDashboard(currentOrgId);
   const suggestions = useAISuggestions(dashboardStats);
@@ -405,6 +405,14 @@ export function AISidebar() {
       setIsStreaming(false);
     }
   }, [input, csvFile, isStreaming, currentOrgId, messages, sessionId, createSession, saveMessages, hasSpreadsheetContext, spreadsheetRows]);
+
+  useEffect(() => {
+    if (!isOpen || isStreaming) return;
+    const pending = consumePendingMessage();
+    if (pending) {
+      setTimeout(() => handleSend(pending), 300);
+    }
+  }, [isOpen]);
 
   const handleConfirm = async (messageId: string, modifiedActions?: ProposedAction[]) => {
     if (!currentOrgId) return;

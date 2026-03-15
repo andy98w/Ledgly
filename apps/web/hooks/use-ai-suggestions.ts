@@ -5,6 +5,7 @@ export interface AISuggestion {
   type: string;
   message: string;
   action: string;
+  prompt: string;
   count?: number;
   priority: 'high' | 'medium' | 'low';
 }
@@ -20,6 +21,7 @@ export function useAISuggestions(stats: DashboardStats | undefined): AISuggestio
         type: 'overdue',
         message: `${stats.overdueCount} charge${stats.overdueCount !== 1 ? 's are' : ' is'} overdue`,
         action: 'Send reminders',
+        prompt: 'Send reminders for all overdue charges',
         count: stats.overdueCount,
         priority: 'high',
       });
@@ -32,6 +34,7 @@ export function useAISuggestions(stats: DashboardStats | undefined): AISuggestio
         type: 'unmatched',
         message: `${unmatched.length} payment${unmatched.length !== 1 ? 's' : ''} need matching`,
         action: 'Auto-match',
+        prompt: 'Auto-match all unallocated payments to their charges',
         count: unmatched.length,
         priority: totalUnmatchedCents > 10000 ? 'high' : 'medium',
       });
@@ -43,6 +46,7 @@ export function useAISuggestions(stats: DashboardStats | undefined): AISuggestio
         type: 'outstanding',
         message: `$${dollars.toLocaleString()} in unpaid charges`,
         action: 'View details',
+        prompt: 'Show me a breakdown of all unpaid charges by member',
         count: stats.openChargesCount,
         priority: stats.totalOutstandingCents > 50000 ? 'high' : 'medium',
       });
@@ -55,6 +59,7 @@ export function useAISuggestions(stats: DashboardStats | undefined): AISuggestio
           type: 'balance',
           message: `Members owe $${Math.round(avgPerMember / 100).toLocaleString()} on average`,
           action: 'View balances',
+          prompt: 'Show me all member balances sorted by amount owed',
           priority: 'low',
         });
       }

@@ -186,7 +186,7 @@ export default function DashboardPage() {
                     size="sm"
                     variant="outline"
                     className="text-xs shrink-0 ml-3"
-                    onClick={openAISidebar}
+                    onClick={() => openAISidebar(s.prompt)}
                   >
                     {s.action}
                   </Button>

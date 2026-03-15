@@ -771,7 +771,10 @@ export default function MembersPage() {
       .filter((m) => selectedRows.has(m.id) && m.id !== currentMembership?.id)
       .map((m) => m.id);
 
-    if (memberIds.length === 0) return;
+    if (memberIds.length === 0) {
+      toast({ title: 'You cannot remove yourself', variant: 'destructive' });
+      return;
+    }
 
     try {
       const result = await bulkDeleteMembers.mutateAsync({ orgId: currentOrgId, memberIds });
@@ -965,9 +968,7 @@ export default function MembersPage() {
                 actorRole={currentMembership?.role}
                 isSelf={member.id === currentMembership?.id}
                 isSelected={selectedRows.has(member.id)}
-                onToggleSelect={member.id === currentMembership?.id ? () => {
-                  toast({ title: 'You cannot remove yourself', variant: 'destructive' });
-                } : () => toggleRowSelection(member.id)}
+                onToggleSelect={() => toggleRowSelection(member.id)}
               />
             )}
           />

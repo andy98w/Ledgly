@@ -8,22 +8,30 @@ export const SIDEBAR_DEFAULT_WIDTH = 400;
 interface AISidebarState {
   isOpen: boolean;
   width: number;
-  open: () => void;
+  pendingMessage: string | null;
+  open: (message?: string) => void;
   close: () => void;
   toggle: () => void;
   setWidth: (w: number) => void;
+  consumePendingMessage: () => string | null;
 }
 
 export const useAISidebarStore = create<AISidebarState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       isOpen: false,
       width: SIDEBAR_DEFAULT_WIDTH,
-      open: () => set({ isOpen: true }),
+      pendingMessage: null,
+      open: (message?: string) => set({ isOpen: true, pendingMessage: message || null }),
       close: () => set({ isOpen: false }),
       toggle: () => set((s) => ({ isOpen: !s.isOpen })),
       setWidth: (w: number) => set({ width: Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, w)) }),
+      consumePendingMessage: () => {
+        const msg = get().pendingMessage;
+        if (msg) set({ pendingMessage: null });
+        return msg;
+      },
     }),
-    { name: 'ledgly-ai-sidebar' },
+    { name: 'ledgly-ai-sidebar', partialize: (s) => ({ isOpen: s.isOpen, width: s.width }) },
   ),
 );

@@ -48,7 +48,7 @@ export function MobileNav() {
         })}
 
         <button
-          onClick={openAI}
+          onClick={() => openAI()}
           className={cn(
             'relative flex flex-col items-center justify-center flex-1 h-full touch-target transition-colors',
             isAIOpen ? 'text-primary' : 'text-muted-foreground',
