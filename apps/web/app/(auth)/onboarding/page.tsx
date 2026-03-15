@@ -1,9 +1,9 @@
 'use client';
 
-import { Suspense, useState, useEffect, useRef } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { Sun, Moon, Monitor, Mail, MailX, Check, Plus, Trash2, Loader2, ChevronLeft, CreditCard, Palette, Users, LogIn } from 'lucide-react';
+import { Sun, Moon, Monitor, Mail, Check, Plus, Trash2, Loader2, ChevronLeft, Users, LogIn } from 'lucide-react';
 import Image from 'next/image';
 import { useCreateOrganization, useUpdateOrganization, useResolveJoinCode, useJoinOrganization } from '@/lib/queries/organizations';
 import { useCreateMembers } from '@/lib/queries/members';
@@ -29,7 +29,7 @@ const themeOptions = [
   { value: 'system', label: 'System', icon: Monitor },
 ];
 
-const STEP_LABELS = ['Organization', 'Gmail', 'Sources', 'Theme', 'Members'];
+const STEP_LABELS = ['Organization', 'Setup', 'Team'];
 
 let nextMemberKey = 1;
 
@@ -49,7 +49,6 @@ function OnboardingWizard() {
   const createOrganization = useCreateOrganization();
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
 
-  // Determine initial step from URL params (for OAuth return)
   const urlStep = searchParams.get('step');
   const urlOrgId = searchParams.get('orgId');
   const connected = searchParams.get('connected');
@@ -64,7 +63,6 @@ function OnboardingWizard() {
   const [members, setMembers] = useState([{ key: nextMemberKey++, name: '', email: '' }]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Join mode state
   const [joinMode, setJoinMode] = useState(false);
   const [joinCode, setJoinCode] = useState('');
   const [submittedJoinCode, setSubmittedJoinCode] = useState('');
@@ -74,7 +72,6 @@ function OnboardingWizard() {
   const { data: resolved, isLoading: resolving, error: resolveError } = useResolveJoinCode(submittedJoinCode || null);
   const joinOrg = useJoinOrganization();
 
-  // Handle OAuth return — resume at step 2 with org already created
   useEffect(() => {
     if (urlStep && urlOrgId) {
       setStep(parseInt(urlStep, 10));
@@ -85,11 +82,8 @@ function OnboardingWizard() {
     }
   }, [urlStep, urlOrgId, connected]);
 
-  // Back navigation: step 2 goes back to 1, step 3 goes back to 1 if Gmail was skipped (source step was skipped), else 2
   const handleBack = () => {
-    if (step === 2) setStep(1);
-    else if (step === 3) setStep(gmailConnected ? 2 : 1);
-    else if (step === 4) setStep(3);
+    if (step > 0) setStep(step - 1);
   };
 
   const handleCreateOrg = async () => {
@@ -141,36 +135,31 @@ function OnboardingWizard() {
 
   const handleConnectGmail = () => {
     if (!orgId) return;
-    const returnTo = `/onboarding?step=2&orgId=${orgId}`;
+    const returnTo = `/onboarding?step=1&orgId=${orgId}`;
     window.location.href = getGmailConnectUrl(orgId, returnTo);
-  };
-
-  const handleSkipGmail = () => {
-    setStep(3);
-  };
-
-  const handleSaveSources = async () => {
-    if (!orgId) return;
-    try {
-      await updateOrganization.mutateAsync({ enabledPaymentSources: enabledSources });
-      setStep(3);
-    } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to save payment sources',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const handleThemeNext = () => {
-    setStep(4);
   };
 
   const toggleSource = (sourceId: string) => {
     setEnabledSources((prev) =>
       prev.includes(sourceId) ? prev.filter((s) => s !== sourceId) : [...prev, sourceId],
     );
+  };
+
+  const handleSetupContinue = async () => {
+    if (!orgId) return;
+    setIsSubmitting(true);
+    try {
+      await updateOrganization.mutateAsync({ enabledPaymentSources: enabledSources });
+      setStep(2);
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to save settings',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const addMemberRow = () => {
@@ -200,7 +189,8 @@ function OnboardingWizard() {
           })),
         });
       }
-      router.push('/agent');
+      toast({ title: 'Welcome to Ledgly! \u{1F389}' });
+      router.push('/dashboard');
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -212,31 +202,11 @@ function OnboardingWizard() {
     }
   };
 
-  // Step icon config for consistent visual anchors
-  const stepIcons: Record<number, { icon: React.ElementType; bg: string; fg: string }> = {
-    1: { icon: Mail, bg: 'bg-primary/10', fg: 'text-primary' },
-    2: { icon: CreditCard, bg: 'bg-primary/10', fg: 'text-primary' },
-    3: { icon: Palette, bg: 'bg-primary/10', fg: 'text-primary' },
-    4: { icon: Users, bg: 'bg-primary/10', fg: 'text-primary' },
-  };
-
-  const StepIcon = ({ stepNum }: { stepNum: number }) => {
-    const config = stepIcons[stepNum];
-    if (!config) return null;
-    const Icon = config.icon;
-    return (
-      <div className={cn('w-12 h-12 mx-auto mb-4 rounded-xl flex items-center justify-center', config.bg)}>
-        <Icon className={cn('h-6 w-6', config.fg)} />
-      </div>
-    );
-  };
-
   return (
     <>
-      {/* Progress indicator */}
-      <div className="mb-6">
+      <div className="mb-4">
         <div className="flex items-center justify-center gap-2">
-          {[0, 1, 2, 3, 4].map((s) => (
+          {[0, 1, 2].map((s) => (
             <div
               key={s}
               className={cn(
@@ -246,16 +216,15 @@ function OnboardingWizard() {
             />
           ))}
         </div>
-        <p className="text-xs text-muted-foreground text-center mt-2">
-          Step {step + 1} of 5 &middot; {STEP_LABELS[step]}
+        <p className="text-xs text-muted-foreground text-center mt-1.5">
+          {STEP_LABELS[step]}
         </p>
       </div>
 
-      {/* Step 0: Org Name / Join */}
       {step === 0 && (
         <>
-          <CardHeader className="text-center px-0 pt-0">
-            <Image src="/logo.png" alt="Ledgly" width={48} height={48} className="mx-auto mb-4 w-12 h-12 rounded-xl" />
+          <CardHeader className="text-center px-0 pt-0 pb-4">
+            <Image src="/logo.png" alt="Ledgly" width={48} height={48} className="mx-auto mb-3 w-12 h-12 rounded-xl" />
             <CardTitle>{joinMode ? 'Join an organization' : 'Create your organization'}</CardTitle>
             <CardDescription>
               {joinMode
@@ -271,9 +240,9 @@ function OnboardingWizard() {
                     e.preventDefault();
                     handleCreateOrg();
                   }}
-                  className="space-y-4"
+                  className="space-y-3"
                 >
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <Label htmlFor="name">Organization Name</Label>
                     <Input
                       id="name"
@@ -300,7 +269,7 @@ function OnboardingWizard() {
                   </Button>
                 </form>
 
-                <div className="relative my-6">
+                <div className="relative my-5">
                   <div className="absolute inset-0 flex items-center">
                     <div className="w-full border-t border-border" />
                   </div>
@@ -318,8 +287,7 @@ function OnboardingWizard() {
                 </button>
               </>
             ) : (
-              <div className="space-y-4">
-                {/* Resolved org — show join confirmation */}
+              <div className="space-y-3">
                 {submittedJoinCode && resolved && !resolveError ? (
                   <>
                     <div className="text-center py-2">
@@ -364,8 +332,8 @@ function OnboardingWizard() {
                         Invalid or disabled code. Check with your admin.
                       </div>
                     )}
-                    <form onSubmit={handleJoinLookup} className="space-y-4">
-                      <div className="space-y-2">
+                    <form onSubmit={handleJoinLookup} className="space-y-3">
+                      <div className="space-y-1.5">
                         <Label htmlFor="joinCode">Join Code</Label>
                         <Input
                           id="joinCode"
@@ -407,105 +375,116 @@ function OnboardingWizard() {
         </>
       )}
 
-      {/* Step 1: Connect Gmail */}
       {step === 1 && (
         <>
-          <CardHeader className="text-center px-0 pt-0">
-            <StepIcon stepNum={1} />
-            <CardTitle>Connect Gmail</CardTitle>
-            <CardDescription>
-              Automatically import payment notifications from Venmo, Zelle, Cash App, and PayPal
-            </CardDescription>
+          <CardHeader className="text-center px-0 pt-0 pb-4">
+            <CardTitle>Get started</CardTitle>
+            <CardDescription>Connect your accounts and set your preferences</CardDescription>
           </CardHeader>
-          <CardContent className="px-0 pb-0 space-y-4">
-            <button
-              onClick={handleConnectGmail}
-              className="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-border/50 hover:border-primary hover:bg-primary/5 active:scale-[0.98] transition-all text-left"
-            >
-              <div className="p-3 rounded-xl bg-primary/10">
-                <Mail className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p className="font-medium">Connect Gmail</p>
-                <p className="text-sm text-muted-foreground">
-                  Import payment emails automatically
-                </p>
-              </div>
-            </button>
-            <button
-              onClick={handleSkipGmail}
-              className="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-border/50 hover:border-border hover:bg-secondary/50 active:scale-[0.98] transition-all text-left"
-            >
-              <div className="p-3 rounded-xl bg-secondary">
-                <MailX className="h-5 w-5 text-muted-foreground" />
-              </div>
-              <div>
-                <p className="font-medium">Skip for now</p>
-                <p className="text-sm text-muted-foreground">
-                  You can connect later in Settings
-                </p>
-              </div>
-            </button>
-            <Button variant="ghost" size="sm" onClick={handleBack} className="w-full text-muted-foreground">
-              <ChevronLeft className="w-4 h-4 mr-1" />
-              Back
-            </Button>
-          </CardContent>
-        </>
-      )}
+          <CardContent className="px-0 pb-0 space-y-5">
+            <div>
+              <Label className="text-xs uppercase tracking-wide text-muted-foreground mb-2 block">Gmail</Label>
+              {gmailConnected ? (
+                <div className="flex items-center gap-3 p-3 rounded-xl border-2 border-primary bg-primary/5">
+                  <div className="p-2 rounded-lg bg-primary/10">
+                    <Check className="h-4 w-4 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-sm">Gmail connected</p>
+                    <p className="text-xs text-muted-foreground">Payment emails will be imported automatically</p>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={handleConnectGmail}
+                  className="w-full flex items-center gap-3 p-3 rounded-xl border-2 border-border/50 hover:border-primary hover:bg-primary/5 active:scale-[0.98] transition-all text-left"
+                >
+                  <div className="p-2 rounded-lg bg-primary/10">
+                    <Mail className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-medium text-sm">Connect Gmail to auto-import payments</p>
+                    <p className="text-xs text-muted-foreground">Venmo, Zelle, Cash App, and PayPal</p>
+                  </div>
+                </button>
+              )}
+              {!gmailConnected && (
+                <p className="text-xs text-muted-foreground mt-1.5 ml-1">You can always connect later in Settings</p>
+              )}
+            </div>
 
-      {/* Step 2: Payment Sources (only after Gmail connected) */}
-      {step === 2 && (
-        <>
-          <CardHeader className="text-center px-0 pt-0">
-            <StepIcon stepNum={2} />
-            <CardTitle>Payment Sources</CardTitle>
-            <CardDescription>
-              Choose which payment platforms to monitor for incoming payments
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="px-0 pb-0 space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              {PAYMENT_SOURCES.map((source) => {
-                const isActive = enabledSources.includes(source.id);
-                return (
-                  <button
-                    key={source.id}
-                    onClick={() => toggleSource(source.id)}
-                    className={cn(
-                      'flex items-center gap-3 p-3 rounded-xl border-2 transition-all active:scale-[0.98] text-left',
-                      isActive
-                        ? 'border-primary bg-primary/10'
-                        : 'border-border/50 hover:border-border hover:bg-secondary/50',
-                    )}
-                  >
-                    <div
+            <div>
+              <Label className="text-xs uppercase tracking-wide text-muted-foreground mb-2 block">Payment sources</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {PAYMENT_SOURCES.map((source) => {
+                  const isActive = enabledSources.includes(source.id);
+                  return (
+                    <button
+                      key={source.id}
+                      onClick={() => toggleSource(source.id)}
                       className={cn(
-                        'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all',
-                        isActive ? 'border-primary bg-primary' : 'border-muted-foreground/30',
+                        'flex items-center gap-2.5 px-3 py-2 rounded-lg border-2 transition-all active:scale-[0.98] text-left',
+                        isActive
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border/50 hover:border-border hover:bg-secondary/50',
                       )}
                     >
-                      {isActive && <Check className="w-3 h-3 text-primary-foreground" />}
-                    </div>
-                    <span className={cn('font-medium text-sm', isActive ? 'text-primary' : 'text-muted-foreground')}>
-                      {source.label}
-                    </span>
-                  </button>
-                );
-              })}
+                      <div
+                        className={cn(
+                          'w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-all',
+                          isActive ? 'border-primary bg-primary' : 'border-muted-foreground/30',
+                        )}
+                      >
+                        {isActive && <Check className="w-2.5 h-2.5 text-primary-foreground" />}
+                      </div>
+                      <span className={cn('font-medium text-sm', isActive ? 'text-primary' : 'text-muted-foreground')}>
+                        {source.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
+
+            <div>
+              <Label className="text-xs uppercase tracking-wide text-muted-foreground mb-2 block">Theme</Label>
+              <div className="flex gap-2">
+                {themeOptions.map((option) => {
+                  const isActive = theme === option.value;
+                  const Icon = option.icon;
+                  return (
+                    <button
+                      key={option.value}
+                      onClick={() => setTheme(option.value)}
+                      className={cn(
+                        'flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition-all active:scale-[0.98]',
+                        isActive
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border/50 hover:border-border hover:bg-secondary/50',
+                      )}
+                    >
+                      <Icon className={cn('h-4 w-4', isActive ? 'text-primary' : 'text-muted-foreground')} />
+                      <span className={cn('text-sm font-medium', isActive ? 'text-primary' : 'text-muted-foreground')}>
+                        {option.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <Button
-              onClick={handleSaveSources}
+              onClick={handleSetupContinue}
               className="w-full"
-              disabled={updateOrganization.isPending}
+              disabled={isSubmitting}
             >
-              {updateOrganization.isPending ? (
+              {isSubmitting ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   Saving...
                 </>
               ) : (
-                'Next'
+                'Continue'
               )}
             </Button>
             <Button variant="ghost" size="sm" onClick={handleBack} className="w-full text-muted-foreground">
@@ -516,85 +495,41 @@ function OnboardingWizard() {
         </>
       )}
 
-      {/* Step 3: Appearance */}
-      {step === 3 && (
+      {step === 2 && (
         <>
-          <CardHeader className="text-center px-0 pt-0">
-            <StepIcon stepNum={3} />
-            <CardTitle>Appearance</CardTitle>
-            <CardDescription>Choose your preferred theme</CardDescription>
-          </CardHeader>
-          <CardContent className="px-0 pb-0 space-y-4">
-            <div className="grid grid-cols-3 gap-3">
-              {themeOptions.map((option) => {
-                const isActive = theme === option.value;
-                const Icon = option.icon;
-                return (
-                  <button
-                    key={option.value}
-                    onClick={() => setTheme(option.value)}
-                    className={cn(
-                      'flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all hover:scale-[1.02] active:scale-[0.98]',
-                      isActive
-                        ? 'border-primary bg-primary/10'
-                        : 'border-border/50 hover:border-border hover:bg-secondary/50',
-                    )}
-                  >
-                    <div className={cn('p-3 rounded-xl', isActive ? 'bg-primary/20' : 'bg-secondary')}>
-                      <Icon className={cn('h-5 w-5', isActive ? 'text-primary' : 'text-muted-foreground')} />
-                    </div>
-                    <span className={cn('text-sm font-medium', isActive ? 'text-primary' : 'text-muted-foreground')}>
-                      {option.label}
-                    </span>
-                  </button>
-                );
-              })}
+          <CardHeader className="text-center px-0 pt-0 pb-4">
+            <div className="w-10 h-10 mx-auto mb-3 rounded-xl bg-primary/10 flex items-center justify-center">
+              <Users className="h-5 w-5 text-primary" />
             </div>
-            <Button onClick={handleThemeNext} className="w-full">
-              Next
-            </Button>
-            <Button variant="ghost" size="sm" onClick={handleBack} className="w-full text-muted-foreground">
-              <ChevronLeft className="w-4 h-4 mr-1" />
-              Back
-            </Button>
-          </CardContent>
-        </>
-      )}
-
-      {/* Step 4: Add Initial Members */}
-      {step === 4 && (
-        <>
-          <CardHeader className="text-center px-0 pt-0">
-            <StepIcon stepNum={4} />
-            <CardTitle>Add Members</CardTitle>
+            <CardTitle>Who&apos;s in your organization?</CardTitle>
             <CardDescription>
-              Add your initial members now, or skip and add them later
+              Add members now or do it later &mdash; you can always add more from the Members page
             </CardDescription>
           </CardHeader>
-          <CardContent className="px-0 pb-0 space-y-4">
-            <div className="space-y-3">
+          <CardContent className="px-0 pb-0 space-y-3">
+            <div className="space-y-2.5">
               {members.map((member) => (
                 <div key={member.key} className="flex items-start gap-2">
-                  <div className="flex-1 space-y-2">
+                  <div className="flex-1 space-y-1.5">
                     <Input
                       placeholder="Name"
                       value={member.name}
                       onChange={(e) => updateMember(member.key, 'name', e.target.value)}
-                      className="h-10 bg-secondary/50 border-border/50 focus:border-primary"
+                      className="h-9 bg-secondary/50 border-border/50 focus:border-primary"
                     />
                     <Input
                       placeholder="Email (optional)"
                       type="email"
                       value={member.email}
                       onChange={(e) => updateMember(member.key, 'email', e.target.value)}
-                      className="h-10 bg-secondary/50 border-border/50 focus:border-primary"
+                      className="h-9 bg-secondary/50 border-border/50 focus:border-primary"
                     />
                   </div>
                   {members.length > 1 && (
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-10 w-10 mt-0 text-muted-foreground hover:text-destructive"
+                      className="h-9 w-9 mt-0 text-muted-foreground hover:text-destructive"
                       onClick={() => removeMemberRow(member.key)}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -607,13 +542,16 @@ function OnboardingWizard() {
               <Plus className="w-4 h-4 mr-2" />
               Add another
             </Button>
-            <div className="flex gap-3">
+            <div className="flex gap-3 pt-1">
               <Button
                 variant="outline"
                 className="flex-1"
-                onClick={() => router.push('/agent')}
+                onClick={() => {
+                  toast({ title: 'Welcome to Ledgly! \u{1F389}' });
+                  router.push('/dashboard');
+                }}
               >
-                Skip
+                Skip for now
               </Button>
               <Button
                 className="flex-1"
@@ -626,7 +564,7 @@ function OnboardingWizard() {
                     Finishing...
                   </>
                 ) : (
-                  'Finish'
+                  'Finish setup'
                 )}
               </Button>
             </div>
