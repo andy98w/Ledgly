@@ -735,6 +735,14 @@ export class GmailService {
     });
   }
 
+  async getAllImports(orgId: string, limit = 100) {
+    return this.prisma.emailImport.findMany({
+      where: { orgId },
+      orderBy: { emailDate: 'desc' },
+      take: limit,
+    });
+  }
+
   async getRecentConfirmed(orgId: string, limit = 50) {
     return this.prisma.emailImport.findMany({
       where: {

@@ -113,17 +113,17 @@ export class GmailController {
   ) {
     const limitNum = limit ? parseInt(limit, 10) : 50;
 
-    if (status === 'auto_confirmed' || status === 'confirmed') {
-      const imports = await this.gmailService.getRecentConfirmed(orgId, limitNum);
-      return { data: imports };
-    }
-
     if (status === 'ignored') {
       const imports = await this.gmailService.getIgnoredImports(orgId, limitNum);
       return { data: imports };
     }
 
-    const imports = await this.gmailService.getRecentConfirmed(orgId, limitNum);
+    if (status === 'auto_confirmed' || status === 'confirmed') {
+      const imports = await this.gmailService.getRecentConfirmed(orgId, limitNum);
+      return { data: imports };
+    }
+
+    const imports = await this.gmailService.getAllImports(orgId, limitNum);
     return { data: imports };
   }
 
