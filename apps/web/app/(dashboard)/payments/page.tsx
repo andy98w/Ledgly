@@ -1045,7 +1045,7 @@ export default function PaymentsPage() {
         <>
           <div className="space-y-3">
             {isAdmin && paginatedPayments.length > 0 && (
-              <div className="flex items-center justify-between px-1">
+              <div className="flex items-center justify-between px-1 h-6">
                 <button
                   onClick={toggleSelectAllPayments}
                   className="text-xs text-muted-foreground hover:text-foreground transition-colors"
