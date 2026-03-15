@@ -1335,6 +1335,17 @@ export default function SpreadsheetPage() {
           helpText={`Combined view of all charges, expenses, and payments in one place. ${isAdmin ? 'Click any cell to edit. Sort by clicking column headers.' : 'View all financial transactions.'}`}
           actions={
             <div className="flex items-center gap-2">
+              {isAdmin && selectedRows.size > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleAskAI}
+                  className="gap-1.5 border-primary/30 text-primary hover:bg-primary/10"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Ask AI about {selectedRows.size} row{selectedRows.size !== 1 ? 's' : ''}
+                </Button>
+              )}
               {isAdmin && (
                 <Button size="sm" onClick={handleStartInlineRow} className="hover:opacity-90 transition-opacity" disabled={inlineNewRow}>
                   <Plus className="w-4 h-4 mr-1.5" />
@@ -1481,17 +1492,6 @@ export default function SpreadsheetPage() {
               />
               Unmatched payments
             </label>
-            {isAdmin && selectedRows.size > 0 && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleAskAI}
-                className="h-8 text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/10"
-              >
-                <Sparkles className="h-3.5 w-3.5" />
-                Ask AI about {selectedRows.size} row{selectedRows.size !== 1 ? 's' : ''}
-              </Button>
-            )}
           </div>
         </div>
       </FadeIn>
