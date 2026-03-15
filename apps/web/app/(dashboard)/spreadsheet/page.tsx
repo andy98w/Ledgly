@@ -1866,7 +1866,7 @@ export default function SpreadsheetPage() {
               <thead>
                 <tr className="border-b bg-secondary/30">
                   {isAdmin && (
-                    <th className="w-12 pl-2 pr-0 py-2">
+                    <th className="w-14 pl-3 pr-0 py-2">
                       <div className="flex items-center gap-0.5">
                         {selectedRows.size > 0 && (
                           <button
@@ -1916,7 +1916,7 @@ export default function SpreadsheetPage() {
                     </span>
                   </th>
                   <th
-                    className="text-left px-2 py-2 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none"
+                    className="text-left px-2 py-2 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none w-36"
                     onClick={() => {
                       if (sortBy === 'member') {
                         setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -1934,7 +1934,7 @@ export default function SpreadsheetPage() {
                     </span>
                   </th>
                   <th
-                    className="text-left px-2 py-2 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none w-24"
+                    className="text-left px-2 py-2 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none w-28"
                     onClick={() => {
                       if (sortBy === 'category') {
                         setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -1951,7 +1951,7 @@ export default function SpreadsheetPage() {
                       )}
                     </span>
                   </th>
-                  <th className="text-left px-2 py-2 font-medium text-muted-foreground w-28">Title</th>
+                  <th className="text-left px-2 py-2 font-medium text-muted-foreground">Title</th>
                   <th
                     className="text-right px-2 py-2 font-medium text-success cursor-pointer hover:text-success/80 select-none w-24"
                     onClick={() => {
@@ -2016,7 +2016,7 @@ export default function SpreadsheetPage() {
                 {/* Select All / Add Row */}
                 {isAdmin && !isLoading && (
                   <tr className="border-b border-border/50 bg-secondary/20 hover:bg-secondary/40 transition-colors">
-                    <td className="pl-2 pr-0 py-2">
+                    <td className="pl-3 pr-0 py-2">
                       <div className="flex items-center gap-1">
                         <div className="w-6 h-6" />
                         {!inlineNewRow && (
@@ -2046,7 +2046,7 @@ export default function SpreadsheetPage() {
                 {/* Inline New Row */}
                 {isAdmin && inlineNewRow && (
                   <tr className="border-b border-border/50 bg-primary/5 animate-in fade-in slide-in-from-top-1 duration-200">
-                    <td className="pl-2 pr-0 py-2">
+                    <td className="pl-3 pr-0 py-2">
                       <div className="flex items-center gap-1">
                         <button
                           onClick={handleSaveInlineRow}
@@ -2069,36 +2069,39 @@ export default function SpreadsheetPage() {
                         </button>
                       </div>
                     </td>
-                    {/* Date + Type selector */}
-                    <td className="px-2 py-1 w-24">
+                    {/* Type selector */}
+                    <td className="px-2 py-2">
+                      <Select value={newRowType} onValueChange={(v) => {
+                        const val = v as typeof newRowType;
+                        if (val === 'multi-charge') {
+                          handleCancelInlineRow();
+                          setShowMultiChargeDialog(true);
+                          return;
+                        }
+                        if (val === 'multi-expense') {
+                          handleCancelInlineRow();
+                          setShowMultiExpenseDialog(true);
+                          return;
+                        }
+                        setNewRowType(val);
+                        setNewRowData(d => ({ ...d, category: '' }));
+                        setInlineNewRowField('member');
+                      }}>
+                        <SelectTrigger className="h-7 text-xs bg-transparent border-border/50 w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="charge">Charge</SelectItem>
+                          <SelectItem value="multi-charge">Multi-charge</SelectItem>
+                          <SelectItem value="expense">Expense</SelectItem>
+                          <SelectItem value="multi-expense">Multi-expense</SelectItem>
+                          <SelectItem value="payment">Payment</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </td>
+                    {/* Date + Member/Vendor */}
+                    <td className="px-2 py-1">
                       <div className="space-y-1">
-                        <Select value={newRowType} onValueChange={(v) => {
-                          const val = v as typeof newRowType;
-                          if (val === 'multi-charge') {
-                            handleCancelInlineRow();
-                            setShowMultiChargeDialog(true);
-                            return;
-                          }
-                          if (val === 'multi-expense') {
-                            handleCancelInlineRow();
-                            setShowMultiExpenseDialog(true);
-                            return;
-                          }
-                          setNewRowType(val);
-                          setNewRowData(d => ({ ...d, category: '' }));
-                          setInlineNewRowField('date');
-                        }}>
-                          <SelectTrigger className="h-6 text-xs bg-transparent border-border/50 w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="charge">Charge</SelectItem>
-                            <SelectItem value="multi-charge">Multi-charge</SelectItem>
-                            <SelectItem value="expense">Expense</SelectItem>
-                            <SelectItem value="multi-expense">Multi-expense</SelectItem>
-                            <SelectItem value="payment">Payment</SelectItem>
-                          </SelectContent>
-                        </Select>
                         <input
                           type="date"
                           value={newRowData.date}
@@ -2106,47 +2109,44 @@ export default function SpreadsheetPage() {
                           className="h-5 w-full text-xs bg-transparent border-0 shadow-none ring-0 outline-none focus:ring-0 text-muted-foreground"
                           style={{ colorScheme: 'dark' }}
                         />
+                        {newRowType === 'expense' ? (
+                          <input
+                            placeholder="Vendor..."
+                            value={newRowData.vendor}
+                            onChange={(e) => setNewRowData(d => ({ ...d, vendor: e.target.value }))}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); setInlineNewRowField('category'); }
+                              if (e.key === 'Tab' && e.shiftKey) { e.preventDefault(); setInlineNewRowField('date'); }
+                              if (e.key === 'Escape') handleCancelInlineRow();
+                              if (e.key === 'Enter') handleSaveInlineRow();
+                            }}
+                            autoFocus={inlineNewRowField === 'member'}
+                            className="h-5 text-xs bg-transparent border-0 shadow-none ring-0 outline-none focus:ring-0 w-full"
+                          />
+                        ) : (
+                          <Select value={newRowData.membershipId || 'none'} onValueChange={(v) => setNewRowData(d => ({ ...d, membershipId: v === 'none' ? '' : v }))}>
+                            <SelectTrigger className="h-6 text-xs bg-transparent border-border/50 w-full">
+                              <SelectValue placeholder="Member..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none" disabled>Select member...</SelectItem>
+                              {members.filter(m => m.id).map((m) => (
+                                <SelectItem key={m.id} value={m.id}>
+                                  {(m as any).displayName || (m as any).name || (m as any).user?.name || 'Unknown'}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
                       </div>
                     </td>
-                    {/* Member */}
-                    <td className="px-2 py-2">
-                      {newRowType === 'expense' ? (
-                        <input
-                          placeholder="Vendor..."
-                          value={newRowData.vendor}
-                          onChange={(e) => setNewRowData(d => ({ ...d, vendor: e.target.value }))}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); setInlineNewRowField('category'); }
-                            if (e.key === 'Tab' && e.shiftKey) { e.preventDefault(); setInlineNewRowField('date'); }
-                            if (e.key === 'Escape') handleCancelInlineRow();
-                            if (e.key === 'Enter') handleSaveInlineRow();
-                          }}
-                          autoFocus={inlineNewRowField === 'member'}
-                          className="h-6 text-xs bg-transparent border-0 shadow-none ring-0 outline-none focus:ring-0 w-full"
-                        />
-                      ) : (
-                        <Select value={newRowData.membershipId || 'none'} onValueChange={(v) => setNewRowData(d => ({ ...d, membershipId: v === 'none' ? '' : v }))}>
-                          <SelectTrigger className="h-7 text-xs bg-transparent border-border/50">
-                            <SelectValue placeholder="Member..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none" disabled>Select member...</SelectItem>
-                            {members.filter(m => m.id).map((m) => (
-                              <SelectItem key={m.id} value={m.id}>
-                                {(m as any).displayName || (m as any).name || (m as any).user?.name || 'Unknown'}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    </td>
                     {/* Category */}
-                    <td className="px-2 py-2 w-24">
+                    <td className="px-2 py-2">
                       {newRowType === 'payment' ? (
                         <span className="text-xs text-muted-foreground">—</span>
                       ) : (
                         <Select value={newRowData.category || 'none'} onValueChange={(v) => setNewRowData(d => ({ ...d, category: v === 'none' ? '' : v }))}>
-                          <SelectTrigger className="h-7 text-xs bg-transparent border-border/50 w-24">
+                          <SelectTrigger className="h-7 text-xs bg-transparent border-border/50 w-full">
                             <SelectValue placeholder="Category..." />
                           </SelectTrigger>
                           <SelectContent>
@@ -2250,7 +2250,7 @@ export default function SpreadsheetPage() {
                       )}
                     >
                       {isAdmin && (
-                        <td className="pl-2 pr-0 py-2">
+                        <td className="pl-3 pr-0 py-2">
                           <div className="flex items-center gap-1">
                             {row.isParent ? (
                               <button
