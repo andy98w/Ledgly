@@ -1,12 +1,14 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { validateEnv } from './env';
+import { initSentry } from './instrument';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 async function bootstrap() {
   const env = validateEnv();
+  initSentry(env.SENTRY_DSN);
 
   const app = await NestFactory.create(AppModule);
 
@@ -31,7 +33,7 @@ async function bootstrap() {
 
   await app.listen(env.PORT);
   if (env.NODE_ENV !== 'production') {
-    console.log(`API running on http://localhost:${env.PORT}`);
+    Logger.log(`API running on http://localhost:${env.PORT}`, 'Bootstrap');
   }
 }
 bootstrap();

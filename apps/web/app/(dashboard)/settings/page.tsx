@@ -126,10 +126,11 @@ export default function SettingsPage() {
     createOrganization.mutate(
       { name: newOrgName.trim() },
       {
-        onSuccess: () => {
+        onSuccess: (org) => {
           toast({ title: 'Organization created!' });
           setShowCreateOrgDialog(false);
           setNewOrgName('');
+          router.push(`/onboarding?orgId=${org.id}&step=1`);
         },
         onError: (error: any) => {
           toast({

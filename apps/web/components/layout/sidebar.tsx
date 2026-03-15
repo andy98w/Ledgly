@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   Users,
@@ -77,6 +77,7 @@ const secondaryNavItems: NavItem[] = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
   const setCurrentOrgId = useAuthStore((s) => s.setCurrentOrgId);
@@ -97,10 +98,11 @@ export function Sidebar() {
     createOrganization.mutate(
       { name: newOrgName.trim() },
       {
-        onSuccess: () => {
+        onSuccess: (org) => {
           toast({ title: 'Organization created!' });
           setShowCreateOrgDialog(false);
           setNewOrgName('');
+          router.push(`/onboarding?orgId=${org.id}&step=1`);
         },
         onError: (error: any) => {
           toast({

@@ -12,9 +12,16 @@
     "db:push": "pnpm --filter @ledgly/api db:push",
     "db:migrate": "pnpm --filter @ledgly/api db:migrate",
     "db:studio": "pnpm --filter @ledgly/api db:studio",
-    "clean": "turbo run clean && rm -rf node_modules"
+    "clean": "turbo run clean && rm -rf node_modules",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "apps/api/src/**/*.ts": ["eslint --fix"],
+    "apps/web/**/*.{ts,tsx}": ["eslint --fix"]
   },
   "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
     "prettier": "^3.2.5",
     "turbo": "^2.0.0",
     "typescript": "^5.4.0"

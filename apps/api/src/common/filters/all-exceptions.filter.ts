@@ -5,6 +5,7 @@ import {
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
+import * as Sentry from '@sentry/node';
 import { Request, Response } from 'express';
 
 @Catch()
@@ -26,8 +27,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
           : (exResponse as any).message || exception.message;
     }
 
-    // Log non-HTTP (unexpected) errors — swap for Sentry/Datadog in production
     if (!(exception instanceof HttpException)) {
+      Sentry.captureException(exception, {
+        tags: { path: request.url, method: request.method },
+      });
       console.error('[UnhandledException]', {
         path: request.url,
         method: request.method,

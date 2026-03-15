@@ -404,8 +404,9 @@ function EditableCell({
   };
 
   // Truncated text with tooltip helper
-  const TruncatedText = ({ text, className: cls }: { text: string; className?: string }) => {
+  const TruncatedText = ({ text, className: cls, wrap }: { text: string; className?: string; wrap?: boolean }) => {
     if (!text || text === '-') return <span className={cls}>{text || '-'}</span>;
+    if (wrap) return <span className={cls}>{text}</span>;
     return (
       <TooltipProvider delayDuration={300}>
         <Tooltip>
@@ -431,7 +432,7 @@ function EditableCell({
     if (type === 'money') {
       return <span><Money cents={value as number} size="sm" /></span>;
     }
-    return <TruncatedText text={String(value)} />;
+    return <TruncatedText text={String(value)} wrap={column === 'description'} />;
   }
 
   return (
@@ -454,7 +455,7 @@ function EditableCell({
       ) : type === 'member' ? (
         <TruncatedText text={getMemberDisplayValue()} className="font-medium" />
       ) : (
-        <TruncatedText text={String(value || '-')} className="font-medium" />
+        <TruncatedText text={String(value || '-')} className="font-medium" wrap={column === 'description'} />
       )}
     </div>
   );
@@ -1861,11 +1862,11 @@ export default function SpreadsheetPage() {
         )}
         <div ref={tableRef} className="rounded-xl border bg-card overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm table-fixed">
               <thead>
                 <tr className="border-b bg-secondary/30">
                   {isAdmin && (
-                    <th className="w-10 pl-1 pr-0 py-2">
+                    <th className="w-12 pl-2 pr-0 py-2">
                       <div className="flex items-center gap-0.5">
                         {selectedRows.size > 0 && (
                           <button
@@ -1915,7 +1916,7 @@ export default function SpreadsheetPage() {
                     </span>
                   </th>
                   <th
-                    className="text-left px-2 py-2 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none w-32"
+                    className="text-left px-2 py-2 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none"
                     onClick={() => {
                       if (sortBy === 'member') {
                         setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -1950,7 +1951,7 @@ export default function SpreadsheetPage() {
                       )}
                     </span>
                   </th>
-                  <th className="text-left px-2 py-2 font-medium text-muted-foreground">Title</th>
+                  <th className="text-left px-2 py-2 font-medium text-muted-foreground w-28">Title</th>
                   <th
                     className="text-right px-2 py-2 font-medium text-success cursor-pointer hover:text-success/80 select-none w-24"
                     onClick={() => {
@@ -2008,17 +2009,16 @@ export default function SpreadsheetPage() {
                       )}
                     </span>
                   </th>
-                  {isAdmin && <th className="w-6 pr-1" />}
+                  {isAdmin && <th className="w-8 px-1" />}
                 </tr>
               </thead>
               <tbody>
                 {/* Select All / Add Row */}
                 {isAdmin && !isLoading && (
                   <tr className="border-b border-border/50 bg-secondary/20 hover:bg-secondary/40 transition-colors">
-                    <td className="pl-1 pr-0 py-2">
+                    <td className="pl-2 pr-0 py-2">
                       <div className="flex items-center gap-1">
                         <div className="w-6 h-6" />
-                        <div className="w-2" />
                         {!inlineNewRow && (
                           <button
                             onClick={handleStartInlineRow}
@@ -2040,12 +2040,13 @@ export default function SpreadsheetPage() {
                         </button>
                       )}
                     </td>
+                    <td />
                   </tr>
                 )}
                 {/* Inline New Row */}
                 {isAdmin && inlineNewRow && (
                   <tr className="border-b border-border/50 bg-primary/5 animate-in fade-in slide-in-from-top-1 duration-200">
-                    <td className="pl-1 pr-0 py-2">
+                    <td className="pl-2 pr-0 py-2">
                       <div className="flex items-center gap-1">
                         <button
                           onClick={handleSaveInlineRow}
@@ -2068,38 +2069,47 @@ export default function SpreadsheetPage() {
                         </button>
                       </div>
                     </td>
-                    {/* Type selector */}
-                    <td className="px-2 py-2 w-24">
-                      <Select value={newRowType} onValueChange={(v) => {
-                        const val = v as typeof newRowType;
-                        if (val === 'multi-charge') {
-                          handleCancelInlineRow();
-                          setShowMultiChargeDialog(true);
-                          return;
-                        }
-                        if (val === 'multi-expense') {
-                          handleCancelInlineRow();
-                          setShowMultiExpenseDialog(true);
-                          return;
-                        }
-                        setNewRowType(val);
-                        setNewRowData(d => ({ ...d, category: '' }));
-                        setInlineNewRowField('date');
-                      }}>
-                        <SelectTrigger className="h-7 text-xs bg-transparent border-border/50 w-24">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="charge">Charge</SelectItem>
-                          <SelectItem value="multi-charge">Multi-charge</SelectItem>
-                          <SelectItem value="expense">Expense</SelectItem>
-                          <SelectItem value="multi-expense">Multi-expense</SelectItem>
-                          <SelectItem value="payment">Payment</SelectItem>
-                        </SelectContent>
-                      </Select>
+                    {/* Date + Type selector */}
+                    <td className="px-2 py-1 w-24">
+                      <div className="space-y-1">
+                        <Select value={newRowType} onValueChange={(v) => {
+                          const val = v as typeof newRowType;
+                          if (val === 'multi-charge') {
+                            handleCancelInlineRow();
+                            setShowMultiChargeDialog(true);
+                            return;
+                          }
+                          if (val === 'multi-expense') {
+                            handleCancelInlineRow();
+                            setShowMultiExpenseDialog(true);
+                            return;
+                          }
+                          setNewRowType(val);
+                          setNewRowData(d => ({ ...d, category: '' }));
+                          setInlineNewRowField('date');
+                        }}>
+                          <SelectTrigger className="h-6 text-xs bg-transparent border-border/50 w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="charge">Charge</SelectItem>
+                            <SelectItem value="multi-charge">Multi-charge</SelectItem>
+                            <SelectItem value="expense">Expense</SelectItem>
+                            <SelectItem value="multi-expense">Multi-expense</SelectItem>
+                            <SelectItem value="payment">Payment</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <input
+                          type="date"
+                          value={newRowData.date}
+                          onChange={(e) => setNewRowData(d => ({ ...d, date: e.target.value }))}
+                          className="h-5 w-full text-xs bg-transparent border-0 shadow-none ring-0 outline-none focus:ring-0 text-muted-foreground"
+                          style={{ colorScheme: 'dark' }}
+                        />
+                      </div>
                     </td>
                     {/* Member */}
-                    <td className="px-2 py-2 w-32">
+                    <td className="px-2 py-2">
                       {newRowType === 'expense' ? (
                         <input
                           placeholder="Vendor..."
@@ -2151,7 +2161,7 @@ export default function SpreadsheetPage() {
                       )}
                     </td>
                     {/* Title */}
-                    <td className="px-2 py-2 w-36">
+                    <td className="px-2 py-2">
                       <input
                         placeholder={newRowType === 'payment' ? 'Memo...' : 'Title...'}
                         value={newRowType === 'payment' ? newRowData.memo : newRowData.description}
@@ -2170,7 +2180,7 @@ export default function SpreadsheetPage() {
                       />
                     </td>
                     {/* Amount cells (spans 3 columns) */}
-                    <td className="px-2 py-2 text-right w-24" colSpan={3}>
+                    <td className="px-2 py-2 text-right" colSpan={3}>
                       <div className="flex items-center justify-end gap-1">
                         <span className="text-xs text-muted-foreground">$</span>
                         <input
@@ -2192,6 +2202,7 @@ export default function SpreadsheetPage() {
                         />
                       </div>
                     </td>
+                    <td />
                   </tr>
                 )}
                 {isLoading ? (
@@ -2204,12 +2215,13 @@ export default function SpreadsheetPage() {
                       <td className="px-2 py-2"><Skeleton className="h-4 w-24" /></td>
                       <td className="px-2 py-2"><Skeleton className="h-4 w-16 ml-auto" /></td>
                       <td className="px-2 py-2"><Skeleton className="h-4 w-16 ml-auto" /></td>
-                      <td className="pl-3 pr-5 py-3"><Skeleton className="h-4 w-16 ml-auto" /></td>
+                      <td className="px-2 py-2"><Skeleton className="h-4 w-16 ml-auto" /></td>
+                      {isAdmin && <td />}
                     </tr>
                   ))
                 ) : paginatedRows.length === 0 ? (
                   <tr>
-                    <td colSpan={isAdmin ? 8 : 7}>
+                    <td colSpan={isAdmin ? 9 : 7}>
                       <div className="flex flex-col items-center justify-center text-center py-12">
                         <Search className="h-6 w-6 text-muted-foreground mb-2" />
                         <p className="font-semibold">No results</p>
@@ -2238,12 +2250,12 @@ export default function SpreadsheetPage() {
                       )}
                     >
                       {isAdmin && (
-                        <td className="pl-1 pr-0 py-2">
+                        <td className="pl-2 pr-0 py-2">
                           <div className="flex items-center gap-1">
                             {row.isParent ? (
                               <button
                                 onClick={() => toggleParentExpand(row.id)}
-                                className="w-6 h-6 flex items-center justify-center transition-colors hover:text-primary"
+                                className="relative w-6 h-6 flex items-center justify-center transition-colors hover:text-primary"
                                 title={expandedParents.has(row.id) ? 'Collapse' : 'Expand'}
                               >
                                 {expandedParents.has(row.id) ? (
@@ -2251,34 +2263,36 @@ export default function SpreadsheetPage() {
                                 ) : (
                                   <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
                                 )}
+                                {insightsMap.has(row.id) && (
+                                  <div className={cn('absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full', INSIGHT_DOT_COLORS[insightsMap.get(row.id)!.type])} />
+                                )}
                               </button>
-                            ) : (
-                              <div className="w-6 h-6" />
-                            )}
-                            {!row.isChild && (
-                              <>
-                                {insightsMap.has(row.id) ? (
+                            ) : !row.isChild ? (
+                              <div className="relative w-6 h-6 flex items-center justify-center">
+                                {insightsMap.has(row.id) && (
                                   <TooltipProvider delayDuration={200}>
                                     <Tooltip>
                                       <TooltipTrigger asChild>
-                                        <div className={cn('w-2 h-2 rounded-full shrink-0', INSIGHT_DOT_COLORS[insightsMap.get(row.id)!.type])} />
+                                        <div className={cn('w-2 h-2 rounded-full', INSIGHT_DOT_COLORS[insightsMap.get(row.id)!.type])} />
                                       </TooltipTrigger>
                                       <TooltipContent side="right" className="max-w-[200px] text-xs">
                                         {insightsMap.get(row.id)!.message}
                                       </TooltipContent>
                                     </Tooltip>
                                   </TooltipProvider>
-                                ) : (
-                                  <div className="w-2" />
                                 )}
-                                <button
-                                  onClick={() => handleDeleteRow(row)}
-                                  className="w-6 h-6 flex items-center justify-center transition-colors hover:text-destructive"
-                                  title="Delete row"
-                                >
-                                  <Minus className="w-3.5 h-3.5 text-muted-foreground hover:text-destructive" />
-                                </button>
-                              </>
+                              </div>
+                            ) : (
+                              <div className="w-6 h-6" />
+                            )}
+                            {!row.isChild && (
+                              <button
+                                onClick={() => handleDeleteRow(row)}
+                                className="w-6 h-6 flex items-center justify-center transition-colors hover:text-destructive"
+                                title="Delete row"
+                              >
+                                <Minus className="w-3.5 h-3.5 text-muted-foreground hover:text-destructive" />
+                              </button>
                             )}
                           </div>
                         </td>
@@ -2320,7 +2334,7 @@ export default function SpreadsheetPage() {
                       </td>
                       <td
                         className={cn(
-                          'px-2 py-2 w-32 cursor-default',
+                          'px-2 py-2 cursor-default',
                           activeCell?.rowId === row.id && activeCell?.column === 'member' && 'ring-2 ring-inset ring-primary/50',
                         )}
                         onMouseDown={(e) => handleRowMouseDown(row.id, 'member', e)}
@@ -2383,7 +2397,7 @@ export default function SpreadsheetPage() {
                       </td>
                       <td
                         className={cn(
-                          "px-2 py-2 w-36 cursor-default",
+                          "px-2 py-2 cursor-default",
                           row.isChild && "pl-10",
                           activeCell?.rowId === row.id && activeCell?.column === 'description' && 'ring-2 ring-inset ring-primary/50',
                         )}
@@ -2519,10 +2533,9 @@ export default function SpreadsheetPage() {
                           <span className="text-muted-foreground/30">-</span>
                         )}
                       </td>
-                      {/* Phase 4: Row context menu */}
-                      {isAdmin && !row.isChild && (
-                        <td className="w-6 px-0 pr-1 py-2">
-                          {(() => {
+                      {isAdmin && (
+                        <td className="w-8 px-1 py-2">
+                          {!row.isChild && (() => {
                             const actions = getRowActions(row);
                             if (actions.length === 0) return null;
                             return (
@@ -2561,7 +2574,7 @@ export default function SpreadsheetPage() {
               {!isLoading && displayRows.length > 0 && (
                 <tfoot>
                   <tr className="bg-secondary/50 font-medium">
-                    <td className="px-2 py-2" colSpan={isAdmin ? 6 : 4}>
+                    <td className="px-2 py-2" colSpan={isAdmin ? 5 : 4}>
                       <span className="text-muted-foreground">Total ({displayRows.length} transactions)</span>
                     </td>
                     <td className="px-2 py-2 text-right">
@@ -2573,6 +2586,7 @@ export default function SpreadsheetPage() {
                     <td className="px-2 py-2 text-right">
                       <Money cents={totals.expenses} size="sm" className="text-destructive font-semibold" />
                     </td>
+                    {isAdmin && <td />}
                   </tr>
                 </tfoot>
               )}
