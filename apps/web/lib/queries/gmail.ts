@@ -3,11 +3,16 @@ import { api } from '@/lib/api';
 
 import { queryKeys } from '@/lib/query-keys';
 
+export interface GmailConnection {
+  id: string;
+  email: string;
+  lastSyncAt?: string;
+  isActive: boolean;
+}
+
 export interface GmailStatus {
   connected: boolean;
-  email?: string;
-  lastSyncAt?: string;
-  isActive?: boolean;
+  connections: GmailConnection[];
 }
 
 export interface EmailImport {
@@ -118,8 +123,8 @@ export function useDisconnectGmail() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ orgId }: { orgId: string }) =>
-      api.delete(`/organizations/${orgId}/gmail/disconnect`),
+    mutationFn: ({ orgId, connectionId }: { orgId: string; connectionId: string }) =>
+      api.delete(`/organizations/${orgId}/gmail/disconnect/${connectionId}`),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.gmail.all(variables.orgId),

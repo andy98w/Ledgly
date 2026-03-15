@@ -62,10 +62,10 @@ function GmailSyncSection({ orgId }: { orgId: string | null }) {
     }
   }, [org?.gmailSyncAfter]);
 
-  const handleDisconnect = async () => {
+  const handleDisconnect = async (connectionId: string) => {
     if (!orgId) return;
     try {
-      await disconnectGmail.mutateAsync({ orgId });
+      await disconnectGmail.mutateAsync({ orgId, connectionId });
       toast({ title: 'Gmail disconnected' });
     } catch {
       toast({ title: 'Failed to disconnect', variant: 'destructive' });
@@ -94,6 +94,9 @@ function GmailSyncSection({ orgId }: { orgId: string | null }) {
     }
   };
 
+  const connections = gmailStatus?.connections ?? [];
+  const hasConnections = gmailStatus?.connected;
+
   return (
     <FadeIn delay={0.45}>
       <MotionCard hover={false}>
@@ -107,68 +110,75 @@ function GmailSyncSection({ orgId }: { orgId: string | null }) {
         </MotionCardHeader>
         <MotionCardContent>
           <div className="space-y-4">
-            {gmailStatus?.connected ? (
-              <>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">{gmailStatus.email}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {gmailStatus.lastSyncAt
-                        ? `Last synced ${new Date(gmailStatus.lastSyncAt).toLocaleDateString()}`
-                        : 'Connected, waiting for first sync'}
-                    </p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleDisconnect}
-                    disabled={disconnectGmail.isPending}
-                    className="text-destructive hover:text-destructive"
-                  >
-                    {disconnectGmail.isPending ? 'Disconnecting...' : 'Disconnect'}
-                  </Button>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm">Sync emails after</Label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="text"
-                      inputMode="numeric"
-                      placeholder="mm/dd/yy"
-                      value={syncAfterInput}
-                      onChange={(e) => {
-                        const raw = e.target.value.replace(/[^\d/]/g, '');
-                        setSyncAfterInput(raw);
-                      }}
-                      className="h-9 w-32 text-sm"
-                    />
+            {connections.length > 0 && (
+              <div className="space-y-3">
+                {connections.map((conn) => (
+                  <div key={conn.id} className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">{conn.email}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {conn.lastSyncAt
+                          ? `Last synced ${new Date(conn.lastSyncAt).toLocaleDateString()}`
+                          : 'Connected, waiting for first sync'}
+                      </p>
+                    </div>
                     <Button
-                      size="sm"
                       variant="outline"
-                      onClick={handleSaveSyncDate}
-                      disabled={updateOrg.isPending}
+                      size="sm"
+                      onClick={() => handleDisconnect(conn.id)}
+                      disabled={disconnectGmail.isPending}
+                      className="text-destructive hover:text-destructive"
                     >
-                      Save
+                      {disconnectGmail.isPending ? 'Disconnecting...' : 'Disconnect'}
                     </Button>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Only import payment emails sent after this date. Leave blank for the last 30 days.
-                  </p>
-                </div>
-              </>
-            ) : (
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  Connect Gmail to automatically import payment notifications from Venmo, Zelle, Cash App, and PayPal.
-                </p>
-                {orgId && (
+                ))}
+              </div>
+            )}
+
+            {orgId && (
+              <Button
+                variant={hasConnections ? 'outline' : 'default'}
+                onClick={() => { window.location.href = getGmailConnectUrl(orgId, '/settings'); }}
+              >
+                <Mail className="w-4 h-4 mr-2" />
+                {hasConnections ? 'Add another Gmail' : 'Connect Gmail'}
+              </Button>
+            )}
+
+            {!hasConnections && (
+              <p className="text-sm text-muted-foreground">
+                Connect Gmail to automatically import payment notifications from Venmo, Zelle, Cash App, and PayPal.
+              </p>
+            )}
+
+            {hasConnections && (
+              <div className="space-y-2">
+                <Label className="text-sm">Sync emails after</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="mm/dd/yy"
+                    value={syncAfterInput}
+                    onChange={(e) => {
+                      const raw = e.target.value.replace(/[^\d/]/g, '');
+                      setSyncAfterInput(raw);
+                    }}
+                    className="h-9 w-32 text-sm"
+                  />
                   <Button
-                    onClick={() => { window.location.href = getGmailConnectUrl(orgId, '/settings'); }}
+                    size="sm"
+                    variant="outline"
+                    onClick={handleSaveSyncDate}
+                    disabled={updateOrg.isPending}
                   >
-                    <Mail className="w-4 h-4 mr-2" />
-                    Connect Gmail
+                    Save
                   </Button>
-                )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Only import payment emails sent after this date. Leave blank for the last 30 days.
+                </p>
               </div>
             )}
           </div>

@@ -122,17 +122,9 @@ export class GmailService {
       throw new UnauthorizedException('Failed to get email from Google');
     }
 
-    const existing = await this.prisma.gmailConnection.findFirst({
-      where: { email, orgId: { not: orgId } },
-    });
-    if (existing) {
-      throw new BadRequestException('This Gmail account is already connected to another organization.');
-    }
-
     const connection = await this.prisma.gmailConnection.upsert({
-      where: { orgId },
+      where: { orgId_email: { orgId, email } },
       update: {
-        email,
         accessToken: tokens.access_token,
         refreshToken: tokens.refresh_token,
         tokenExpiresAt: new Date(tokens.expiry_date || Date.now() + 3600000),
@@ -163,27 +155,30 @@ export class GmailService {
     return { email };
   }
 
-  async getConnection(orgId: string) {
-    return this.prisma.gmailConnection.findUnique({
+  async getConnections(orgId: string) {
+    return this.prisma.gmailConnection.findMany({
       where: { orgId },
+      orderBy: { createdAt: 'asc' },
     });
   }
 
-  async disconnect(orgId: string, actorId?: string) {
+  async disconnect(connectionId: string, actorId?: string) {
     const connection = await this.prisma.gmailConnection.findUnique({
-      where: { orgId },
-      select: { id: true, email: true },
+      where: { id: connectionId },
+      select: { id: true, orgId: true, email: true },
     });
+
+    if (!connection) {
+      throw new NotFoundException('Gmail connection not found');
+    }
 
     await this.prisma.gmailConnection.delete({
-      where: { orgId },
+      where: { id: connectionId },
     });
 
-    if (connection) {
-      await this.auditService.logDelete(orgId, actorId, 'GMAIL_CONNECTION', connection.id, {
-        email: connection.email,
-      }).catch((err) => this.logger.warn(`Audit log failed: ${err.message}`));
-    }
+    await this.auditService.logDelete(connection.orgId, actorId, 'GMAIL_CONNECTION', connection.id, {
+      email: connection.email,
+    }).catch((err) => this.logger.warn(`Audit log failed: ${err.message}`));
   }
 
   async syncEmails(orgId: string): Promise<{
@@ -191,11 +186,11 @@ export class GmailService {
     skipped: number;
     autoConfirmed: number;
   }> {
-    const connection = await this.prisma.gmailConnection.findUnique({
-      where: { orgId },
+    const connections = await this.prisma.gmailConnection.findMany({
+      where: { orgId, isActive: true },
     });
 
-    if (!connection || !connection.isActive) {
+    if (connections.length === 0) {
       throw new Error('No active Gmail connection');
     }
 
@@ -205,41 +200,45 @@ export class GmailService {
     });
 
     const enabledSources = org?.enabledPaymentSources ?? ['venmo', 'zelle', 'cashapp', 'paypal'];
-
-    const gmail = await this.getGmailClient(connection);
-
     const query = this.buildSearchQuery(enabledSources, org?.gmailSyncAfter ?? undefined);
     if (!query) {
       return { imported: 0, skipped: 0, autoConfirmed: 0 };
     }
-    const messages = await this.listMessages(gmail, query);
 
     const syncBatch = this.auditService.createBatchContext('Gmail auto-import');
-
     let imported = 0;
     let skipped = 0;
 
-    const limit = createConcurrencyLimiter(5);
-    const results = await Promise.allSettled(
-      messages.map((message) =>
-        limit(() => this.processMessage(gmail, connection, message.id!, syncBatch)),
-      ),
-    );
+    for (const connection of connections) {
+      try {
+        const gmail = await this.getGmailClient(connection);
+        const messages = await this.listMessages(gmail, query);
 
-    for (const result of results) {
-      if (result.status === 'fulfilled') {
-        if (result.value === 'imported') imported++;
-        else skipped++;
-      } else {
-        this.logger.error(`Failed to process email: ${result.reason}`);
-        skipped++;
+        const limit = createConcurrencyLimiter(5);
+        const results = await Promise.allSettled(
+          messages.map((message) =>
+            limit(() => this.processMessage(gmail, connection, message.id!, syncBatch)),
+          ),
+        );
+
+        for (const result of results) {
+          if (result.status === 'fulfilled') {
+            if (result.value === 'imported') imported++;
+            else skipped++;
+          } else {
+            this.logger.error(`Failed to process email: ${result.reason}`);
+            skipped++;
+          }
+        }
+
+        await this.prisma.gmailConnection.update({
+          where: { id: connection.id },
+          data: { lastSyncAt: new Date() },
+        });
+      } catch (err) {
+        this.logger.error(`Failed to sync connection ${connection.email}: ${err.message}`);
       }
     }
-
-    await this.prisma.gmailConnection.update({
-      where: { id: connection.id },
-      data: { lastSyncAt: new Date() },
-    });
 
     if (imported > 0) {
       await this.prisma.auditLog.updateMany({

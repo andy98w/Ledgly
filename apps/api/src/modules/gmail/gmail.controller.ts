@@ -80,22 +80,23 @@ export class GmailController {
 
   @Get('status')
   async getStatus(@Param('orgId') orgId: string) {
-    const connection = await this.gmailService.getConnection(orgId);
-    if (!connection) {
-      return { connected: false };
-    }
+    const connections = await this.gmailService.getConnections(orgId);
+    const active = connections.filter((c) => c.isActive);
     return {
-      connected: true,
-      email: connection.email,
-      lastSyncAt: connection.lastSyncAt,
-      isActive: connection.isActive,
+      connected: active.length > 0,
+      connections: connections.map((c) => ({
+        id: c.id,
+        email: c.email,
+        lastSyncAt: c.lastSyncAt,
+        isActive: c.isActive,
+      })),
     };
   }
 
-  @Delete('disconnect')
+  @Delete('disconnect/:connectionId')
   @Roles('ADMIN', 'TREASURER')
-  async disconnect(@Param('orgId') orgId: string, @Req() req: any) {
-    await this.gmailService.disconnect(orgId, req.membership?.id);
+  async disconnect(@Param('connectionId') connectionId: string, @Req() req: any) {
+    await this.gmailService.disconnect(connectionId, req.membership?.id);
     return { success: true };
   }
 

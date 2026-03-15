@@ -33,7 +33,11 @@ export class GmailSchedulerService {
         },
       });
 
-      const orgsWithGmail = gmailConnections.map((c) => c.org);
+      const orgMap = new Map<string, { id: string; name: string }>();
+      for (const c of gmailConnections) {
+        orgMap.set(c.orgId, c.org);
+      }
+      const orgsWithGmail = Array.from(orgMap.values());
 
       if (orgsWithGmail.length === 0) {
         this.logger.log('No organizations with Gmail connected');

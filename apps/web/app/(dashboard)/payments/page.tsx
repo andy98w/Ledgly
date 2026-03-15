@@ -909,9 +909,9 @@ export default function PaymentsPage() {
     );
   };
 
-  const handleDisconnectGmail = () => {
+  const handleDisconnectGmail = (connectionId: string) => {
     if (!currentOrgId) return;
-    disconnectGmail.mutate({ orgId: currentOrgId }, { onSuccess: () => toast({ title: 'Gmail disconnected' }) });
+    disconnectGmail.mutate({ orgId: currentOrgId, connectionId }, { onSuccess: () => toast({ title: 'Gmail disconnected' }) });
   };
 
   return (

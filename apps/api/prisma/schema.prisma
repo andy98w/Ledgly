@@ -20,7 +20,7 @@ model Organization {
   joinCode                String?          @unique @map("join_code")
   joinCodeEnabled         Boolean          @default(true) @map("join_code_enabled")
   joinRequiresApproval    Boolean          @default(false) @map("join_requires_approval")
-  gmailConnection         GmailConnection?
+  gmailConnections        GmailConnection[]
   memberships         Membership[]
   notifications       Notification[]
   payments            Payment[]
@@ -214,8 +214,8 @@ model AuditLog {
 
 model GmailConnection {
   id             String        @id @default(cuid())
-  orgId          String        @unique @map("org_id")
-  email          String        @unique
+  orgId          String        @map("org_id")
+  email          String
   accessToken    String        @map("access_token")
   refreshToken   String        @map("refresh_token")
   tokenExpiresAt DateTime      @map("token_expires_at")
@@ -227,6 +227,8 @@ model GmailConnection {
   emailImports   EmailImport[]
   org            Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
+  @@unique([orgId, email])
+  @@index([orgId])
   @@map("gmail_connections")
 }
 
