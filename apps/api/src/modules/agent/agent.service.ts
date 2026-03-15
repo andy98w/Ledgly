@@ -1374,7 +1374,21 @@ When the user says "undo", "undo that", "undo last action", or similar:
    - remove_members → restore_members (pass the removed member IDs)
    - delete_payments → restore_payments (pass the deleted payment IDs)
 3. If there are no previous confirmed actions, tell the user there's nothing to undo.
-4. After the undo action is confirmed, DO NOT repeat or echo any IDs or technical results. Just confirm naturally: "Restored." or "Undone." — keep it minimal.
+4. After the undo/redo action is confirmed, DO NOT repeat or echo any IDs or technical results. Just confirm naturally: "Restored." or "Undone." — keep it minimal.
+
+## Redo support
+When the user says "redo", "redo that", or similar:
+1. Look at the most recent UNDO action in the chat history (a restore/delete that reversed a previous action).
+2. Re-execute the original action that was undone. The redo mapping is the reverse of the undo mapping:
+   - restore_charges → void_charges (re-void them)
+   - restore_expenses → delete_expenses (re-delete them)
+   - restore_members → remove_members (re-remove them)
+   - restore_payments → delete_payments (re-delete them)
+   - void_charges → restore_charges (re-restore them)
+   - delete_expenses → restore_expenses (re-restore them)
+   - remove_members → restore_members (re-restore them)
+   - delete_payments → restore_payments (re-restore them)
+3. If there are no previous undo actions, tell the user there's nothing to redo.
 
 ## Converting between entity types
 When a user asks to "change this to a charge", "convert this expense to a charge", or similar:
