@@ -1,13 +1,17 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
-import { ArrowUpRight, ArrowDownRight, Download, Upload, Filter, Plus, DollarSign, AlertCircle, Search, Minus, ArrowUp, ArrowDown, Trash2, Check, Link2, Loader2, CreditCard, MoreVertical, FileSpreadsheet, ChevronDown, ChevronRight, Layers, Sparkles, Ban, Zap } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Download, Upload, Filter, Plus, DollarSign, AlertCircle, Search, Minus, ArrowUp, ArrowDown, Trash2, Check, Link2, Loader2, CreditCard, MoreVertical, FileSpreadsheet, ChevronDown, ChevronRight, Layers, Sparkles, Ban, Zap, Columns3 } from 'lucide-react';
 import { useCharges, useUpdateCharge, useCreateCharge, useCreateMultiCharge, useVoidCharge, useRestoreCharge, useBulkCreateCharges } from '@/lib/queries/charges';
 import { useExpenses, useUpdateExpense, useCreateExpense, useCreateMultiExpense, useDeleteExpense, useRestoreExpense } from '@/lib/queries/expenses';
 import { usePayments, useUpdatePayment, useCreatePayment, useDeletePayment, useRestorePayment, useAllocatePayment, useAutoAllocateToCharge, useBulkAutoAllocate, useBulkCreatePayments } from '@/lib/queries/payments';
 import { useMembers } from '@/lib/queries/members';
 import { useAuthStore, useIsAdminOrTreasurer, useCurrentMembership } from '@/lib/stores/auth';
 import { formatDate } from '@/lib/utils';
+import { useColumnConfig, COLUMN_DEFS } from '@/hooks/use-column-config';
+import { useColumnResize } from '@/hooks/use-column-resize';
+import { useColumnReorder } from '@/hooks/use-column-reorder';
+import { useSpreadsheetKeyboard } from '@/hooks/use-spreadsheet-keyboard';
 import {
   CHARGE_CATEGORIES,
   CHARGE_CATEGORY_LABELS,
@@ -71,7 +75,7 @@ import { getRowActions, type RowAction } from '@/lib/utils/row-actions';
 import { InsightsBanner } from '@/components/spreadsheet/insights-banner';
 import { FormulaBar } from '@/components/spreadsheet/formula-bar';
 import { AllocatePaymentsDialog } from '@/components/spreadsheet/allocate-dialog';
-import { EditableCell } from '@/components/spreadsheet/editable-cell';
+import { EditableCell, formatShortDate } from '@/components/spreadsheet/editable-cell';
 import type { SpreadsheetQueryResult } from '@/lib/queries/agent';
 
 /** Strip "VENMO payment to " etc. prefixes from Gmail-imported expense titles */
@@ -108,7 +112,7 @@ type EditingCell = {
 } | null;
 
 export default function SpreadsheetPage() {
-  const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [typeFilters, setTypeFilters] = useState<Set<string>>(new Set(['charge', 'expense', 'payment']));
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'date' | 'amount' | 'type' | 'category' | 'member' | 'status' | 'income' | 'expense'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -150,6 +154,13 @@ export default function SpreadsheetPage() {
   const { toast } = useToast();
   const isAdmin = useIsAdminOrTreasurer();
   const currentMembership = useCurrentMembership();
+
+  const columnConfig = useColumnConfig();
+  const { resizingColumnId, onResizeStart } = useColumnResize({ onResize: columnConfig.resizeColumn });
+  const { dragColumnId, dropTargetId, onDragStart, onDragOver, onDragLeave, onDrop, onDragEnd } = useColumnReorder({
+    onReorder: columnConfig.reorderColumn,
+    frozenColumns: ['date'],
+  });
 
   const { data: chargesData, isLoading: chargesLoading } = useCharges(currentOrgId, { limit: 100 });
   const { data: expensesData, isLoading: expensesLoading } = useExpenses(currentOrgId, { limit: 100 });
@@ -213,7 +224,7 @@ export default function SpreadsheetPage() {
     // Add charges (income)
     if (chargesData?.data) {
       for (const charge of chargesData.data) {
-        if (typeFilter !== 'all' && typeFilter !== 'charge') continue;
+        if (!typeFilters.has('charge')) continue;
         const c = charge as any;
         const hasChildren = c.children && c.children.length > 0;
 
@@ -261,7 +272,7 @@ export default function SpreadsheetPage() {
     // Add expenses (outgoing)
     if (expensesData?.data) {
       for (const expense of expensesData.data) {
-        if (typeFilter !== 'all' && typeFilter !== 'expense') continue;
+        if (!typeFilters.has('expense')) continue;
         const e = expense as any;
         const hasChildren = e.children && e.children.length > 0;
         const cleanedTitle = cleanExpenseTitle(expense.title);
@@ -302,7 +313,7 @@ export default function SpreadsheetPage() {
     // Add payments (income - actual money received)
     if (paymentsData?.data) {
       for (const payment of paymentsData.data) {
-        if (typeFilter !== 'all' && typeFilter !== 'payment') continue;
+        if (!typeFilters.has('payment')) continue;
         const memberName = payment.rawPayerName || undefined;
         allRows.push({
           id: payment.id,
@@ -414,7 +425,7 @@ export default function SpreadsheetPage() {
     });
 
     return filteredRows;
-  }, [chargesData, expensesData, paymentsData, members, typeFilter, searchQuery, sortBy, sortOrder, formulaCategories, formulaStatuses, formulaAmountMin, formulaAmountMax, formulaDateFrom, formulaDateTo]);
+  }, [chargesData, expensesData, paymentsData, members, typeFilters, searchQuery, sortBy, sortOrder, formulaCategories, formulaStatuses, formulaAmountMin, formulaAmountMax, formulaDateFrom, formulaDateTo]);
 
   // Phase 2: Anomaly detection (computed from rows before insight filtering)
   const insights = useMemo(() => computeInsights(rows), [rows]);
@@ -463,11 +474,13 @@ export default function SpreadsheetPage() {
     return result;
   }, [displayRows, page, pageSize, expandedParents]);
 
+  const rowIds = useMemo(() => paginatedRows.map(r => r.id), [paginatedRows]);
+
   // Reset to page 1 when filters change
   useEffect(() => {
     setPage(1);
     setSelectedRows(new Set());
-  }, [typeFilter, searchQuery, sortBy, sortOrder, pageSize, insightFilter]);
+  }, [typeFilters, searchQuery, sortBy, sortOrder, pageSize, insightFilter]);
 
   const toggleParentExpand = (parentId: string) => {
     setExpandedParents((prev) => {
@@ -613,6 +626,31 @@ export default function SpreadsheetPage() {
 
     setEditingCell(null);
   };
+
+  useSpreadsheetKeyboard({
+    activeCell,
+    setActiveCell,
+    editingCell,
+    setEditingCell: (cell) => setEditingCell(cell as EditingCell),
+    rowIds,
+    visibleColumns: columnConfig.visibleColumns,
+    isAdmin,
+    getCellValue: (rowId, column) => {
+      const row = paginatedRows.find(r => r.id === rowId);
+      if (!row) return '';
+      if (column === 'date') return formatShortDate(row.date);
+      if (column === 'member') return row.member || '-';
+      if (column === 'category') return row.category;
+      if (column === 'description') return row.description;
+      if (column === 'income') return row.incomeCents > 0 ? (row.incomeCents / 100).toFixed(2) : '';
+      if (column === 'expense') return row.expenseCents > 0 ? (row.expenseCents / 100).toFixed(2) : '';
+      return '';
+    },
+    onSaveCell: (rowId, column, value) => {
+      const row = paginatedRows.find(r => r.id === rowId);
+      if (row) handleSaveCell(row, column as any, value);
+    },
+  });
 
   const handleAddMember = async (name: string): Promise<string | null> => {
     if (!currentOrgId) return null;
@@ -1149,7 +1187,7 @@ export default function SpreadsheetPage() {
 
   // Phase 3: Formula bar handlers
   const handleFormulaFilter = useCallback((result: SpreadsheetQueryResult & { type: 'filter' }) => {
-    if (result.typeFilter) setTypeFilter(result.typeFilter);
+    if (result.typeFilter) setTypeFilters(new Set([result.typeFilter]));
     if (result.search !== undefined) setSearchQuery(result.search || '');
     setFormulaCategories(result.categories?.length ? result.categories : null);
     setFormulaStatuses(result.statuses?.length ? result.statuses : null);
@@ -1442,7 +1480,7 @@ export default function SpreadsheetPage() {
               orgId={currentOrgId}
               rows={rows}
               viewMetadata={{
-                typeFilter,
+                typeFilter: typeFilters.size === 3 ? 'all' : Array.from(typeFilters)[0] || 'all',
                 rowCount: rows.length,
                 columns: ['date', 'type', 'category', 'description', 'member', 'income', 'expense'],
               }}
@@ -1472,18 +1510,32 @@ export default function SpreadsheetPage() {
               />
             </div>
           )}
-          <div className="flex items-center gap-2">
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-[120px] sm:w-[150px] h-8 bg-secondary/30 border-border/50 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Transactions</SelectItem>
-                <SelectItem value="charge">Charges Only</SelectItem>
-                <SelectItem value="expense">Expenses Only</SelectItem>
-                <SelectItem value="payment">Payments Only</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-1">
+              {(['charge', 'expense', 'payment'] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setTypeFilters(prev => {
+                    const next = new Set(prev);
+                    if (next.has(t)) {
+                      next.delete(t);
+                      if (next.size === 0) return new Set(['charge', 'expense', 'payment']);
+                    } else {
+                      next.add(t);
+                    }
+                    return next;
+                  })}
+                  className={cn(
+                    'px-2.5 py-1 rounded-md text-xs font-medium transition-colors',
+                    typeFilters.has(t)
+                      ? t === 'charge' ? 'bg-warning/15 text-warning' : t === 'expense' ? 'bg-destructive/15 text-destructive' : 'bg-success/15 text-success'
+                      : 'bg-secondary/50 text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  {t === 'charge' ? 'Charges' : t === 'expense' ? 'Expenses' : 'Payments'}
+                </button>
+              ))}
+            </div>
             <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
               <Switch
                 checked={showUnallocated}
