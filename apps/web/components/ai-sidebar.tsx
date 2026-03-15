@@ -588,7 +588,7 @@ export function AISidebar() {
 
                 <div>
                   {msg.content && (
-                    <MessageContent content={msg.content} />
+                    <MessageContent content={msg.content.replace(/\[Actions confirmed\..*?\]/g, '').trim()} />
                   )}
 
                   {msg.role === 'assistant' && isStreaming && msg === messages[messages.length - 1] && !msg.actions && (
@@ -850,7 +850,7 @@ export function AISidebar() {
                   </div>
                   <div>
                     {msg.content && (
-                      <MessageContent content={msg.content} />
+                      <MessageContent content={msg.content.replace(/\[Actions confirmed\..*?\]/g, '').trim()} />
                     )}
                     {msg.role === 'assistant' && isStreaming && msg === messages[messages.length - 1] && !msg.actions && (
                       <span className="inline-block w-1.5 h-3.5 bg-foreground/60 animate-pulse ml-0.5" />

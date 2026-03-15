@@ -1,8 +1,7 @@
 {
   "parser": "@typescript-eslint/parser",
   "parserOptions": {
-    "project": "tsconfig.json",
-    "tsconfigRootDir": ".",
+    "project": "apps/api/tsconfig.json",
     "sourceType": "module"
   },
   "plugins": ["@typescript-eslint"],
