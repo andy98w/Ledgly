@@ -52,7 +52,6 @@ import { FadeIn } from '@/components/ui/page-transition';
 import { PageHeader } from '@/components/ui/page-header';
 import { Pagination } from '@/components/ui/pagination';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -112,7 +111,7 @@ type EditingCell = {
 } | null;
 
 export default function SpreadsheetPage() {
-  const [typeFilters, setTypeFilters] = useState<Set<string>>(new Set(['charge', 'expense', 'payment']));
+  const [typeFilters, setTypeFilters] = useState<Set<string>>(new Set(['charge', 'expense']));
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'date' | 'amount' | 'type' | 'category' | 'member' | 'status' | 'income' | 'expense'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -139,7 +138,6 @@ export default function SpreadsheetPage() {
   const [showMultiExpenseDialog, setShowMultiExpenseDialog] = useState(false);
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [insightFilter, setInsightFilter] = useState<'overdue' | 'unmatched' | 'duplicate' | null>(null);
-  const [showUnallocated, setShowUnallocated] = useState(false);
   const [newRowData, setNewRowData] = useState({
     date: new Date().toISOString().split('T')[0],
     category: '',
@@ -439,18 +437,12 @@ export default function SpreadsheetPage() {
 
   // Apply insight filter to narrow down to matching rows only
   const displayRows = useMemo(() => {
-    let filtered = rows;
-    if (!showUnallocated) {
-      filtered = filtered.filter((row) => !row.isUnallocated);
-    }
-    if (insightFilter) {
-      const insightRowIds = new Set(
-        insights.filter((i) => i.type === insightFilter).map((i) => i.rowId)
-      );
-      filtered = filtered.filter((row) => insightRowIds.has(row.id));
-    }
-    return filtered;
-  }, [rows, insights, insightFilter, showUnallocated]);
+    if (!insightFilter) return rows;
+    const insightRowIds = new Set(
+      insights.filter((i) => i.type === insightFilter).map((i) => i.rowId)
+    );
+    return rows.filter((row) => insightRowIds.has(row.id));
+  }, [rows, insights, insightFilter]);
 
   const INSIGHT_DOT_COLORS: Record<RowInsight['type'], string> = {
     overdue: 'bg-destructive',
@@ -1536,14 +1528,6 @@ export default function SpreadsheetPage() {
                 </button>
               ))}
             </div>
-            <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
-              <Switch
-                checked={showUnallocated}
-                onCheckedChange={setShowUnallocated}
-                className="scale-75 origin-left"
-              />
-              Unmatched payments
-            </label>
           </div>
         </div>
       </FadeIn>
@@ -1595,99 +1579,51 @@ export default function SpreadsheetPage() {
                       </div>
                     </th>
                   )}
-                  <th
-                    className="text-left px-2 py-2 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none w-24"
-                    onClick={() => {
-                      if (sortBy === 'date') {
-                        setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-                      } else {
-                        setSortBy('date');
-                        setSortOrder('desc');
-                      }
-                    }}
-                  >
-                    <span className="flex items-center gap-1">
-                      Date
-                      {sortBy === 'date' && (
-                        sortOrder === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-                      )}
-                    </span>
-                  </th>
-                  <th
-                    className="text-left px-2 py-2 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none w-36"
-                    onClick={() => {
-                      if (sortBy === 'member') {
-                        setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-                      } else {
-                        setSortBy('member');
-                        setSortOrder('asc');
-                      }
-                    }}
-                  >
-                    <span className="flex items-center gap-1">
-                      Member/Vendor
-                      {sortBy === 'member' && (
-                        sortOrder === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-                      )}
-                    </span>
-                  </th>
-                  <th
-                    className="text-left px-2 py-2 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none w-28"
-                    onClick={() => {
-                      if (sortBy === 'category') {
-                        setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-                      } else {
-                        setSortBy('category');
-                        setSortOrder('asc');
-                      }
-                    }}
-                  >
-                    <span className="flex items-center gap-1">
-                      Category
-                      {sortBy === 'category' && (
-                        sortOrder === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-                      )}
-                    </span>
-                  </th>
-                  <th className="text-left px-2 py-2 font-medium text-muted-foreground">Title</th>
-                  <th
-                    className="text-right px-2 py-2 font-medium text-success cursor-pointer hover:text-success/80 select-none w-24"
-                    onClick={() => {
-                      if (sortBy === 'income') {
-                        setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-                      } else {
-                        setSortBy('income');
-                        setSortOrder('desc');
-                      }
-                    }}
-                  >
-                    <span className="flex items-center justify-end gap-1">
-                      <DollarSign className="h-3 w-3" />
-                      Income
-                      {sortBy === 'income' && (
-                        sortOrder === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-                      )}
-                    </span>
-                  </th>
-                  <th
-                    className="text-right pl-2 pr-2 py-2 font-medium text-destructive cursor-pointer hover:text-destructive/80 select-none w-24"
-                    onClick={() => {
-                      if (sortBy === 'expense') {
-                        setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-                      } else {
-                        setSortBy('expense');
-                        setSortOrder('desc');
-                      }
-                    }}
-                  >
-                    <span className="flex items-center justify-end gap-1">
-                      <DollarSign className="h-3 w-3" />
-                      Expense
-                      {sortBy === 'expense' && (
-                        sortOrder === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-                      )}
-                    </span>
-                  </th>
+                  {columnConfig.visibleColumns.map((colId) => {
+                    const def = columnConfig.getColumnDef(colId);
+                    const width = colId === 'description' ? undefined : columnConfig.getWidth(colId);
+                    return (
+                      <th
+                        key={colId}
+                        className={cn(
+                          'px-2 py-2 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none relative',
+                          def.align === 'right' ? 'text-right' : 'text-left',
+                          colId === 'date' && (isAdmin ? 'sticky left-14 z-20 bg-secondary/30' : 'sticky left-0 z-20 bg-secondary/30'),
+                          dropTargetId === colId && 'border-l-2 border-primary',
+                          dragColumnId === colId && 'opacity-50',
+                        )}
+                        style={width ? { width } : undefined}
+                        draggable={colId !== 'date'}
+                        onDragStart={(e) => onDragStart(colId, e)}
+                        onDragOver={(e) => onDragOver(colId, e)}
+                        onDragLeave={onDragLeave}
+                        onDrop={(e) => onDrop(colId, e)}
+                        onDragEnd={onDragEnd}
+                        onClick={() => {
+                          if (def.sortKey) {
+                            if (sortBy === def.sortKey) {
+                              setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+                            } else {
+                              setSortBy(def.sortKey as any);
+                              setSortOrder('asc');
+                            }
+                          }
+                        }}
+                      >
+                        <span className="flex items-center gap-1" style={{ justifyContent: def.align === 'right' ? 'flex-end' : 'flex-start' }}>
+                          {(colId === 'income' || colId === 'expense') && <DollarSign className="h-3 w-3" />}
+                          {def.label}
+                          {sortBy === def.sortKey && (
+                            sortOrder === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                          )}
+                        </span>
+                        <div
+                          className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/30 transition-colors"
+                          onMouseDown={(e) => onResizeStart(colId, columnConfig.getWidth(colId), e)}
+                        />
+                      </th>
+                    );
+                  })}
                   {isAdmin && <th className="w-8 px-1" />}
                 </tr>
               </thead>
@@ -1709,7 +1645,7 @@ export default function SpreadsheetPage() {
                         )}
                       </div>
                     </td>
-                    <td colSpan={6}>
+                    <td colSpan={columnConfig.visibleColumns.length}>
                       {selectedRows.size > 0 && (
                         <button
                           onClick={() => setSelectedRows(new Set())}
@@ -1887,18 +1823,17 @@ export default function SpreadsheetPage() {
                   Array.from({ length: 5 }).map((_, i) => (
                     <tr key={i} className="border-b border-border/50">
                       {isAdmin && <td className="pl-3 pr-1 py-3"><Skeleton className="h-7 w-14" /></td>}
-                      <td className="px-2 py-2"><Skeleton className="h-4 w-20" /></td>
-                      <td className="px-2 py-2"><Skeleton className="h-5 w-20" /></td>
-                      <td className="px-2 py-2"><Skeleton className="h-4 w-40" /></td>
-                      <td className="px-2 py-2"><Skeleton className="h-4 w-24" /></td>
-                      <td className="px-2 py-2"><Skeleton className="h-4 w-16 ml-auto" /></td>
-                      <td className="px-2 py-2"><Skeleton className="h-4 w-16 ml-auto" /></td>
+                      {columnConfig.visibleColumns.map((colId) => (
+                        <td key={colId} className="px-2 py-2">
+                          <Skeleton className={cn('h-4', colId === 'description' ? 'w-40' : colId === 'member' ? 'w-20' : 'w-16', (colId === 'income' || colId === 'expense') && 'ml-auto')} />
+                        </td>
+                      ))}
                       {isAdmin && <td />}
                     </tr>
                   ))
                 ) : paginatedRows.length === 0 ? (
                   <tr>
-                    <td colSpan={isAdmin ? 8 : 6}>
+                    <td colSpan={isAdmin ? columnConfig.visibleColumns.length + 2 : columnConfig.visibleColumns.length}>
                       <div className="flex flex-col items-center justify-center text-center py-12">
                         <Search className="h-6 w-6 text-muted-foreground mb-2" />
                         <p className="font-semibold">No results</p>
@@ -1920,7 +1855,7 @@ export default function SpreadsheetPage() {
                               'hover:bg-secondary/30',
                               row.type === 'charge' && 'bg-warning/5',
                               row.type === 'expense' && 'bg-destructive/5',
-                              row.type === 'payment' && 'bg-success/5',
+                              row.type === 'payment' && (row.isUnallocated ? 'bg-success/3 opacity-60' : 'bg-success/5'),
                             ),
                         row.isChild && !selectedRows.has(row.id) && 'bg-secondary/20',
                         isDragging && 'select-none',
