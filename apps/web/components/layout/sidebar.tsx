@@ -58,7 +58,6 @@ const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Home', icon: LayoutDashboard },
   { href: '/spreadsheet', label: 'Ledger', icon: FileSpreadsheet },
   { href: '/members', label: 'Members', icon: Users },
-  { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
 export function Sidebar() {
@@ -267,25 +266,53 @@ export function Sidebar() {
         <div className={cn('space-y-1', isCollapsed ? 'p-2' : 'p-3')}>
           <TooltipProvider delayDuration={0}>
             {isCollapsed ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => { logout(); window.location.href = '/login'; }}
-                    className="flex w-full items-center justify-center py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
-                  >
-                    <LogOut className="h-5 w-5" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="right">Sign out</TooltipContent>
-              </Tooltip>
+              <>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Link
+                      href="/settings"
+                      className={cn(
+                        'flex w-full items-center justify-center py-2.5 rounded-xl text-sm font-medium transition-colors',
+                        pathname.startsWith('/settings') ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50',
+                      )}
+                    >
+                      <Settings className="h-5 w-5" />
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">Settings</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => { logout(); window.location.href = '/login'; }}
+                      className="flex w-full items-center justify-center py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+                    >
+                      <LogOut className="h-5 w-5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">Sign out</TooltipContent>
+                </Tooltip>
+              </>
             ) : (
-              <button
-                onClick={() => { logout(); window.location.href = '/login'; }}
-                className="flex w-full items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
-              >
-                <LogOut className="h-5 w-5" />
-                Sign out
-              </button>
+              <>
+                <Link
+                  href="/settings"
+                  className={cn(
+                    'flex w-full items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors',
+                    pathname.startsWith('/settings') ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50',
+                  )}
+                >
+                  <Settings className="h-5 w-5" />
+                  Settings
+                </Link>
+                <button
+                  onClick={() => { logout(); window.location.href = '/login'; }}
+                  className="flex w-full items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+                >
+                  <LogOut className="h-5 w-5" />
+                  Sign out
+                </button>
+              </>
             )}
           </TooltipProvider>
         </div>

@@ -54,6 +54,7 @@ export class AgentService {
     query: string,
     viewMetadata?: { typeFilter: string; rowCount: number; columns: string[] },
   ): Promise<any> {
+    const today = new Date().toISOString().slice(0, 10);
     const systemPrompt = `You are a spreadsheet query parser. The user is viewing a financial spreadsheet with ${viewMetadata?.rowCount || 0} rows.
 Current filter: ${viewMetadata?.typeFilter || 'all'}.
 Available columns: ${viewMetadata?.columns?.join(', ') || 'date, type, category, description, member, income, outstanding, expense'}.
@@ -74,6 +75,17 @@ For compute, return an expression the frontend can evaluate against the loaded r
 Only include fields that are relevant. For filters, omit fields that aren't constrained.
 Category enums for charges: DUES, EVENT, FINE, MERCH, OTHER. For expenses: EVENT, SUPPLIES, FOOD, VENUE, MARKETING, SERVICES, OTHER.
 Status enums: OPEN, PARTIALLY_PAID, PAID, VOID.
+Today's date is ${today}.
+
+Examples:
+- "everything under Bryan" → {"type":"filter","search":"Bryan"}
+- "show unpaid charges" → {"type":"filter","typeFilter":"charge","statuses":["OPEN"]}
+- "total expenses this month" → {"type":"compute","expression":"sum","field":"expenseCents","explanation":"Total expenses this month","filters":{"type":"expense"}}
+- "sort by amount highest first" → {"type":"sort","sortBy":"amount","sortOrder":"desc"}
+- "charges over $100" → {"type":"filter","typeFilter":"charge","amountMin":10000}
+- "who owes the most" → {"type":"sort","sortBy":"outstanding","sortOrder":"desc"}
+- "Bryan's dues" → {"type":"filter","search":"Bryan","categories":["DUES"]}
+
 Return ONLY the JSON object, no markdown or explanation.`;
 
     try {
@@ -1401,6 +1413,49 @@ When a user asks to "change this to a charge", "convert this expense to a charge
 
 ## Cross-entity suggestions
 - If a search for charges/expenses/payments returns nothing, proactively check the related entity type. For example, if the user says "delete the dues charge" and no charges match, also check expenses — they may have meant "expense" instead of "charge", and vice versa. Suggest what you found: "I didn't find a dues charge, but I found a dues expense — would you like me to delete that instead?"
+
+## Natural language understanding
+Users speak casually. Handle all of these patterns gracefully:
+
+**Amount parsing:**
+- "$50", "50 dollars", "fifty bucks", "50.00" → 5000 cents
+- "twenty five" → 2500 cents
+- "$5k" → 500000 cents
+
+**Date parsing:**
+- "today", "yesterday", "last friday", "next monday" → resolve relative to today (${today})
+- "March 15", "3/15", "03/15/26" → ISO date
+- "last month", "this semester", "beginning of the year" → appropriate date range
+- "start of semester" without more context: assume Jan 15 for spring, Aug 25 for fall
+
+**Member references:**
+- First name only ("charge Bryan $50") → fuzzy match against member list
+- Partial names ("charge Bry" or "the one named lui") → fuzzy match
+- "everyone", "all members", "the whole org" → all active members
+- "new members", "members who joined this month" → filter by joinedAt
+
+**Quantity and batch:**
+- "charge everyone $50 for dues" → multi-charge to all active members
+- "charge Bryan and Sarah $30 each" → multi-charge to 2 members
+- "add 3 expenses: cups $15, plates $20, napkins $5" → multi-expense
+
+**Corrections and follow-ups:**
+- "actually make that $60" → modify the most recent action
+- "same thing but for expenses" → repeat pattern with different type
+- "do that for everyone else too" → extend to remaining members
+- "wait, not Sarah" → modify to exclude that member
+- "change the category to EVENT" → update most recent item
+
+**Ambiguity resolution:**
+- If a query is ambiguous, pick the most likely interpretation and proceed. Don't ask clarifying questions unless truly necessary.
+- "the dues" → look up the most recent charge with category DUES
+- "that payment" → the most recently discussed or created payment
+- "his charges" → charges assigned to the most recently mentioned member
+
+**Error recovery:**
+- If a member name doesn't match anyone, suggest the closest match: "I don't see 'Brian'. Did you mean Bryan Lui?"
+- If an amount seems wrong (e.g., $5000 for a typical $50 dues org), confirm: "That's $5,000 — just making sure that's correct."
+- If no data matches, be helpful: "No expenses found. Would you like to create one?"
 
 ${orgContext}${csvInstruction}${this.buildSpreadsheetContextSection(spreadsheetContext)}`;
   }
