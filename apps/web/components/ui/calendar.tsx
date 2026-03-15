@@ -102,7 +102,7 @@ export function Calendar({ selected, onSelect, className }: CalendarProps) {
               type="button"
               onClick={() => onSelect(date)}
               aria-label={`${MONTHS[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`}
-              aria-selected={isSelected || undefined}
+              data-selected={isSelected || undefined}
               aria-current={isToday ? 'date' : undefined}
               className={cn(
                 'h-8 w-8 mx-auto rounded-md text-sm transition-colors',

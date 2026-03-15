@@ -25,22 +25,15 @@ function parseNumericString(val: string): [number, string] | null {
 }
 
 function AnimatedNumber({ value }: { value: number | string }) {
-  // Pure number
-  if (typeof value === 'number') {
-    const animated = useAnimatedValue(value, true);
-    return <>{animated.toLocaleString()}</>;
-  }
+  const numericValue = typeof value === 'number'
+    ? value
+    : (parseNumericString(value)?.[0] ?? 0);
+  const suffix = typeof value === 'string' ? (parseNumericString(value)?.[1] ?? '') : '';
+  const isPlainString = typeof value === 'string' && !parseNumericString(value);
+  const animated = useAnimatedValue(numericValue, true);
 
-  // String with a leading number (e.g. "85%", "12 items")
-  const parsed = parseNumericString(value);
-  if (parsed) {
-    const [num, suffix] = parsed;
-    const animated = useAnimatedValue(num, true);
-    return <>{animated.toLocaleString()}{suffix}</>;
-  }
-
-  // Plain string — no animation
-  return <>{value}</>;
+  if (isPlainString) return <>{value}</>;
+  return <>{animated.toLocaleString()}{suffix}</>;
 }
 
 export function StatCard({
