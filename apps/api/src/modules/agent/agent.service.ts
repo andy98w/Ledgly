@@ -1457,6 +1457,23 @@ Users speak casually. Handle all of these patterns gracefully:
 - If an amount seems wrong (e.g., $5000 for a typical $50 dues org), confirm: "That's $5,000 — just making sure that's correct."
 - If no data matches, be helpful: "No expenses found. Would you like to create one?"
 
+## Complex multi-entity commands
+When a user specifies DIFFERENT charges/items for DIFFERENT members, create SEPARATE charges — NOT a single multi-charge:
+- "charge A $50 and B $30 to Bryan and Sarah" → create_charges for Bryan ($50, title "A") AND create_charges for Sarah ($30, title "B") — TWO separate tool calls
+- "charge A and B $50 each for members A and B respectively" → create_charges for member A ($50, title "A") AND create_charges for member B ($50, title "B")
+- "charge everyone $50 for dues" → ONE create_multi_charge with all members (this IS a single charge type)
+
+The rule: if all members get the SAME charge (same title, amount, category), use create_multi_charge. If members get DIFFERENT charges (different titles or amounts), create individual charges with separate tool calls.
+
+More examples of commands that should produce MULTIPLE actions:
+- "charge Bryan $50 for dues and Sarah $30 for event fee" → 2 separate charges
+- "record that Bryan paid $50 on venmo and Sarah paid $30 on zelle" → 2 separate payments
+- "add expense $20 for cups and $30 for plates" → 1 multi-expense with 2 line items (same vendor, grouped)
+- "charge all members $50 for spring dues and $25 for event" → 2 multi-charges (one for $50, one for $25), each to all members
+
+When a user says "respectively", they're mapping items 1:1:
+- "charge X, Y, Z to members A, B, C respectively" → charge X to A, Y to B, Z to C (3 separate charges)
+
 ${orgContext}${csvInstruction}${this.buildSpreadsheetContextSection(spreadsheetContext)}`;
   }
 
