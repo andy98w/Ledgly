@@ -154,7 +154,7 @@ export default function SpreadsheetPage() {
   const currentMembership = useCurrentMembership();
 
   const columnConfig = useColumnConfig();
-  const { resizingColumnId, onResizeStart } = useColumnResize({ onResize: columnConfig.resizeColumn });
+  const { onResizeStart } = useColumnResize({ onResize: columnConfig.resizeColumn });
   const { dragColumnId, dropTargetId, onDragStart, onDragOver, onDragLeave, onDrop, onDragEnd } = useColumnReorder({
     onReorder: columnConfig.reorderColumn,
     frozenColumns: ['date'],
@@ -1588,6 +1588,34 @@ export default function SpreadsheetPage() {
                   {t === 'charge' ? 'Charges' : t === 'expense' ? 'Expenses' : 'Payments'}
                 </button>
               ))}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
+                    <Columns3 className="h-3.5 w-3.5" />
+                    Columns
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44">
+                  {COLUMN_DEFS.filter(c => c.hideable).map(col => (
+                    <DropdownMenuItem
+                      key={col.id}
+                      onClick={() => columnConfig.toggleVisibility(col.id)}
+                      className="text-xs gap-2"
+                    >
+                      {columnConfig.state.hidden.includes(col.id) ? (
+                        <div className="w-4 h-4" />
+                      ) : (
+                        <Check className="w-4 h-4" />
+                      )}
+                      {col.label}
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={columnConfig.resetColumns} className="text-xs">
+                    Reset to default
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </div>
@@ -1609,7 +1637,7 @@ export default function SpreadsheetPage() {
               <thead>
                 <tr className="border-b bg-secondary/30">
                   {isAdmin && (
-                    <th className="w-14 pl-3 pr-0 py-2">
+                    <th className="w-14 pl-3 pr-0 py-2 sticky left-0 z-20 bg-secondary/30">
                       <div className="flex items-center gap-0.5">
                         {selectedRows.size > 0 && (
                           <button
@@ -1923,7 +1951,7 @@ export default function SpreadsheetPage() {
                       )}
                     >
                       {isAdmin && (
-                        <td className="pl-3 pr-0 py-2">
+                        <td className={cn("pl-3 pr-0 py-2 sticky left-0 z-10", stickyDateBg(row))}>
                           <div className="flex items-center gap-1">
                             {row.isParent ? (
                               <button
