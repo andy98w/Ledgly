@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useCallback, memo } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Plus, CreditCard, AlertCircle, TrendingUp, Wallet, Search, MoreHorizontal, Pencil, Trash2, Loader2, ChevronDown, Link2, Check, Users, X, UserPlus, Receipt, MoreVertical, FileSpreadsheet, FileText, Mail, RefreshCw } from 'lucide-react';
+import { Plus, CreditCard, AlertCircle, TrendingUp, Wallet, Search, MoreHorizontal, Pencil, Trash2, Loader2, ChevronDown, Link2, Check, Users, X, UserPlus, Receipt, MoreVertical, FileSpreadsheet, FileText, Mail, RefreshCw, ArrowDownLeft, ArrowUpRight, EyeOff, RotateCcw } from 'lucide-react';
 import { useAutoAllocateToCharge, useRemoveAllocation, useBulkAutoAllocate } from '@/lib/queries/payments';
 import { cn } from '@/lib/utils';
 import { groupCharges } from '@/lib/utils/charge-grouping';
@@ -15,12 +15,14 @@ import { useAuthStore, useIsAdminOrTreasurer } from '@/lib/stores/auth';
 import { formatDate } from '@/lib/utils';
 import {
   useGmailStatus,
+  useGmailImports,
   useSyncGmail,
   useIgnoreImport,
   useRestoreImport,
   useDisconnectGmail,
   getGmailConnectUrl,
 } from '@/lib/queries/gmail';
+import type { EmailImport } from '@/lib/queries/gmail';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -270,12 +272,15 @@ export default function PaymentsPage() {
   const bulkAutoAllocate = useBulkAutoAllocate();
 
   const { data: gmailStatus, isLoading: gmailStatusLoading } = useGmailStatus(currentOrgId);
+  const { data: gmailImportsData } = useGmailImports(gmailStatus?.connected ? currentOrgId : null);
   const syncGmail = useSyncGmail();
   const ignoreImport = useIgnoreImport();
   const restoreImportAction = useRestoreImport();
   const disconnectGmail = useDisconnectGmail();
+  const [importsExpanded, setImportsExpanded] = useState(false);
 
   const gmailConnected = gmailStatus?.connected;
+  const gmailImports = gmailImportsData?.data || [];
 
   useEffect(() => {
     const connected = searchParams.get('connected');
@@ -984,6 +989,141 @@ export default function PaymentsPage() {
             color="amber"
           />
         </div>
+      )}
+
+      {gmailConnected && gmailImports.length > 0 && (
+        <FadeIn delay={0.15}>
+          <div className="rounded-xl border border-border/50 bg-card/50">
+            <button
+              onClick={() => setImportsExpanded(!importsExpanded)}
+              className="flex items-center justify-between w-full p-4 text-left hover:bg-secondary/20 transition-colors rounded-xl"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                  <Mail className="w-4 h-4 text-blue-500" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Gmail Imports</p>
+                  <p className="text-xs text-muted-foreground">
+                    {gmailImports.length} import{gmailImports.length !== 1 ? 's' : ''} ({gmailImports.filter((i: EmailImport) => i.parsedDirection === 'incoming').length} payments, {gmailImports.filter((i: EmailImport) => i.parsedDirection === 'outgoing').length} expenses)
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={(e) => { e.stopPropagation(); handleGmailSync(); }}
+                  disabled={syncGmail.isPending}
+                >
+                  {syncGmail.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <RefreshCw className="w-3 h-3 mr-1" />}
+                  Sync now
+                </Button>
+                <ChevronDown className={cn('w-4 h-4 text-muted-foreground transition-transform', importsExpanded && 'rotate-180')} />
+              </div>
+            </button>
+
+            {importsExpanded && (
+              <div className="px-4 pb-4 space-y-2">
+                <div className="border-t border-border/30 pt-3 space-y-1.5">
+                  {gmailImports.map((imp: EmailImport) => {
+                    const sourceColors: Record<string, string> = {
+                      venmo: 'bg-blue-500/10 text-blue-600',
+                      zelle: 'bg-purple-500/10 text-purple-600',
+                      cashapp: 'bg-green-500/10 text-green-600',
+                      paypal: 'bg-sky-500/10 text-sky-600',
+                    };
+                    const sourceColor = sourceColors[imp.parsedSource] || 'bg-secondary text-muted-foreground';
+                    const isIncoming = imp.parsedDirection === 'incoming';
+                    const isIgnored = imp.status === 'IGNORED';
+
+                    return (
+                      <div
+                        key={imp.id}
+                        className={cn(
+                          'flex items-center gap-3 p-3 rounded-lg border border-border/30 transition-colors',
+                          isIgnored && 'opacity-50',
+                        )}
+                      >
+                        <Badge variant="secondary" className={cn('text-[10px] font-medium shrink-0 uppercase tracking-wide', sourceColor)}>
+                          {imp.parsedSource}
+                        </Badge>
+
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            'text-[10px] shrink-0 gap-0.5',
+                            isIncoming ? 'text-emerald-600 border-emerald-200' : 'text-red-500 border-red-200',
+                          )}
+                        >
+                          {isIncoming ? <ArrowDownLeft className="w-2.5 h-2.5" /> : <ArrowUpRight className="w-2.5 h-2.5" />}
+                          {isIncoming ? 'Received' : 'Sent'}
+                        </Badge>
+
+                        <span className="text-sm truncate min-w-0 flex-1">
+                          {imp.parsedPayerName || 'Unknown'}
+                        </span>
+
+                        <span className={cn('text-sm font-medium tabular-nums shrink-0', isIncoming ? 'text-emerald-600' : 'text-red-500')}>
+                          {isIncoming ? '+' : '-'}${((imp.parsedAmount || 0) / 100).toFixed(2)}
+                        </span>
+
+                        <span className="text-xs text-muted-foreground shrink-0">
+                          {formatDate(imp.emailDate)}
+                        </span>
+
+                        <Badge
+                          variant="secondary"
+                          className={cn(
+                            'text-[10px] shrink-0',
+                            imp.status === 'AUTO_CONFIRMED' && 'bg-emerald-500/10 text-emerald-600',
+                            imp.status === 'IGNORED' && 'bg-secondary text-muted-foreground',
+                            imp.status === 'DUPLICATE' && 'bg-yellow-500/10 text-yellow-600',
+                          )}
+                        >
+                          {imp.status === 'AUTO_CONFIRMED' && 'Auto-confirmed'}
+                          {imp.status === 'IGNORED' && 'Ignored'}
+                          {imp.status === 'DUPLICATE' && 'Duplicate'}
+                        </Badge>
+
+                        {isIgnored ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 shrink-0"
+                            onClick={() => currentOrgId && restoreImportAction.mutate(
+                              { orgId: currentOrgId, importId: imp.id },
+                              { onSuccess: () => toast({ title: 'Import restored' }) },
+                            )}
+                            disabled={restoreImportAction.isPending}
+                            title="Restore"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 shrink-0"
+                            onClick={() => currentOrgId && ignoreImport.mutate(
+                              { orgId: currentOrgId, importId: imp.id },
+                              { onSuccess: () => toast({ title: 'Import ignored' }) },
+                            )}
+                            disabled={ignoreImport.isPending}
+                            title="Ignore"
+                          >
+                            <EyeOff className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </FadeIn>
       )}
 
       {/* Search + Filter */}

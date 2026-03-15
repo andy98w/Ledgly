@@ -40,6 +40,14 @@ export interface SyncResult {
   autoConfirmed: number;
 }
 
+export function useGmailImports(orgId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.gmail.imports(orgId),
+    queryFn: () => api.get<{ data: EmailImport[] }>(`/organizations/${orgId}/gmail/imports`),
+    enabled: !!orgId,
+  });
+}
+
 export function useGmailStatus(orgId: string | null) {
   return useQuery({
     queryKey: queryKeys.gmail.status(orgId),
