@@ -281,7 +281,7 @@ export class GmailService {
   private buildSearchQuery(enabledSources: string[], syncAfter?: Date): string {
     const sourceMap: Record<string, string[]> = {
       venmo: ['from:venmo.com', 'from:venmo@venmo.com'],
-      zelle: ['from:zelle', 'from:zellepay'],
+      zelle: ['from:zelle', 'from:zellepay', 'from:ealerts.bankofamerica.com', 'from:chase.com', 'from:wellsfargo.com', 'from:citibank.com', 'from:usbank.com', 'from:capitalone.com', 'from:pnc.com'],
       cashapp: ['from:cash.app', 'from:square.com'],
       paypal: ['from:paypal.com', 'from:service@paypal.com'],
     };

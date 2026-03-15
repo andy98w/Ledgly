@@ -200,12 +200,14 @@ export class EmailParserService {
     }
 
     // Check for outgoing payments
-    const outgoingPatterns = [/you sent/i, /you paid/i, /payment to/i];
+    const outgoingPatterns = [/you sent/i, /you paid/i, /payment to/i, /has been sent/i];
     const isOutgoing = outgoingPatterns.some(p => p.test(subject));
 
-    // Outgoing: "You sent $X to Name"
+    // Outgoing: "You sent $X to Name" or "payment of $X to Name has been sent"
     if (isOutgoing) {
-      let match = subject.match(/you sent \$?([\d,]+\.?\d*) to (.+)/i);
+      const match = subject.match(/you sent \$?([\d,]+\.?\d*) to (.+)/i)
+        || subject.match(/payment of \$?([\d,]+\.?\d*) to (.+?)(?:\s+has been|\s*$)/i)
+        || body.match(/payment of \$?([\d,]+\.?\d*) to (.+?)(?:\s+has been|\s*$)/i);
       if (match) {
         return {
           source: 'zelle',
@@ -219,8 +221,10 @@ export class EmailParserService {
       }
     }
 
-    // Incoming: "You received $X from Name"
-    let match = subject.match(/received \$?([\d,]+\.?\d*) from (.+)/i);
+    // Incoming: "You received $X from Name" or "payment of $X from Name has been deposited"
+    let match = subject.match(/received \$?([\d,]+\.?\d*) from (.+)/i)
+      || subject.match(/payment of \$?([\d,]+\.?\d*) from (.+?)(?:\s+has been|\s*$)/i)
+      || body.match(/payment of \$?([\d,]+\.?\d*) from (.+?)(?:\s+has been|\s*$)/i);
     if (match) {
       return {
         source: 'zelle',
