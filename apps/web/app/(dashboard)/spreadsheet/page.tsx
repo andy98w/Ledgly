@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
-import { ArrowUpRight, ArrowDownRight, Download, Upload, Filter, Plus, DollarSign, Wallet, Search, Minus, ArrowUp, ArrowDown, Trash2, Check, Link2, Loader2, CreditCard, MoreVertical, FileSpreadsheet, ChevronDown, ChevronRight, Layers, Sparkles, Ban, Zap } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Download, Upload, Filter, Plus, DollarSign, AlertCircle, Search, Minus, ArrowUp, ArrowDown, Trash2, Check, Link2, Loader2, CreditCard, MoreVertical, FileSpreadsheet, ChevronDown, ChevronRight, Layers, Sparkles, Ban, Zap } from 'lucide-react';
 import { useCharges, useUpdateCharge, useCreateCharge, useCreateMultiCharge, useVoidCharge, useRestoreCharge, useBulkCreateCharges } from '@/lib/queries/charges';
 import { useExpenses, useUpdateExpense, useCreateExpense, useCreateMultiExpense, useDeleteExpense, useRestoreExpense } from '@/lib/queries/expenses';
 import { usePayments, useUpdatePayment, useCreatePayment, useDeletePayment, useRestorePayment, useAllocatePayment, useAutoAllocateToCharge, useBulkAutoAllocate, useBulkCreatePayments } from '@/lib/queries/payments';
@@ -104,6 +104,7 @@ interface SpreadsheetRow {
   parentId?: string;
   childCount?: number;
   children?: SpreadsheetRow[];
+  isUnallocated?: boolean;
 }
 
 type EditingCell = {
@@ -443,7 +444,7 @@ function EditableCell({
       )}
     >
       {type === 'money' ? (
-        <Money cents={value as number} size="sm" className={column === 'income' ? 'text-success' : column === 'outstanding' ? 'text-warning' : 'text-destructive'} />
+        <Money cents={value as number} size="sm" className={column === 'income' ? 'text-success' : 'text-destructive'} />
       ) : type === 'category' ? (
         <Badge variant="secondary" className="text-xs">
           {rowType === 'charge'
@@ -464,7 +465,7 @@ function EditableCell({
 export default function SpreadsheetPage() {
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<'date' | 'amount' | 'type' | 'category' | 'member' | 'status' | 'income' | 'outstanding' | 'expense'>('date');
+  const [sortBy, setSortBy] = useState<'date' | 'amount' | 'type' | 'category' | 'member' | 'status' | 'income' | 'expense'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [formulaCategories, setFormulaCategories] = useState<string[] | null>(null);
   const [formulaStatuses, setFormulaStatuses] = useState<string[] | null>(null);
@@ -489,6 +490,7 @@ export default function SpreadsheetPage() {
   const [showMultiExpenseDialog, setShowMultiExpenseDialog] = useState(false);
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [insightFilter, setInsightFilter] = useState<'overdue' | 'unmatched' | 'duplicate' | null>(null);
+  const [showUnallocated, setShowUnallocated] = useState(false);
   const [newRowData, setNewRowData] = useState({
     date: new Date().toISOString().split('T')[0],
     category: '',
@@ -579,7 +581,7 @@ export default function SpreadsheetPage() {
               description: child.title,
               member: child.membership?.displayName || child.membership?.name || child.membership?.user?.name || undefined,
               membershipId: child.membershipId,
-              incomeCents: child.allocatedCents || 0,
+              incomeCents: child.amountCents,
               outstandingCents: child.balanceDueCents ?? child.amountCents,
               expenseCents: 0,
               status: child.status,
@@ -599,7 +601,7 @@ export default function SpreadsheetPage() {
             ? `${c.children.length} members`
             : (c.membership?.displayName || charge.membership?.name || charge.membership?.user?.name || undefined),
           membershipId: hasChildren ? undefined : charge.membershipId ?? undefined,
-          incomeCents: c.allocatedCents || 0,
+          incomeCents: charge.amountCents,
           outstandingCents: c.balanceDueCents ?? charge.amountCents,
           expenseCents: 0,
           status: charge.status,
@@ -670,6 +672,7 @@ export default function SpreadsheetPage() {
           expenseCents: 0,
           allocatedCents: payment.allocatedCents,
           unallocatedCents: payment.unallocatedCents,
+          isUnallocated: payment.unallocatedCents === payment.amountCents,
         });
       }
     }
@@ -737,14 +740,6 @@ export default function SpreadsheetPage() {
             comparison = a.incomeCents - b.incomeCents;
           }
           break;
-        case 'outstanding':
-          const aHasOutstanding = a.outstandingCents > 0 ? 1 : 0;
-          const bHasOutstanding = b.outstandingCents > 0 ? 1 : 0;
-          comparison = bHasOutstanding - aHasOutstanding;
-          if (comparison === 0) {
-            comparison = a.outstandingCents - b.outstandingCents;
-          }
-          break;
         case 'expense':
           // Sort by expense first (rows with expense come before rows without)
           // Then by amount within each group
@@ -788,12 +783,18 @@ export default function SpreadsheetPage() {
 
   // Apply insight filter to narrow down to matching rows only
   const displayRows = useMemo(() => {
-    if (!insightFilter) return rows;
-    const insightRowIds = new Set(
-      insights.filter((i) => i.type === insightFilter).map((i) => i.rowId)
-    );
-    return rows.filter((row) => insightRowIds.has(row.id));
-  }, [rows, insights, insightFilter]);
+    let filtered = rows;
+    if (!showUnallocated) {
+      filtered = filtered.filter((row) => !row.isUnallocated);
+    }
+    if (insightFilter) {
+      const insightRowIds = new Set(
+        insights.filter((i) => i.type === insightFilter).map((i) => i.rowId)
+      );
+      filtered = filtered.filter((row) => insightRowIds.has(row.id));
+    }
+    return filtered;
+  }, [rows, insights, insightFilter, showUnallocated]);
 
   const INSIGHT_DOT_COLORS: Record<RowInsight['type'], string> = {
     overdue: 'bg-destructive',
@@ -832,12 +833,13 @@ export default function SpreadsheetPage() {
     });
   };
 
-  // Calculate totals — separate realized income (payments) from outstanding (charges)
+  // Calculate totals
   const totals = useMemo(() => {
     let income = 0;
     let outstanding = 0;
     let expenses = 0;
     for (const r of displayRows) {
+      if (r.isUnallocated) continue;
       income += r.incomeCents;
       outstanding += r.outstandingCents;
       expenses += r.expenseCents;
@@ -1731,7 +1733,7 @@ export default function SpreadsheetPage() {
       {/* Summary Cards */}
       {displayRows.length > 0 && (
         <FadeIn delay={0.1}>
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-3">
             <div className="rounded-xl border bg-card p-4">
               <div className="flex items-center gap-2 text-success mb-2">
                 <ArrowUpRight className="w-4 h-4" />
@@ -1740,16 +1742,9 @@ export default function SpreadsheetPage() {
               <Money cents={totals.income} size="lg" className="text-success" />
             </div>
             <div className="rounded-xl border bg-card p-4">
-              <div className="flex items-center gap-2 text-warning mb-2">
-                <Wallet className="w-4 h-4" />
-                <span className="text-sm font-medium">Unpaid</span>
-              </div>
-              <Money cents={totals.outstanding} size="lg" className="text-warning" />
-            </div>
-            <div className="rounded-xl border bg-card p-4">
               <div className="flex items-center gap-2 text-destructive mb-2">
                 <ArrowDownRight className="w-4 h-4" />
-                <span className="text-sm font-medium">Total Expenses</span>
+                <span className="text-sm font-medium">Expenses</span>
               </div>
               <Money cents={totals.expenses} size="lg" className="text-destructive" />
             </div>
@@ -1794,7 +1789,7 @@ export default function SpreadsheetPage() {
               viewMetadata={{
                 typeFilter,
                 rowCount: rows.length,
-                columns: ['date', 'type', 'category', 'description', 'member', 'income', 'outstanding', 'expense'],
+                columns: ['date', 'type', 'category', 'description', 'member', 'income', 'expense'],
               }}
               onFilter={handleFormulaFilter}
               onSort={handleFormulaSort}
@@ -1834,7 +1829,15 @@ export default function SpreadsheetPage() {
                 <SelectItem value="payment">Payments Only</SelectItem>
               </SelectContent>
             </Select>
-            {/* Phase 1: Ask AI button — visible when rows are selected */}
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showUnallocated}
+                onChange={(e) => setShowUnallocated(e.target.checked)}
+                className="rounded border-border"
+              />
+              Unmatched payments
+            </label>
             {isAdmin && selectedRows.size > 0 && (
               <Button
                 size="sm"
@@ -1972,25 +1975,6 @@ export default function SpreadsheetPage() {
                     </span>
                   </th>
                   <th
-                    className="text-right px-2 py-2 font-medium text-warning cursor-pointer hover:text-warning/80 select-none w-24"
-                    onClick={() => {
-                      if (sortBy === 'outstanding') {
-                        setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-                      } else {
-                        setSortBy('outstanding');
-                        setSortOrder('desc');
-                      }
-                    }}
-                  >
-                    <span className="flex items-center justify-end gap-1">
-                      <Wallet className="h-3 w-3" />
-                      Unpaid
-                      {sortBy === 'outstanding' && (
-                        sortOrder === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-                      )}
-                    </span>
-                  </th>
-                  <th
                     className="text-right pl-2 pr-2 py-2 font-medium text-destructive cursor-pointer hover:text-destructive/80 select-none w-24"
                     onClick={() => {
                       if (sortBy === 'expense') {
@@ -2030,7 +2014,7 @@ export default function SpreadsheetPage() {
                         )}
                       </div>
                     </td>
-                    <td colSpan={7}>
+                    <td colSpan={6}>
                       {selectedRows.size > 0 && (
                         <button
                           onClick={() => setSelectedRows(new Set())}
@@ -2179,8 +2163,7 @@ export default function SpreadsheetPage() {
                         className="h-6 text-xs bg-transparent border-0 shadow-none ring-0 outline-none focus:ring-0 w-full"
                       />
                     </td>
-                    {/* Amount cells (spans 3 columns) */}
-                    <td className="px-2 py-2 text-right" colSpan={3}>
+                    <td className="px-2 py-2 text-right" colSpan={2}>
                       <div className="flex items-center justify-end gap-1">
                         <span className="text-xs text-muted-foreground">$</span>
                         <input
@@ -2215,13 +2198,12 @@ export default function SpreadsheetPage() {
                       <td className="px-2 py-2"><Skeleton className="h-4 w-24" /></td>
                       <td className="px-2 py-2"><Skeleton className="h-4 w-16 ml-auto" /></td>
                       <td className="px-2 py-2"><Skeleton className="h-4 w-16 ml-auto" /></td>
-                      <td className="px-2 py-2"><Skeleton className="h-4 w-16 ml-auto" /></td>
                       {isAdmin && <td />}
                     </tr>
                   ))
                 ) : paginatedRows.length === 0 ? (
                   <tr>
-                    <td colSpan={isAdmin ? 9 : 7}>
+                    <td colSpan={isAdmin ? 8 : 6}>
                       <div className="flex flex-col items-center justify-center text-center py-12">
                         <Search className="h-6 w-6 text-muted-foreground mb-2" />
                         <p className="font-semibold">No results</p>
@@ -2439,32 +2421,23 @@ export default function SpreadsheetPage() {
                       >
                         {row.incomeCents > 0 ? (
                           row.type === 'charge' ? (
-                            // Charge income = allocated payments (not editable, show payer tooltip)
-                            <TooltipProvider delayDuration={300}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span>
-                                    <Money cents={row.incomeCents} size="sm" className="text-success" />
-                                  </span>
-                                </TooltipTrigger>
-                                <TooltipContent side="top" className="max-w-xs">
-                                  {(() => {
-                                    const charge = chargesMap.get(row.id);
-                                    const allocs = charge?.allocations || [];
-                                    if (allocs.length === 0) return <p className="text-xs">Matched</p>;
-                                    return (
-                                      <div className="space-y-1">
-                                        {allocs.map((a: any) => (
-                                          <p key={a.id} className="text-xs">
-                                            {a.payerName || 'Unknown'} &mdash; <Money cents={a.amountCents} size="sm" inline />
-                                          </p>
-                                        ))}
-                                      </div>
-                                    );
-                                  })()}
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
+                            <div className="flex items-center justify-end gap-1.5">
+                              <Money cents={row.incomeCents} size="sm" className="text-success" />
+                              {row.outstandingCents > 0 ? (
+                                <TooltipProvider delayDuration={300}>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <AlertCircle className="w-3 h-3 text-warning shrink-0" />
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top">
+                                      <Money cents={row.outstandingCents} size="xs" inline className="text-warning" /> unpaid
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              ) : (
+                                <Check className="w-3 h-3 text-success shrink-0" />
+                              )}
+                            </div>
                           ) : (
                             <EditableCell
                               value={row.incomeCents}
@@ -2479,31 +2452,6 @@ export default function SpreadsheetPage() {
                               column="income"
                             />
                           )
-                        ) : (
-                          <span className="text-muted-foreground/30">-</span>
-                        )}
-                      </td>
-                      <td
-                        className={cn(
-                          'px-2 py-2 text-right w-24 cursor-default',
-                          activeCell?.rowId === row.id && activeCell?.column === 'outstanding' && 'ring-2 ring-inset ring-primary/50',
-                        )}
-                        onMouseDown={(e) => handleRowMouseDown(row.id, 'outstanding', e)}
-                        onDoubleClick={() => isAdmin && row.outstandingCents > 0 && setEditingCell({ rowId: row.id, column: 'amount' })}
-                      >
-                        {row.outstandingCents > 0 ? (
-                          <EditableCell
-                            value={row.outstandingCents}
-                            type="money"
-                            isEditing={editingCell?.rowId === row.id && editingCell?.column === 'amount'}
-                            onEdit={() => setEditingCell({ rowId: row.id, column: 'amount' })}
-                            onSave={(v) => handleSaveCell(row, 'amount', v)}
-                            onCancel={() => setEditingCell(null)}
-                            onNavigate={(dir) => handleCellNavigate(row.id, 'amount', dir)}
-                            isAdmin={isAdmin}
-                            rowType={row.type}
-                            column="outstanding"
-                          />
                         ) : (
                           <span className="text-muted-foreground/30">-</span>
                         )}
@@ -2579,9 +2527,6 @@ export default function SpreadsheetPage() {
                     </td>
                     <td className="px-2 py-2 text-right">
                       <Money cents={totals.income} size="sm" className="text-success font-semibold" />
-                    </td>
-                    <td className="px-2 py-2 text-right">
-                      <Money cents={totals.outstanding} size="sm" className="text-warning font-semibold" />
                     </td>
                     <td className="px-2 py-2 text-right">
                       <Money cents={totals.expenses} size="sm" className="text-destructive font-semibold" />
