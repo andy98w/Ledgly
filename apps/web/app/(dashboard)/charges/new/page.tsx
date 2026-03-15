@@ -208,8 +208,25 @@ export default function NewChargePage() {
         </div>
       </FadeIn>
 
+      {!showForm && (
+        <FadeIn delay={0.1}>
+          <MotionCard hover={false}>
+            <MotionCardHeader>
+              <MotionCardTitle>Quick Start</MotionCardTitle>
+            </MotionCardHeader>
+            <MotionCardContent>
+              <ChargeTemplates
+                charges={chargesData?.data}
+                onSelect={handleSelectTemplate}
+                onCustom={() => setShowForm(true)}
+              />
+            </MotionCardContent>
+          </MotionCard>
+        </FadeIn>
+      )}
+
+      {showForm && (
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        {/* Charge Details */}
         <FadeIn delay={0.1}>
           <MotionCard hover={false}>
             <MotionCardHeader>
@@ -414,6 +431,7 @@ export default function NewChargePage() {
           </div>
         </FadeIn>
       </form>
+      )}
     </div>
   );
 }
