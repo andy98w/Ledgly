@@ -1,44 +1,27 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, Receipt, CreditCard, MoreHorizontal, TrendingDown, Table2, History, Sparkles, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, Users, FileSpreadsheet, Settings, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAISidebarStore } from '@/lib/stores/ai-sidebar';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 
-const primaryItems = [
+const navItems = [
   { href: '/dashboard', label: 'Home', icon: LayoutDashboard },
-  { href: '/spreadsheet', label: 'Sheet', icon: Table2 },
+  { href: '/spreadsheet', label: 'Ledger', icon: FileSpreadsheet },
   { href: '/members', label: 'Members', icon: Users },
-];
-
-const moreItems = [
-  { href: '/charges', label: 'Charges', icon: Receipt },
-  { href: '/payments', label: 'Payments', icon: CreditCard },
-  { href: '/expenses', label: 'Expenses', icon: TrendingDown },
-  { href: '/reports', label: 'Reports', icon: BarChart3 },
-  { href: '/audit', label: 'Activity', icon: History },
+  { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
 export function MobileNav() {
   const pathname = usePathname();
-  const [moreOpen, setMoreOpen] = useState(false);
   const openAI = useAISidebarStore((s) => s.open);
   const isAIOpen = useAISidebarStore((s) => s.isOpen);
-
-  const isMoreActive = moreItems.some((item) => pathname.startsWith(item.href));
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-background border-t safe-bottom">
       <div className="flex items-center justify-around h-16">
-        {primaryItems.map((item) => {
+        {navItems.map((item) => {
           const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
           return (
             <Link
@@ -58,7 +41,6 @@ export function MobileNav() {
           );
         })}
 
-        {/* AI toggle button */}
         <button
           onClick={openAI}
           className={cn(
@@ -72,44 +54,6 @@ export function MobileNav() {
             <span className="absolute bottom-1.5 w-1 h-1 rounded-full bg-primary" />
           )}
         </button>
-
-        {/* More dropdown */}
-        <DropdownMenu open={moreOpen} onOpenChange={setMoreOpen}>
-          <DropdownMenuTrigger asChild>
-            <button
-              className={cn(
-                'relative flex flex-col items-center justify-center flex-1 h-full touch-target transition-colors',
-                isMoreActive ? 'text-primary' : 'text-muted-foreground',
-              )}
-              aria-label="More navigation options"
-            >
-              <MoreHorizontal className={cn('h-5 w-5 transition-transform duration-150', isMoreActive && 'scale-110')} />
-              <span className="text-xs mt-1">More</span>
-              {isMoreActive && (
-                <span className="absolute bottom-1.5 w-1 h-1 rounded-full bg-primary" />
-              )}
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" side="top" className="w-48 mb-2">
-            {moreItems.map((item) => {
-              const isActive = pathname.startsWith(item.href);
-              return (
-                <DropdownMenuItem key={item.href} asChild>
-                  <Link
-                    href={item.href}
-                    className={cn(
-                      'flex items-center gap-3 cursor-pointer',
-                      isActive && 'text-primary',
-                    )}
-                  >
-                    <item.icon className="h-4 w-4" />
-                    {item.label}
-                  </Link>
-                </DropdownMenuItem>
-              );
-            })}
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
     </nav>
   );

@@ -864,10 +864,14 @@ export default function ChargesPage() {
           <EmptyState
             icon={Receipt}
             title="No charges yet"
-            description="Create your first charge to start tracking payments"
+            description={isAdmin
+              ? "Charges are how you bill members for dues, events, or fees. Create one to start tracking who owes what."
+              : "Your organization hasn't created any charges yet. Check back later for updates on any dues or fees."
+            }
             action={isAdmin && (
-              <Button asChild>
-                <Link href="/charges/new">Create your first charge</Link>
+              <Button onClick={() => setShowCreateDialog(true)}>
+                <Plus className="w-4 h-4 mr-1.5" />
+                Create your first charge
               </Button>
             )}
             className="rounded-xl border border-border/50 bg-card/50"

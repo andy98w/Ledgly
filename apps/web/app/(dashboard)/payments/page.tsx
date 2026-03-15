@@ -1024,12 +1024,18 @@ export default function PaymentsPage() {
       ) : filteredPayments.length === 0 ? (
         <FadeIn delay={0.3}>
           <EmptyState
-            icon={CreditCard}
+            icon={Wallet}
             title="No payments yet"
-            description="Payments will appear here once recorded"
+            description={isAdmin
+              ? "Payments are automatically imported from Venmo and Zelle via Gmail, or you can record them manually. They're matched to charges to track who's paid."
+              : "No payments have been recorded for your organization yet. Once payments come in, they'll show up here."
+            }
             action={isAdmin && (
               <Button asChild>
-                <Link href="/payments/new">Record your first payment</Link>
+                <Link href="/payments/new">
+                  <Plus className="w-4 h-4 mr-1.5" />
+                  Record your first payment
+                </Link>
               </Button>
             )}
             className="rounded-xl border border-border/50 bg-card/50"

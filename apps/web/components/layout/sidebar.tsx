@@ -7,22 +7,16 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   Users,
-  Receipt,
-  CreditCard,
   Settings,
   LogOut,
   Building2,
   ChevronDown,
   Check,
-  TrendingDown,
-  Table2,
-  History,
   Plus,
   Loader2,
   PanelLeftClose,
   PanelLeft,
-  Sparkles,
-  BarChart3,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MEMBERSHIP_ROLE_LABELS } from '@ledgly/shared';
@@ -60,19 +54,11 @@ type NavItem = {
   badge?: string;
 };
 
-const primaryNavItems: NavItem[] = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/spreadsheet', label: 'Spreadsheet', icon: Table2 },
+const navItems: NavItem[] = [
+  { href: '/dashboard', label: 'Home', icon: LayoutDashboard },
+  { href: '/spreadsheet', label: 'Ledger', icon: FileSpreadsheet },
   { href: '/members', label: 'Members', icon: Users },
-  { href: '/charges', label: 'Charges', icon: Receipt },
-  { href: '/payments', label: 'Payments', icon: CreditCard },
-  { href: '/expenses', label: 'Expenses', icon: TrendingDown },
-  { href: '/reports', label: 'Reports', icon: BarChart3 },
-];
-
-const secondaryNavItems: NavItem[] = [
-  { href: '/audit', label: 'Activity', icon: History },
-  { href: '/agent', label: 'AI Sessions', icon: Sparkles },
+  { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
 export function Sidebar() {
@@ -231,7 +217,7 @@ export function Sidebar() {
         {/* Navigation */}
         <nav data-tour="sidebar-nav" className={cn('flex-1 py-4 space-y-1', isCollapsed ? 'px-2' : 'px-3')}>
           <TooltipProvider delayDuration={0}>
-            {primaryNavItems.map((item) => {
+            {navItems.map((item) => {
               const isActive = item.href === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(item.href);
               const link = (
                 <Link
@@ -272,52 +258,6 @@ export function Sidebar() {
 
               return link;
             })}
-
-            {/* Secondary nav separator */}
-            <div className="pt-2 mt-2 border-t border-border/30">
-              {!isCollapsed && (
-                <span className="px-3 text-[11px] text-muted-foreground/50 uppercase tracking-wider font-medium">
-                  More
-                </span>
-              )}
-            </div>
-
-            {secondaryNavItems.map((item) => {
-              const isActive = item.href === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(item.href);
-              const link = (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    'relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
-                    isCollapsed && 'justify-center px-0',
-                    isActive
-                      ? 'text-primary'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50',
-                  )}
-                >
-                  {isActive && (
-                    <>
-                      <div className="absolute inset-0 bg-primary/8 rounded-xl transition-all" />
-                      <div className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-primary" />
-                    </>
-                  )}
-                  <item.icon className={cn('h-5 w-5 relative z-10 shrink-0', isActive && 'text-primary')} />
-                  {!isCollapsed && <span className="relative z-10">{item.label}</span>}
-                </Link>
-              );
-
-              if (isCollapsed) {
-                return (
-                  <Tooltip key={item.href}>
-                    <TooltipTrigger asChild>{link}</TooltipTrigger>
-                    <TooltipContent side="right">{item.label}</TooltipContent>
-                  </Tooltip>
-                );
-              }
-
-              return link;
-            })}
           </TooltipProvider>
         </nav>
 
@@ -327,47 +267,25 @@ export function Sidebar() {
         <div className={cn('space-y-1', isCollapsed ? 'p-2' : 'p-3')}>
           <TooltipProvider delayDuration={0}>
             {isCollapsed ? (
-              <>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Link
-                      href="/settings"
-                      className="flex items-center justify-center py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
-                    >
-                      <Settings className="h-5 w-5" />
-                    </Link>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">Settings</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={() => { logout(); window.location.href = '/login'; }}
-                      className="flex w-full items-center justify-center py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
-                    >
-                      <LogOut className="h-5 w-5" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">Sign out</TooltipContent>
-                </Tooltip>
-              </>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => { logout(); window.location.href = '/login'; }}
+                    className="flex w-full items-center justify-center py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+                  >
+                    <LogOut className="h-5 w-5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">Sign out</TooltipContent>
+              </Tooltip>
             ) : (
-              <>
-                <Link
-                  href="/settings"
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
-                >
-                  <Settings className="h-5 w-5" />
-                  Settings
-                </Link>
-                <button
-                  onClick={() => { logout(); window.location.href = '/login'; }}
-                  className="flex w-full items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
-                >
-                  <LogOut className="h-5 w-5" />
-                  Sign out
-                </button>
-              </>
+              <button
+                onClick={() => { logout(); window.location.href = '/login'; }}
+                className="flex w-full items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+              >
+                <LogOut className="h-5 w-5" />
+                Sign out
+              </button>
             )}
           </TooltipProvider>
         </div>

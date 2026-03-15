@@ -124,6 +124,17 @@ export const ChargeGroupCard = memo(function ChargeGroupCard({
                   <span className="opacity-30">&bull;</span>
                   <span>{paidCount}/{group.memberCount} paid</span>
                 </div>
+                <div className="flex items-center gap-2 w-full max-w-[200px]">
+                  <div className="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-success transition-all duration-500"
+                      style={{ width: `${group.memberCount > 0 ? (paidCount / group.memberCount) * 100 : 0}%` }}
+                    />
+                  </div>
+                  <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
+                    {Math.round(group.memberCount > 0 ? (paidCount / group.memberCount) * 100 : 0)}%
+                  </span>
+                </div>
               </div>
             </button>
             <div className="flex items-center gap-4">

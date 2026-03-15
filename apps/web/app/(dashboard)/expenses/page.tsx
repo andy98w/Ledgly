@@ -729,12 +729,16 @@ export default function ExpensesPage() {
       ) : expenses.length === 0 ? (
         <FadeIn delay={0.3}>
           <EmptyState
-            icon={Receipt}
+            icon={TrendingDown}
             title="No expenses found"
-            description="Start tracking your organization's spending"
+            description={isAdmin
+              ? "Track where your organization's money goes. Log expenses for events, supplies, venues, and more."
+              : "No expenses have been recorded yet. Check back later to see how your organization's funds are being used."
+            }
             action={isAdmin && (
               <Button onClick={() => setShowCreateDialog(true)}>
-                Add your first expense
+                <Plus className="w-4 h-4 mr-1.5" />
+                Record your first expense
               </Button>
             )}
             className="rounded-xl border border-border/50 bg-card/50"
