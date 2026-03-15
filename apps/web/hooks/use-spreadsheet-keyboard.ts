@@ -11,6 +11,7 @@ interface UseSpreadsheetKeyboardOptions {
   editingCell: { rowId: string; column: string } | null;
   setEditingCell: (cell: { rowId: string; column: string } | null) => void;
   rowIds: string[];
+  selectedRowIds: Set<string>;
   visibleColumns: string[];
   isAdmin: boolean;
   getCellValue: (rowId: string, column: string) => string;
@@ -23,18 +24,28 @@ export function useSpreadsheetKeyboard({
   editingCell,
   setEditingCell,
   rowIds,
+  selectedRowIds,
   visibleColumns,
   isAdmin,
   getCellValue,
   onSaveCell,
 }: UseSpreadsheetKeyboardOptions) {
   const handleCopy = useCallback(() => {
+    // Multi-row: copy all selected rows as tab-separated values
+    if (selectedRowIds.size > 1) {
+      const lines = rowIds
+        .filter(id => selectedRowIds.has(id))
+        .map(id => visibleColumns.map(col => getCellValue(id, col)).join('\t'));
+      navigator.clipboard.writeText(lines.join('\n')).catch(() => {});
+      return;
+    }
+    // Single cell
     if (!activeCell) return;
     const value = getCellValue(activeCell.rowId, activeCell.column);
     if (value && value !== '-') {
       navigator.clipboard.writeText(value).catch(() => {});
     }
-  }, [activeCell, getCellValue]);
+  }, [activeCell, selectedRowIds, rowIds, visibleColumns, getCellValue]);
 
   const handlePaste = useCallback(async () => {
     if (!activeCell || !isAdmin) return;
@@ -48,21 +59,24 @@ export function useSpreadsheetKeyboard({
     if (editingCell) return;
 
     const handler = (e: KeyboardEvent) => {
-      if (!activeCell) return;
       const target = e.target as HTMLElement;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return;
-
-      const rowIdx = rowIds.indexOf(activeCell.rowId);
-      const colIdx = visibleColumns.indexOf(activeCell.column);
-      if (rowIdx === -1 || colIdx === -1) return;
 
       const metaKey = e.metaKey || e.ctrlKey;
 
       if (metaKey && e.key === 'c') {
-        e.preventDefault();
-        handleCopy();
+        if (selectedRowIds.size > 1 || activeCell) {
+          e.preventDefault();
+          handleCopy();
+        }
         return;
       }
+
+      if (!activeCell) return;
+
+      const rowIdx = rowIds.indexOf(activeCell.rowId);
+      const colIdx = visibleColumns.indexOf(activeCell.column);
+      if (rowIdx === -1 || colIdx === -1) return;
 
       if (metaKey && e.key === 'v') {
         e.preventDefault();
@@ -122,5 +136,5 @@ export function useSpreadsheetKeyboard({
 
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [activeCell, editingCell, rowIds, visibleColumns, isAdmin, setActiveCell, setEditingCell, handleCopy, handlePaste]);
+  }, [activeCell, editingCell, rowIds, selectedRowIds, visibleColumns, isAdmin, setActiveCell, setEditingCell, handleCopy, handlePaste]);
 }

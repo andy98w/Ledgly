@@ -625,6 +625,7 @@ export default function SpreadsheetPage() {
     editingCell,
     setEditingCell: (cell) => setEditingCell(cell as EditingCell),
     rowIds,
+    selectedRowIds: selectedRows,
     visibleColumns: columnConfig.visibleColumns,
     isAdmin,
     getCellValue: (rowId, column) => {
@@ -1356,6 +1357,66 @@ export default function SpreadsheetPage() {
     throw new Error('Unknown import type');
   };
 
+  const renderCellContent = (row: SpreadsheetRow, colId: string) => {
+    switch (colId) {
+      case 'date':
+        return (
+          <div className="flex items-center gap-1">
+            {!isAdmin && row.isParent && (
+              <button onClick={() => toggleParentExpand(row.id)} className="shrink-0 p-0.5 hover:text-primary transition-colors">
+                {expandedParents.has(row.id) ? <ChevronDown className="w-3.5 h-3.5 text-primary" /> : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />}
+              </button>
+            )}
+            <EditableCell value={row.date} type="date" isEditing={editingCell?.rowId === row.id && editingCell?.column === 'date'} onEdit={() => setEditingCell({ rowId: row.id, column: 'date' })} onSave={(v) => handleSaveCell(row, 'date', v)} onCancel={() => setEditingCell(null)} onNavigate={(dir) => handleCellNavigate(row.id, 'date', dir)} isAdmin={isAdmin} rowType={row.type} column="date" />
+          </div>
+        );
+      case 'member':
+        return row.type === 'charge' || row.type === 'payment' ? (
+          <EditableCell value={row.membershipId || ''} type="member" isEditing={editingCell?.rowId === row.id && editingCell?.column === 'member'} onEdit={() => setEditingCell({ rowId: row.id, column: 'member' })} onSave={(v) => handleSaveCell(row, 'member', v)} onCancel={() => setEditingCell(null)} onNavigate={(dir) => handleCellNavigate(row.id, 'member', dir)} isAdmin={isAdmin} rowType={row.type} column="member" members={members} onAddMember={handleAddMember} />
+        ) : (
+          <EditableCell value={row.member || ''} type="text" isEditing={editingCell?.rowId === row.id && editingCell?.column === 'member'} onEdit={() => setEditingCell({ rowId: row.id, column: 'member' })} onSave={(v) => handleSaveCell(row, 'member', v)} onCancel={() => setEditingCell(null)} onNavigate={(dir) => handleCellNavigate(row.id, 'member', dir)} isAdmin={isAdmin} rowType={row.type} column="member" />
+        );
+      case 'category':
+        return row.type === 'payment' ? (
+          <Badge variant="outline" className="text-[10px] capitalize">{row.category}</Badge>
+        ) : (
+          <EditableCell value={row.category} type="category" isEditing={editingCell?.rowId === row.id && editingCell?.column === 'category'} onEdit={() => setEditingCell({ rowId: row.id, column: 'category' })} onSave={(v) => handleSaveCell(row, 'category', v)} onCancel={() => setEditingCell(null)} onNavigate={(dir) => handleCellNavigate(row.id, 'category', dir)} isAdmin={isAdmin} rowType={row.type} column="category" />
+        );
+      case 'description':
+        return (
+          <div className="flex items-center gap-2 min-w-0">
+            {row.isParent && (<Badge variant="outline" className="text-[10px] shrink-0 bg-primary/10 text-primary border-primary/30">Multi</Badge>)}
+            {row.isChild && !isAdmin && (<span className="text-muted-foreground/50 shrink-0">&mdash;</span>)}
+            <div className="min-w-0 flex-1">
+              <EditableCell value={row.description} type="text" isEditing={editingCell?.rowId === row.id && editingCell?.column === 'description'} onEdit={() => setEditingCell({ rowId: row.id, column: 'description' })} onSave={(v) => handleSaveCell(row, 'description', v)} onCancel={() => setEditingCell(null)} onNavigate={(dir) => handleCellNavigate(row.id, 'description', dir)} isAdmin={isAdmin} rowType={row.type} column="description" />
+            </div>
+          </div>
+        );
+      case 'income':
+        return row.incomeCents > 0 ? (
+          row.type === 'charge' ? (
+            <div className="flex items-center justify-end gap-1.5">
+              <Money cents={row.incomeCents} size="sm" className="text-success" />
+              {row.outstandingCents > 0 ? (
+                <TooltipProvider delayDuration={300}><Tooltip><TooltipTrigger asChild><AlertCircle className="w-3 h-3 text-warning shrink-0" /></TooltipTrigger><TooltipContent side="top"><Money cents={row.outstandingCents} size="xs" inline className="text-warning" /> unpaid</TooltipContent></Tooltip></TooltipProvider>
+              ) : (<Check className="w-3 h-3 text-success shrink-0" />)}
+            </div>
+          ) : (
+            <EditableCell value={row.incomeCents} type="money" isEditing={editingCell?.rowId === row.id && editingCell?.column === 'amount'} onEdit={() => setEditingCell({ rowId: row.id, column: 'amount' })} onSave={(v) => handleSaveCell(row, 'amount', v)} onCancel={() => setEditingCell(null)} onNavigate={(dir) => handleCellNavigate(row.id, 'amount', dir)} isAdmin={isAdmin} rowType={row.type} column="income" />
+          )
+        ) : (<span className="text-muted-foreground/30">-</span>);
+      case 'expense':
+        return row.expenseCents > 0 ? (
+          <EditableCell value={row.expenseCents} type="money" isEditing={editingCell?.rowId === row.id && editingCell?.column === 'amount'} onEdit={() => setEditingCell({ rowId: row.id, column: 'amount' })} onSave={(v) => handleSaveCell(row, 'amount', v)} onCancel={() => setEditingCell(null)} onNavigate={(dir) => handleCellNavigate(row.id, 'amount', dir)} isAdmin={isAdmin} rowType={row.type} column="expense" />
+        ) : (<span className="text-muted-foreground/30">-</span>);
+      default:
+        return null;
+    }
+  };
+
+  const stickyDateBg = (row: SpreadsheetRow) =>
+    selectedRows.has(row.id) ? 'bg-primary/10' : row.type === 'charge' ? 'bg-warning/5' : row.type === 'expense' ? 'bg-destructive/5' : row.type === 'payment' ? 'bg-success/5' : 'bg-card';
+
   return (
     <div className="space-y-6" data-tour="spreadsheet-view">
       {/* Header */}
@@ -1909,208 +1970,29 @@ export default function SpreadsheetPage() {
                           </div>
                         </td>
                       )}
-                      <td
-                        className={cn(
-                          'px-2 py-2 w-24 cursor-default',
-                          activeCell?.rowId === row.id && activeCell?.column === 'date' && 'ring-2 ring-inset ring-primary/50',
-                        )}
-                        onMouseDown={(e) => handleRowMouseDown(row.id, 'date', e)}
-                        onDoubleClick={() => isAdmin && setEditingCell({ rowId: row.id, column: 'date' })}
-                      >
-                        <div className="flex items-center gap-1">
-                          {!isAdmin && row.isParent && (
-                            <button
-                              onClick={() => toggleParentExpand(row.id)}
-                              className="shrink-0 p-0.5 hover:text-primary transition-colors"
-                            >
-                              {expandedParents.has(row.id) ? (
-                                <ChevronDown className="w-3.5 h-3.5 text-primary" />
-                              ) : (
-                                <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
-                              )}
-                            </button>
-                          )}
-                          <EditableCell
-                            value={row.date}
-                            type="date"
-                            isEditing={editingCell?.rowId === row.id && editingCell?.column === 'date'}
-                            onEdit={() => setEditingCell({ rowId: row.id, column: 'date' })}
-                            onSave={(v) => handleSaveCell(row, 'date', v)}
-                            onCancel={() => setEditingCell(null)}
-                            onNavigate={(dir) => handleCellNavigate(row.id, 'date', dir)}
-                            isAdmin={isAdmin}
-                            rowType={row.type}
-                            column="date"
-                          />
-                        </div>
-                      </td>
-                      <td
-                        className={cn(
-                          'px-2 py-2 cursor-default',
-                          activeCell?.rowId === row.id && activeCell?.column === 'member' && 'ring-2 ring-inset ring-primary/50',
-                        )}
-                        onMouseDown={(e) => handleRowMouseDown(row.id, 'member', e)}
-                        onDoubleClick={() => isAdmin && setEditingCell({ rowId: row.id, column: 'member' })}
-                      >
-                        {row.type === 'charge' || row.type === 'payment' ? (
-                          <EditableCell
-                            value={row.membershipId || ''}
-                            type="member"
-                            isEditing={editingCell?.rowId === row.id && editingCell?.column === 'member'}
-                            onEdit={() => setEditingCell({ rowId: row.id, column: 'member' })}
-                            onSave={(v) => handleSaveCell(row, 'member', v)}
-                            onCancel={() => setEditingCell(null)}
-                            onNavigate={(dir) => handleCellNavigate(row.id, 'member', dir)}
-                            isAdmin={isAdmin}
-                            rowType={row.type}
-                            column="member"
-                            members={members}
-                            onAddMember={handleAddMember}
-                          />
-                        ) : (
-                          <EditableCell
-                            value={row.member || ''}
-                            type="text"
-                            isEditing={editingCell?.rowId === row.id && editingCell?.column === 'member'}
-                            onEdit={() => setEditingCell({ rowId: row.id, column: 'member' })}
-                            onSave={(v) => handleSaveCell(row, 'member', v)}
-                            onCancel={() => setEditingCell(null)}
-                            onNavigate={(dir) => handleCellNavigate(row.id, 'member', dir)}
-                            isAdmin={isAdmin}
-                            rowType={row.type}
-                            column="member"
-                          />
-                        )}
-                      </td>
-                      <td
-                        className={cn(
-                          'px-2 py-2 w-24 cursor-default',
-                          activeCell?.rowId === row.id && activeCell?.column === 'category' && 'ring-2 ring-inset ring-primary/50',
-                        )}
-                        onMouseDown={(e) => handleRowMouseDown(row.id, 'category', e)}
-                        onDoubleClick={() => isAdmin && row.type !== 'payment' && setEditingCell({ rowId: row.id, column: 'category' })}
-                      >
-                        {row.type === 'payment' ? (
-                          <Badge variant="outline" className="text-[10px] capitalize">{row.category}</Badge>
-                        ) : (
-                          <EditableCell
-                            value={row.category}
-                            type="category"
-                            isEditing={editingCell?.rowId === row.id && editingCell?.column === 'category'}
-                            onEdit={() => setEditingCell({ rowId: row.id, column: 'category' })}
-                            onSave={(v) => handleSaveCell(row, 'category', v)}
-                            onCancel={() => setEditingCell(null)}
-                            onNavigate={(dir) => handleCellNavigate(row.id, 'category', dir)}
-                            isAdmin={isAdmin}
-                            rowType={row.type}
-                            column="category"
-                          />
-                        )}
-                      </td>
-                      <td
-                        className={cn(
-                          "px-2 py-2 cursor-default",
-                          row.isChild && "pl-10",
-                          activeCell?.rowId === row.id && activeCell?.column === 'description' && 'ring-2 ring-inset ring-primary/50',
-                        )}
-                        onMouseDown={(e) => handleRowMouseDown(row.id, 'description', e)}
-                        onDoubleClick={() => isAdmin && setEditingCell({ rowId: row.id, column: 'description' })}
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          {row.isParent && (
-                            <Badge variant="outline" className="text-[10px] shrink-0 bg-primary/10 text-primary border-primary/30">
-                              {row.type === 'charge' ? 'Multi' : 'Multi'}
-                            </Badge>
-                          )}
-                          {row.isChild && !isAdmin && (
-                            <span className="text-muted-foreground/50 shrink-0">&mdash;</span>
-                          )}
-                          <div className="min-w-0 flex-1">
-                            <EditableCell
-                              value={row.description}
-                              type="text"
-                              isEditing={editingCell?.rowId === row.id && editingCell?.column === 'description'}
-                              onEdit={() => setEditingCell({ rowId: row.id, column: 'description' })}
-                              onSave={(v) => handleSaveCell(row, 'description', v)}
-                              onCancel={() => setEditingCell(null)}
-                              onNavigate={(dir) => handleCellNavigate(row.id, 'description', dir)}
-                              isAdmin={isAdmin}
-                              rowType={row.type}
-                              column="description"
-                            />
-                          </div>
-                        </div>
-                      </td>
-                      <td
-                        className={cn(
-                          'px-2 py-2 text-right w-24 cursor-default',
-                          activeCell?.rowId === row.id && activeCell?.column === 'income' && 'ring-2 ring-inset ring-primary/50',
-                        )}
-                        onMouseDown={(e) => handleRowMouseDown(row.id, 'income', e)}
-                        onDoubleClick={() => isAdmin && row.type !== 'charge' && row.incomeCents > 0 && setEditingCell({ rowId: row.id, column: 'amount' })}
-                      >
-                        {row.incomeCents > 0 ? (
-                          row.type === 'charge' ? (
-                            <div className="flex items-center justify-end gap-1.5">
-                              <Money cents={row.incomeCents} size="sm" className="text-success" />
-                              {row.outstandingCents > 0 ? (
-                                <TooltipProvider delayDuration={300}>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <AlertCircle className="w-3 h-3 text-warning shrink-0" />
-                                    </TooltipTrigger>
-                                    <TooltipContent side="top">
-                                      <Money cents={row.outstandingCents} size="xs" inline className="text-warning" /> unpaid
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              ) : (
-                                <Check className="w-3 h-3 text-success shrink-0" />
-                              )}
-                            </div>
-                          ) : (
-                            <EditableCell
-                              value={row.incomeCents}
-                              type="money"
-                              isEditing={editingCell?.rowId === row.id && editingCell?.column === 'amount'}
-                              onEdit={() => setEditingCell({ rowId: row.id, column: 'amount' })}
-                              onSave={(v) => handleSaveCell(row, 'amount', v)}
-                              onCancel={() => setEditingCell(null)}
-                              onNavigate={(dir) => handleCellNavigate(row.id, 'amount', dir)}
-                              isAdmin={isAdmin}
-                              rowType={row.type}
-                              column="income"
-                            />
-                          )
-                        ) : (
-                          <span className="text-muted-foreground/30">-</span>
-                        )}
-                      </td>
-                      <td
-                        className={cn(
-                          'pl-3 pr-2 py-2 text-right w-24 cursor-default',
-                          activeCell?.rowId === row.id && activeCell?.column === 'expense' && 'ring-2 ring-inset ring-primary/50',
-                        )}
-                        onMouseDown={(e) => handleRowMouseDown(row.id, 'expense', e)}
-                        onDoubleClick={() => isAdmin && row.expenseCents > 0 && setEditingCell({ rowId: row.id, column: 'amount' })}
-                      >
-                        {row.expenseCents > 0 ? (
-                          <EditableCell
-                            value={row.expenseCents}
-                            type="money"
-                            isEditing={editingCell?.rowId === row.id && editingCell?.column === 'amount'}
-                            onEdit={() => setEditingCell({ rowId: row.id, column: 'amount' })}
-                            onSave={(v) => handleSaveCell(row, 'amount', v)}
-                            onCancel={() => setEditingCell(null)}
-                            onNavigate={(dir) => handleCellNavigate(row.id, 'amount', dir)}
-                            isAdmin={isAdmin}
-                            rowType={row.type}
-                            column="expense"
-                          />
-                        ) : (
-                          <span className="text-muted-foreground/30">-</span>
-                        )}
-                      </td>
+                      {columnConfig.visibleColumns.map((colId) => {
+                        const def = columnConfig.getColumnDef(colId);
+                        const width = colId === 'description' ? undefined : columnConfig.getWidth(colId);
+                        const isActive = activeCell?.rowId === row.id && activeCell?.column === colId;
+                        return (
+                          <td
+                            key={colId}
+                            className={cn(
+                              'px-2 py-2 cursor-default',
+                              def.align === 'right' && 'text-right',
+                              isActive && 'ring-2 ring-inset ring-primary/50',
+                              colId === 'date' && (isAdmin ? 'sticky left-14 z-10' : 'sticky left-0 z-10'),
+                              colId === 'date' && stickyDateBg(row),
+                              colId === 'description' && row.isChild && 'pl-10',
+                            )}
+                            style={width ? { width } : undefined}
+                            onMouseDown={(e) => handleRowMouseDown(row.id, colId, e)}
+                            onDoubleClick={() => isAdmin && setEditingCell({ rowId: row.id, column: colId as any })}
+                          >
+                            {renderCellContent(row, colId)}
+                          </td>
+                        );
+                      })}
                       {isAdmin && (
                         <td className="w-8 px-1 py-2">
                           {!row.isChild && (() => {
@@ -2152,15 +2034,19 @@ export default function SpreadsheetPage() {
               {!isLoading && displayRows.length > 0 && (
                 <tfoot>
                   <tr className="bg-secondary/50 font-medium">
-                    <td className="px-2 py-2" colSpan={isAdmin ? 5 : 4}>
+                    <td className="px-2 py-2" colSpan={(isAdmin ? 1 : 0) + columnConfig.visibleColumns.filter(c => c !== 'income' && c !== 'expense').length}>
                       <span className="text-muted-foreground">Total ({displayRows.length} transactions)</span>
                     </td>
-                    <td className="px-2 py-2 text-right">
-                      <Money cents={totals.income} size="sm" className="text-success font-semibold" />
-                    </td>
-                    <td className="px-2 py-2 text-right">
-                      <Money cents={totals.expenses} size="sm" className="text-destructive font-semibold" />
-                    </td>
+                    {columnConfig.visibleColumns.includes('income') && (
+                      <td className="px-2 py-2 text-right">
+                        <Money cents={totals.income} size="sm" className="text-success font-semibold" />
+                      </td>
+                    )}
+                    {columnConfig.visibleColumns.includes('expense') && (
+                      <td className="px-2 py-2 text-right">
+                        <Money cents={totals.expenses} size="sm" className="text-destructive font-semibold" />
+                      </td>
+                    )}
                     {isAdmin && <td />}
                   </tr>
                 </tfoot>
