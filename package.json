@@ -17,7 +17,7 @@
   },
   "lint-staged": {
     "apps/api/src/**/*.ts": ["eslint --fix"],
-    "apps/web/**/*.{ts,tsx}": ["eslint --fix"]
+    "apps/web/{app,components,hooks,lib}/**/*.{ts,tsx}": ["eslint --fix"]
   },
   "devDependencies": {
     "husky": "^9.1.7",
