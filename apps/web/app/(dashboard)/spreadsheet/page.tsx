@@ -1748,7 +1748,7 @@ export default function SpreadsheetPage() {
                     <td />
                   </tr>
                 )}
-                {/* Inline New Row */}
+                {/* Inline New Row — fixed layout, unaffected by column visibility */}
                 {isAdmin && inlineNewRow && (
                   <tr className="border-b border-border/50 bg-primary/5 animate-in fade-in slide-in-from-top-1 duration-200">
                     <td className="pl-3 pr-0 py-2">
@@ -1774,45 +1774,61 @@ export default function SpreadsheetPage() {
                         </button>
                       </div>
                     </td>
-                    {/* Type selector */}
-                    <td className="px-2 py-2">
-                      <Select value={newRowType} onValueChange={(v) => {
-                        const val = v as typeof newRowType;
-                        if (val === 'multi-charge') {
-                          handleCancelInlineRow();
-                          setShowMultiChargeDialog(true);
-                          return;
-                        }
-                        if (val === 'multi-expense') {
-                          handleCancelInlineRow();
-                          setShowMultiExpenseDialog(true);
-                          return;
-                        }
-                        setNewRowType(val);
-                        setNewRowData(d => ({ ...d, category: '' }));
-                        setInlineNewRowField('member');
-                      }}>
-                        <SelectTrigger className="h-7 text-xs bg-transparent border-border/50 w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="charge">Charge</SelectItem>
-                          <SelectItem value="multi-charge">Multi-charge</SelectItem>
-                          <SelectItem value="expense">Expense</SelectItem>
-                          <SelectItem value="multi-expense">Multi-expense</SelectItem>
-                          <SelectItem value="payment">Payment</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </td>
-                    {/* Date + Member/Vendor */}
-                    <td className="px-2 py-1">
-                      <div className="space-y-1">
+                    <td colSpan={columnConfig.visibleColumns.length} className="px-2 py-2">
+                      <div className="flex items-center gap-3">
+                        <Select value={newRowType} onValueChange={(v) => {
+                          const val = v as typeof newRowType;
+                          if (val === 'multi-charge') {
+                            handleCancelInlineRow();
+                            setShowMultiChargeDialog(true);
+                            return;
+                          }
+                          if (val === 'multi-expense') {
+                            handleCancelInlineRow();
+                            setShowMultiExpenseDialog(true);
+                            return;
+                          }
+                          setNewRowType(val);
+                          setNewRowData(d => ({ ...d, category: '' }));
+                          setInlineNewRowField('member');
+                        }}>
+                          <SelectTrigger className="h-7 text-xs bg-transparent border-border/50 w-28 shrink-0">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="charge">Charge</SelectItem>
+                            <SelectItem value="multi-charge">Multi-charge</SelectItem>
+                            <SelectItem value="expense">Expense</SelectItem>
+                            <SelectItem value="multi-expense">Multi-expense</SelectItem>
+                            <SelectItem value="payment">Payment</SelectItem>
+                          </SelectContent>
+                        </Select>
                         <input
-                          type="date"
-                          value={newRowData.date}
-                          onChange={(e) => setNewRowData(d => ({ ...d, date: e.target.value }))}
-                          className="h-5 w-full text-xs bg-transparent border-0 shadow-none ring-0 outline-none focus:ring-0 text-muted-foreground"
-                          style={{ colorScheme: 'dark' }}
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="mm/dd/yy"
+                          value={newRowData.date ? (() => {
+                            const d = new Date(newRowData.date);
+                            if (isNaN(d.getTime())) return newRowData.date;
+                            return `${d.getMonth() + 1}/${d.getDate()}/${(d.getFullYear() % 100).toString().padStart(2, '0')}`;
+                          })() : ''}
+                          onChange={(e) => {
+                            const raw = e.target.value.replace(/\D/g, '').slice(0, 6);
+                            let masked = raw;
+                            if (raw.length > 2) masked = raw.slice(0, 2) + '/' + raw.slice(2);
+                            if (raw.length > 4) masked = raw.slice(0, 2) + '/' + raw.slice(2, 4) + '/' + raw.slice(4);
+                            const match = masked.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/);
+                            if (match) {
+                              const fullYear = 2000 + parseInt(match[3]);
+                              const date = new Date(fullYear, parseInt(match[1]) - 1, parseInt(match[2]));
+                              if (!isNaN(date.getTime())) {
+                                setNewRowData(d => ({ ...d, date: date.toISOString().split('T')[0] }));
+                                return;
+                              }
+                            }
+                            setNewRowData(d => ({ ...d, date: masked }));
+                          }}
+                          className="h-7 w-20 shrink-0 text-xs bg-transparent border border-border/50 rounded px-2 text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/30"
                         />
                         {newRowType === 'expense' ? (
                           <input
@@ -1820,17 +1836,15 @@ export default function SpreadsheetPage() {
                             value={newRowData.vendor}
                             onChange={(e) => setNewRowData(d => ({ ...d, vendor: e.target.value }))}
                             onKeyDown={(e) => {
-                              if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); setInlineNewRowField('category'); }
-                              if (e.key === 'Tab' && e.shiftKey) { e.preventDefault(); setInlineNewRowField('date'); }
                               if (e.key === 'Escape') handleCancelInlineRow();
                               if (e.key === 'Enter') handleSaveInlineRow();
                             }}
                             autoFocus={inlineNewRowField === 'member'}
-                            className="h-5 text-xs bg-transparent border-0 shadow-none ring-0 outline-none focus:ring-0 w-full"
+                            className="h-7 w-28 shrink-0 text-xs bg-transparent border border-border/50 rounded px-2 focus:outline-none focus:ring-1 focus:ring-primary/30"
                           />
                         ) : (
                           <Select value={newRowData.membershipId || 'none'} onValueChange={(v) => setNewRowData(d => ({ ...d, membershipId: v === 'none' ? '' : v }))}>
-                            <SelectTrigger className="h-6 text-xs bg-transparent border-border/50 w-full">
+                            <SelectTrigger className="h-7 text-xs bg-transparent border-border/50 w-32 shrink-0">
                               <SelectValue placeholder="Member..." />
                             </SelectTrigger>
                             <SelectContent>
@@ -1843,70 +1857,56 @@ export default function SpreadsheetPage() {
                             </SelectContent>
                           </Select>
                         )}
-                      </div>
-                    </td>
-                    {/* Category */}
-                    <td className="px-2 py-2">
-                      {newRowType === 'payment' ? (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      ) : (
-                        <Select value={newRowData.category || 'none'} onValueChange={(v) => setNewRowData(d => ({ ...d, category: v === 'none' ? '' : v }))}>
-                          <SelectTrigger className="h-7 text-xs bg-transparent border-border/50 w-full">
-                            <SelectValue placeholder="Category..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none" disabled>Category...</SelectItem>
-                            {(newRowType === 'charge' ? CHARGE_CATEGORIES : EXPENSE_CATEGORIES).map((cat) => (
-                              <SelectItem key={cat} value={cat}>
-                                {(newRowType === 'charge' ? CHARGE_CATEGORY_LABELS : EXPENSE_CATEGORY_LABELS)[cat as keyof typeof CHARGE_CATEGORY_LABELS & keyof typeof EXPENSE_CATEGORY_LABELS]}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    </td>
-                    {/* Title */}
-                    <td className="px-2 py-2">
-                      <input
-                        placeholder={newRowType === 'payment' ? 'Memo...' : 'Title...'}
-                        value={newRowType === 'payment' ? newRowData.memo : newRowData.description}
-                        onChange={(e) => newRowType === 'payment'
-                          ? setNewRowData(d => ({ ...d, memo: e.target.value }))
-                          : setNewRowData(d => ({ ...d, description: e.target.value }))
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); setInlineNewRowField('amount'); }
-                          if (e.key === 'Tab' && e.shiftKey) { e.preventDefault(); setInlineNewRowField('category'); }
-                          if (e.key === 'Escape') handleCancelInlineRow();
-                          if (e.key === 'Enter') handleSaveInlineRow();
-                        }}
-                        autoFocus={inlineNewRowField === 'description'}
-                        className="h-6 text-xs bg-transparent border-0 shadow-none ring-0 outline-none focus:ring-0 w-full"
-                      />
-                    </td>
-                    <td className="px-2 py-2 text-right" colSpan={2}>
-                      <div className="flex items-center justify-end gap-1">
-                        <span className="text-xs text-muted-foreground">$</span>
+                        {newRowType !== 'payment' && (
+                          <Select value={newRowData.category || 'none'} onValueChange={(v) => setNewRowData(d => ({ ...d, category: v === 'none' ? '' : v }))}>
+                            <SelectTrigger className="h-7 text-xs bg-transparent border-border/50 w-28 shrink-0">
+                              <SelectValue placeholder="Category..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none" disabled>Category...</SelectItem>
+                              {(newRowType === 'charge' ? CHARGE_CATEGORIES : EXPENSE_CATEGORIES).map((cat) => (
+                                <SelectItem key={cat} value={cat}>
+                                  {(newRowType === 'charge' ? CHARGE_CATEGORY_LABELS : EXPENSE_CATEGORY_LABELS)[cat as keyof typeof CHARGE_CATEGORY_LABELS & keyof typeof EXPENSE_CATEGORY_LABELS]}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
                         <input
-                          placeholder="0.00"
-                          value={newRowData.amountCents ? (newRowData.amountCents / 100).toFixed(2) : ''}
-                          onChange={(e) => {
-                            const cents = Math.round(parseFloat(e.target.value || '0') * 100);
-                            setNewRowData(d => ({ ...d, amountCents: isNaN(cents) ? 0 : cents }));
-                          }}
+                          placeholder={newRowType === 'payment' ? 'Memo...' : 'Title...'}
+                          value={newRowType === 'payment' ? newRowData.memo : newRowData.description}
+                          onChange={(e) => newRowType === 'payment'
+                            ? setNewRowData(d => ({ ...d, memo: e.target.value }))
+                            : setNewRowData(d => ({ ...d, description: e.target.value }))
+                          }
                           onKeyDown={(e) => {
-                            if (e.key === 'Tab' && e.shiftKey) { e.preventDefault(); setInlineNewRowField('description'); }
                             if (e.key === 'Escape') handleCancelInlineRow();
                             if (e.key === 'Enter') handleSaveInlineRow();
                           }}
-                          autoFocus={inlineNewRowField === 'amount'}
-                          type="number"
-                          step="0.01"
-                          className="h-6 text-xs bg-transparent border-0 shadow-none ring-0 outline-none focus:ring-0 w-20 text-right"
+                          autoFocus={inlineNewRowField === 'description'}
+                          className="h-7 flex-1 min-w-0 text-xs bg-transparent border border-border/50 rounded px-2 focus:outline-none focus:ring-1 focus:ring-primary/30"
                         />
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className="text-xs text-muted-foreground">$</span>
+                          <input
+                            placeholder="0.00"
+                            value={newRowData.amountCents ? (newRowData.amountCents / 100).toFixed(2) : ''}
+                            onChange={(e) => {
+                              const cents = Math.round(parseFloat(e.target.value || '0') * 100);
+                              setNewRowData(d => ({ ...d, amountCents: isNaN(cents) ? 0 : cents }));
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') handleCancelInlineRow();
+                              if (e.key === 'Enter') handleSaveInlineRow();
+                            }}
+                            autoFocus={inlineNewRowField === 'amount'}
+                            type="number"
+                            step="0.01"
+                            className="h-7 w-20 text-xs bg-transparent border border-border/50 rounded px-2 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
+                          />
+                        </div>
                       </div>
                     </td>
-                    <td />
                   </tr>
                 )}
                 {isLoading ? (
