@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useCallback, memo } from 'react';
 import Link from 'next/link';
 
-import { Plus, Search, Users, AlertCircle, MoreHorizontal, Pencil, Trash2, Circle, CheckCircle2, Mail, Clock, Upload, MoreVertical, FileSpreadsheet, FileText, X } from 'lucide-react';
+import { Plus, Search, Users, AlertCircle, MoreHorizontal, Pencil, Trash2, CheckCircle2, Mail, Clock, Upload, MoreVertical, FileSpreadsheet, FileText, X, Eye } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import { useMembers, useCreateMembers, useUpdateMember, useDeleteMember, useRestoreMember, useResendInvitation, useBulkDeleteMembers, useApproveMember } from '@/lib/queries/members';
 import { useAuthStore, useIsAdminOrTreasurer, useIsOwner, useCurrentMembership } from '@/lib/stores/auth';
@@ -95,27 +95,16 @@ const MemberCard = memo(function MemberCard({
   );
 
   return (
-    <MotionCard className="cursor-pointer">
+    <MotionCard
+      className={cn(
+        'cursor-pointer transition-colors',
+        isSelected && 'ring-2 ring-primary/50 bg-primary/5',
+      )}
+      onClick={() => onToggleSelect?.()}
+    >
       <MotionCardContent className="p-4">
         <div className="flex items-center justify-between">
-          {isAdmin && onToggleSelect && (
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  onToggleSelect();
-                }}
-                className="mr-3 flex items-center justify-center transition-colors"
-                aria-label={isSelected ? "Deselect member" : "Select member"}
-                aria-pressed={isSelected}
-              >
-                {isSelected ? (
-                  <CheckCircle2 className="w-5 h-5 text-primary" />
-                ) : (
-                  <Circle className="w-5 h-5 text-muted-foreground hover:text-primary" />
-                )}
-              </button>
-            )}
-            <Link href={`/members/${member.id}`} className="flex items-center gap-3 flex-1 min-w-0">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
               <AvatarGradient name={member.displayName} size="md" />
               <div className="min-w-0">
                 <p className="font-medium truncate">
@@ -157,7 +146,7 @@ const MemberCard = memo(function MemberCard({
                   )}
                 </div>
               </div>
-            </Link>
+            </div>
             <div className="flex items-center gap-4">
               {!isInvited && !isPending && (
                 <div className="text-right">
@@ -175,43 +164,49 @@ const MemberCard = memo(function MemberCard({
                 </div>
               )}
               {isPending && isAdmin && onApprove && (
-                <Button size="sm" variant="outline" onClick={(e) => { e.preventDefault(); onApprove(member); }}>
+                <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); onApprove(member); }}>
                   <CheckCircle2 className="h-4 w-4 mr-1" />
                   Approve
                 </Button>
               )}
-              {canManage ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Member actions">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    {isInvited && onResendInvitation && (
-                      <DropdownMenuItem onClick={() => onResendInvitation(member)}>
-                        <Mail className="h-4 w-4 mr-2" />
-                        Resend Invitation
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Member actions" onClick={(e) => e.stopPropagation()}>
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem asChild>
+                    <Link href={`/members/${member.id}`}>
+                      <Eye className="h-4 w-4 mr-2" />
+                      View Details
+                    </Link>
+                  </DropdownMenuItem>
+                  {canManage && (
+                    <>
+                      {isInvited && onResendInvitation && (
+                        <DropdownMenuItem onClick={() => onResendInvitation(member)}>
+                          <Mail className="h-4 w-4 mr-2" />
+                          Resend Invitation
+                        </DropdownMenuItem>
+                      )}
+                      {!isInvited && !isPending && (
+                        <DropdownMenuItem onClick={() => onEdit(member)}>
+                          <Pencil className="h-4 w-4 mr-2" />
+                          Edit
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem
+                        onClick={() => onDelete(member)}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Remove
                       </DropdownMenuItem>
-                    )}
-                    {!isInvited && !isPending && (
-                      <DropdownMenuItem onClick={() => onEdit(member)}>
-                        <Pencil className="h-4 w-4 mr-2" />
-                        Edit
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuItem
-                      onClick={() => onDelete(member)}
-                      className="text-destructive focus:text-destructive"
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Remove
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : (
-                <div className="w-8 h-8" />
-              )}
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </MotionCardContent>
@@ -935,34 +930,23 @@ export default function MembersPage() {
         </FadeIn>
       ) : (
         <div className="space-y-3">
-          {/* Select All Row */}
           {isAdmin && paginatedMembers.length > 0 && (
-            <div className="rounded-xl border border-border/50 bg-secondary/20 p-4 flex items-center justify-between">
+            <div className="flex items-center justify-between px-1">
               <button
                 onClick={toggleSelectAll}
-                className="flex items-center gap-3 transition-colors"
-                aria-label={isAllSelected ? "Deselect all members" : "Select all members"}
-                aria-pressed={isAllSelected}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
-                {isAllSelected ? (
-                  <CheckCircle2 className="w-5 h-5 text-primary" />
-                ) : (
-                  <Circle className="w-5 h-5 text-muted-foreground hover:text-primary" />
-                )}
-                <span className="text-sm text-muted-foreground">
-                  {isAllSelected ? 'Deselect all' : 'Select all'}
-                </span>
+                {isAllSelected ? 'Deselect all' : 'Select all'}
+                {selectedRows.size > 0 && !isAllSelected && ` (${selectedRows.size} selected)`}
               </button>
-              <button
-                onClick={() => setShowBulkDeleteConfirm(true)}
-                className={cn(
-                  "w-7 h-7 flex items-center justify-center transition-all hover:text-destructive",
-                  selectedRows.size === 0 && "invisible"
-                )}
-                aria-label={`Remove ${selectedRows.size} selected members`}
-              >
-                <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
-              </button>
+              {selectedRows.size > 0 && (
+                <button
+                  onClick={() => setShowBulkDeleteConfirm(true)}
+                  className="text-xs text-destructive hover:text-destructive/80 transition-colors"
+                >
+                  Remove {selectedRows.size}
+                </button>
+              )}
             </div>
           )}
           <AnimatedList

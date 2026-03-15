@@ -1863,7 +1863,7 @@ export default function SpreadsheetPage() {
               <thead>
                 <tr className="border-b bg-secondary/30">
                   {isAdmin && (
-                    <th className="w-10 pl-2 pr-1 py-2">
+                    <th className="w-10 pl-1 pr-0 py-2">
                       <div className="flex items-center gap-0.5">
                         {selectedRows.size > 0 && (
                           <button
@@ -2006,14 +2006,14 @@ export default function SpreadsheetPage() {
                       )}
                     </span>
                   </th>
-                  {isAdmin && <th className="w-8" />}
+                  {isAdmin && <th className="w-6 pr-1" />}
                 </tr>
               </thead>
               <tbody>
                 {/* Select All / Add Row */}
                 {isAdmin && !isLoading && (
                   <tr className="border-b border-border/50 bg-secondary/20 hover:bg-secondary/40 transition-colors">
-                    <td className="pl-2 pr-1 py-2">
+                    <td className="pl-1 pr-0 py-2">
                       <div className="flex items-center gap-1">
                         <div className="w-6 h-6" />
                         <div className="w-2" />
@@ -2043,7 +2043,7 @@ export default function SpreadsheetPage() {
                 {/* Inline New Row */}
                 {isAdmin && inlineNewRow && (
                   <tr className="border-b border-border/50 bg-primary/5 animate-in fade-in slide-in-from-top-1 duration-200">
-                    <td className="pl-2 pr-1 py-2">
+                    <td className="pl-1 pr-0 py-2">
                       <div className="flex items-center gap-1">
                         <button
                           onClick={handleSaveInlineRow}
@@ -2236,7 +2236,7 @@ export default function SpreadsheetPage() {
                       )}
                     >
                       {isAdmin && (
-                        <td className="pl-2 pr-1 py-2">
+                        <td className="pl-1 pr-0 py-2">
                           <div className="flex items-center gap-1">
                             {row.isParent ? (
                               <button
@@ -2519,7 +2519,7 @@ export default function SpreadsheetPage() {
                       </td>
                       {/* Phase 4: Row context menu */}
                       {isAdmin && !row.isChild && (
-                        <td className="w-8 px-1 py-3">
+                        <td className="w-6 px-0 pr-1 py-2">
                           {(() => {
                             const actions = getRowActions(row);
                             if (actions.length === 0) return null;
