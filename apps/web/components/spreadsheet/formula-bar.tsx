@@ -8,6 +8,7 @@ interface RowData {
   type: 'charge' | 'expense' | 'payment';
   status?: string;
   category: string;
+  member?: string;
   incomeCents: number;
   outstandingCents: number;
   expenseCents: number;
@@ -51,6 +52,51 @@ function evaluateCompute(
   }
 }
 
+// Simple queries that can be handled client-side without AI
+const SIMPLE_PATTERNS = [
+  /^(show|find|list|search|filter)?\s*(all|everything)?\s*(for|from|by|under|assigned to|belonging to|of)\s+(.+)/i,
+  /^(show|find|list|search)?\s*(charges?|expenses?|payments?)\s*(for|from|by|under)?\s*(.+)?/i,
+];
+
+function tryLocalFilter(text: string): SpreadsheetQueryResult | null {
+  // Direct type filters
+  if (/^charges?\s*$/i.test(text)) return { type: 'filter', typeFilter: 'charge' };
+  if (/^expenses?\s*$/i.test(text)) return { type: 'filter', typeFilter: 'expense' };
+  if (/^payments?\s*$/i.test(text)) return { type: 'filter', typeFilter: 'payment' };
+
+  // "everything under X" / "all for X" patterns
+  const memberMatch = text.match(SIMPLE_PATTERNS[0]);
+  if (memberMatch) {
+    return { type: 'filter', search: memberMatch[4].trim() };
+  }
+
+  // "charges for X" patterns
+  const typeMatch = text.match(SIMPLE_PATTERNS[1]);
+  if (typeMatch) {
+    const typeWord = typeMatch[2]?.toLowerCase();
+    const typeFilter = typeWord?.startsWith('charge') ? 'charge'
+      : typeWord?.startsWith('expense') ? 'expense'
+      : typeWord?.startsWith('payment') ? 'payment'
+      : undefined;
+    const search = typeMatch[4]?.trim();
+    if (typeFilter || search) {
+      return { type: 'filter', typeFilter, search };
+    }
+  }
+
+  // Category filters
+  const catMatch = text.match(/^(dues|event|fine|merch|supplies|food|venue|marketing|services)\s*$/i);
+  if (catMatch) {
+    return { type: 'filter', categories: [catMatch[1].toUpperCase()] };
+  }
+
+  // Status filters
+  if (/^(overdue|unpaid|open)\s*$/i.test(text)) return { type: 'filter', statuses: ['OPEN'] };
+  if (/^paid\s*$/i.test(text)) return { type: 'filter', statuses: ['PAID'] };
+
+  return null;
+}
+
 interface FormulaBarProps {
   orgId: string;
   rows: RowData[];
@@ -69,16 +115,7 @@ export function FormulaBar({ orgId, rows, viewMetadata, onFilter, onSort, onSear
   const [isLoading, setIsLoading] = useState(false);
   const [computeResult, setComputeResult] = useState<{ value: string; explanation?: string } | null>(null);
   const [fallbackNotice, setFallbackNotice] = useState(false);
-  const [history, setHistory] = useState<string[]>([]);
-  const [showHistory, setShowHistory] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    const stored = localStorage.getItem('ledgly-formula-history');
-    if (stored) {
-      try { setHistory(JSON.parse(stored)); } catch { /* ignore */ }
-    }
-  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -93,14 +130,32 @@ export function FormulaBar({ orgId, rows, viewMetadata, onFilter, onSort, onSear
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const handleSubmit = useCallback(async (queryText?: string) => {
-    const text = queryText || query.trim();
+  const handleSubmit = useCallback(async () => {
+    const text = query.trim();
     if (!text || isLoading) return;
 
-    setIsLoading(true);
     setComputeResult(null);
     setFallbackNotice(false);
 
+    // Try local parsing first — instant, no API call
+    const local = tryLocalFilter(text);
+    if (local) {
+      if (local.type === 'filter') {
+        onFilter(local as SpreadsheetQueryResult & { type: 'filter' });
+      } else if (local.type === 'sort') {
+        onSort(local as SpreadsheetQueryResult & { type: 'sort' });
+      }
+      return;
+    }
+
+    // Short plain text — just do text search, no AI
+    if (text.length <= 20 && !/\d/.test(text) && !/\b(sum|total|average|count|how many|sort|order)\b/i.test(text)) {
+      onSearchFallback(text);
+      return;
+    }
+
+    // Complex query — use AI
+    setIsLoading(true);
     try {
       const res = await querySpreadsheet(orgId, text, viewMetadata);
 
@@ -112,17 +167,13 @@ export function FormulaBar({ orgId, rows, viewMetadata, onFilter, onSort, onSear
         const value = evaluateCompute(res as SpreadsheetQueryResult & { type: 'compute' }, rows);
         setComputeResult({ value, explanation: res.explanation });
       }
-
-      const updated = [text, ...history.filter((h) => h !== text)].slice(0, 10);
-      setHistory(updated);
-      localStorage.setItem('ledgly-formula-history', JSON.stringify(updated));
     } catch {
       onSearchFallback(text);
       setFallbackNotice(true);
     } finally {
       setIsLoading(false);
     }
-  }, [query, isLoading, orgId, viewMetadata, rows, onFilter, onSort, onSearchFallback, history]);
+  }, [query, isLoading, orgId, viewMetadata, rows, onFilter, onSort, onSearchFallback]);
 
   return (
     <div className="space-y-2">
@@ -149,9 +200,7 @@ export function FormulaBar({ orgId, rows, viewMetadata, onFilter, onSort, onSear
               inputRef.current?.blur();
             }
           }}
-          onFocus={() => history.length > 0 && setShowHistory(true)}
-          onBlur={() => setTimeout(() => setShowHistory(false), 200)}
-          placeholder="Ask about your data or filter... (press /)"
+          placeholder="Search or ask about your data... (press /)"
           className="w-full h-9 pl-9 pr-10 rounded-lg border border-border/50 bg-secondary/30 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50"
           disabled={isLoading}
         />
@@ -165,25 +214,6 @@ export function FormulaBar({ orgId, rows, viewMetadata, onFilter, onSort, onSear
           >
             <X className="h-3.5 w-3.5" />
           </button>
-        )}
-
-        {showHistory && history.length > 0 && (
-          <div className="absolute top-full left-0 right-0 z-20 mt-1 rounded-lg border bg-card shadow-lg py-1 max-h-48 overflow-y-auto">
-            {history.map((h, i) => (
-              <button
-                key={i}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  setQuery(h);
-                  setShowHistory(false);
-                  handleSubmit(h);
-                }}
-                className="w-full text-left px-3 py-1.5 text-xs text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-              >
-                {h}
-              </button>
-            ))}
-          </div>
         )}
       </div>
 

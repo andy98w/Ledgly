@@ -61,6 +61,7 @@ Available columns: ${viewMetadata?.columns?.join(', ') || 'date, type, category,
 Parse the user's natural language query and return JSON with one of these structures:
 
 1. Filter: {"type":"filter","typeFilter":"charge"|"expense"|"payment"|"all","search":"text","categories":["DUES"],"statuses":["OPEN"],"amountMin":0,"amountMax":10000,"dateFrom":"2026-01-01","dateTo":"2026-12-31"}
+   - "search" does a text match across description, member name, and category. Use it for name lookups like "everything under Bryan" → {"type":"filter","search":"Bryan"}
 2. Sort: {"type":"sort","sortBy":"date"|"amount"|"member"|"category"|"outstanding","sortOrder":"asc"|"desc"}
 3. Compute: {"type":"compute","expression":"sum","field":"outstandingCents","explanation":"Total outstanding across all charges","filters":{"type":"charge","status":"OPEN"}}
 
