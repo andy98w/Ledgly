@@ -193,7 +193,7 @@ export class MembersService {
     // Get org payment instructions for portal display
     const org = await this.prisma.organization.findUnique({
       where: { id: orgId },
-      select: { paymentInstructions: true },
+      select: { paymentInstructions: true, paymentHandles: true, enabledPaymentSources: true },
     });
 
     // Get payments for this member
@@ -255,6 +255,8 @@ export class MembersService {
       totalPaidCents,
       overdueCharges,
       paymentInstructions: org?.paymentInstructions || null,
+      paymentHandles: (org?.paymentHandles as Record<string, string>) ?? {},
+      enabledPaymentSources: org?.enabledPaymentSources ?? [],
       charges,
       payments: payments.map((p) => ({
         id: p.id,

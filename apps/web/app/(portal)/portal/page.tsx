@@ -10,12 +10,17 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Money } from '@/components/ui/money';
 import { EmptyState } from '@/components/ui/empty-state';
 import { cn } from '@/lib/utils';
+import { PaymentLinks } from '@/components/portal/payment-links';
 
 export default function PortalPage() {
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
   const user = useAuthStore((s) => s.user);
   const { data: memberData, isLoading } = useMyMembership(currentOrgId);
-  const member = memberData as (typeof memberData & { paymentInstructions?: string | null });
+  const member = memberData as (typeof memberData & {
+    paymentInstructions?: string | null;
+    paymentHandles?: Record<string, string>;
+    enabledPaymentSources?: string[];
+  });
 
   const [chargeFilter, setChargeFilter] = useState<'all' | 'unpaid' | 'paid'>('all');
 
@@ -64,6 +69,9 @@ export default function PortalPage() {
 
   const hasBalance = member.balanceCents > 0;
   const isOverdue = member.overdueCharges > 0;
+  const paymentHandles = member.paymentHandles || {};
+  const enabledSources = member.enabledPaymentSources || [];
+  const hasPaymentLinks = enabledSources.some((s) => paymentHandles[s]?.trim());
 
   return (
     <div className="space-y-6">
@@ -218,6 +226,15 @@ export default function PortalPage() {
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">{paidPercent}% paid</p>
                     </div>
+                  )}
+
+                  {isUnpaid && hasPaymentLinks && (
+                    <PaymentLinks
+                      handles={paymentHandles}
+                      enabledSources={enabledSources}
+                      amountCents={charge.balanceDueCents}
+                      note={charge.title}
+                    />
                   )}
                 </div>
               );

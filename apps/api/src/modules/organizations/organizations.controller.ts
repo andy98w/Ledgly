@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { IsString, IsOptional, IsArray, IsBoolean } from 'class-validator';
+import { IsString, IsOptional, IsArray, IsBoolean, IsObject } from 'class-validator';
 import { OrganizationsService } from './organizations.service';
 import { CurrentUser, CurrentUserData, Roles, Public } from '../../common/decorators';
 import { RolesGuard } from '../../common/guards';
@@ -31,6 +31,10 @@ class UpdateOrganizationDto {
   @IsString()
   @IsOptional()
   paymentInstructions?: string;
+
+  @IsObject()
+  @IsOptional()
+  paymentHandles?: Record<string, string>;
 }
 
 class UpdateJoinCodeSettingsDto {

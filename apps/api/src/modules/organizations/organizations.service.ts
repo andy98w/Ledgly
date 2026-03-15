@@ -13,6 +13,7 @@ interface UpdateOrganizationDto {
   timezone?: string;
   enabledPaymentSources?: string[];
   paymentInstructions?: string | null;
+  paymentHandles?: Record<string, string> | null;
 }
 
 // Safe alphabet: no ambiguous chars (0/O, 1/I/L)
@@ -116,6 +117,7 @@ export class OrganizationsService {
       timezone: org.timezone,
       enabledPaymentSources: org.enabledPaymentSources,
       paymentInstructions: org.paymentInstructions,
+      paymentHandles: org.paymentHandles ?? {},
       joinCode: org.joinCode,
       joinCodeEnabled: org.joinCodeEnabled,
       joinRequiresApproval: org.joinRequiresApproval,
@@ -134,6 +136,7 @@ export class OrganizationsService {
         ...(dto.timezone && { timezone: dto.timezone }),
         ...(dto.enabledPaymentSources !== undefined && { enabledPaymentSources: dto.enabledPaymentSources }),
         ...(dto.paymentInstructions !== undefined && { paymentInstructions: dto.paymentInstructions }),
+        ...(dto.paymentHandles !== undefined && { paymentHandles: dto.paymentHandles as any }),
       },
     });
 

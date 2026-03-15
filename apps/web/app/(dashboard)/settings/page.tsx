@@ -81,6 +81,7 @@ export default function SettingsPage() {
   const [transferTargetId, setTransferTargetId] = useState<string | null>(null);
   const [transferConfirmText, setTransferConfirmText] = useState('');
   const [paymentInstructions, setPaymentInstructions] = useState(orgDetails?.paymentInstructions || '');
+  const [paymentHandles, setPaymentHandles] = useState<Record<string, string>>(orgDetails?.paymentHandles || {});
   const [newRuleTrigger, setNewRuleTrigger] = useState('BEFORE_DUE');
   const [newRuleDays, setNewRuleDays] = useState('3');
 
@@ -750,6 +751,80 @@ export default function SettingsPage() {
                     </>
                   ) : (
                     'Save Instructions'
+                  )}
+                </Button>
+
+                <Separator className="opacity-50" />
+
+                <p className="text-sm font-medium">Payment Links</p>
+                <p className="text-sm text-muted-foreground">
+                  Add your payment handles so members can pay with one tap.
+                </p>
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-sm">Venmo</Label>
+                    <Input
+                      value={paymentHandles.venmo || ''}
+                      onChange={(e) => setPaymentHandles((h) => ({ ...h, venmo: e.target.value }))}
+                      placeholder="@username"
+                      className="bg-secondary/30 border-border/50 focus:border-primary"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-sm">Zelle</Label>
+                    <Input
+                      value={paymentHandles.zelle || ''}
+                      onChange={(e) => setPaymentHandles((h) => ({ ...h, zelle: e.target.value }))}
+                      placeholder="email@example.com or phone"
+                      className="bg-secondary/30 border-border/50 focus:border-primary"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-sm">Cash App</Label>
+                    <Input
+                      value={paymentHandles.cashapp || ''}
+                      onChange={(e) => setPaymentHandles((h) => ({ ...h, cashapp: e.target.value }))}
+                      placeholder="$cashtag"
+                      className="bg-secondary/30 border-border/50 focus:border-primary"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-sm">PayPal</Label>
+                    <Input
+                      value={paymentHandles.paypal || ''}
+                      onChange={(e) => setPaymentHandles((h) => ({ ...h, paypal: e.target.value }))}
+                      placeholder="username"
+                      className="bg-secondary/30 border-border/50 focus:border-primary"
+                    />
+                  </div>
+                </div>
+                <Button
+                  disabled={updateOrganization.isPending || JSON.stringify(paymentHandles) === JSON.stringify(orgDetails?.paymentHandles || {})}
+                  onClick={() => {
+                    const cleaned = Object.fromEntries(
+                      Object.entries(paymentHandles).filter(([, v]) => v.trim())
+                    );
+                    updateOrganization.mutate(
+                      { paymentHandles: cleaned },
+                      {
+                        onSuccess: () => toast({ title: 'Payment links saved!' }),
+                        onError: (error: any) =>
+                          toast({
+                            title: 'Error',
+                            description: error.message || 'Failed to save payment links',
+                            variant: 'destructive',
+                          }),
+                      },
+                    );
+                  }}
+                >
+                  {updateOrganization.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    'Save Payment Links'
                   )}
                 </Button>
               </div>

@@ -19,6 +19,7 @@ interface OrganizationDetails extends Organization {
   joinCodeEnabled: boolean;
   joinRequiresApproval: boolean;
   paymentInstructions: string | null;
+  paymentHandles: Record<string, string>;
   memberCount: number;
   chargeCount: number;
 }
@@ -84,7 +85,7 @@ export function useUpdateOrganization(orgId: string | null) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: Partial<Pick<OrganizationDetails, 'name' | 'timezone' | 'enabledPaymentSources' | 'paymentInstructions'>>) =>
+    mutationFn: (data: Partial<Pick<OrganizationDetails, 'name' | 'timezone' | 'enabledPaymentSources' | 'paymentInstructions' | 'paymentHandles'>>) =>
       api.patch<OrganizationDetails>(`/organizations/${orgId}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['organizations', orgId] });
