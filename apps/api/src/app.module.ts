@@ -18,6 +18,7 @@ import { AgentModule } from './modules/agent/agent.module';
 import { SchedulesModule } from './modules/schedules/schedules.module';
 import { RemindersModule } from './modules/reminders/reminders.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { PlaidModule } from './modules/plaid/plaid.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { ReportsModule } from './modules/reports/reports.module';
     SchedulesModule,
     RemindersModule,
     ReportsModule,
+    PlaidModule,
   ],
   providers: [
     {

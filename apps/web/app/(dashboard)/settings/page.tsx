@@ -3,13 +3,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { Moon, Sun, Monitor, User, Building2, Shield, Loader2, Camera, Plus, AlertTriangle, Mail, GraduationCap, KeyRound, Eye, EyeOff, Link2, Copy, Check, RefreshCw, ArrowRightLeft, Banknote, Bell, Trash2 } from 'lucide-react';
+import { Moon, Sun, Monitor, User, Building2, Shield, Loader2, Camera, Plus, AlertTriangle, Mail, GraduationCap, KeyRound, Eye, EyeOff, Link2, Copy, Check, RefreshCw, ArrowRightLeft, Banknote, Bell, Trash2, Landmark } from 'lucide-react';
 import { useAuthStore, useIsOwner } from '@/lib/stores/auth';
 import { useUpdateProfile, useChangePassword } from '@/lib/queries/auth';
 import { useCreateOrganization, useDeleteOrganization, useOrganization, useUpdateOrganization, useGenerateJoinCode, useDisableJoinCode, useUpdateJoinCodeSettings } from '@/lib/queries/organizations';
 import { useMembers, useTransferOwnership } from '@/lib/queries/members';
 import { useReminderRules, useCreateReminderRule, useDeleteReminderRule } from '@/lib/queries/reminders';
 import { useGmailStatus, useDisconnectGmail, getGmailConnectUrl } from '@/lib/queries/gmail';
+import { usePlaidStatus, usePlaidConnections, useCreatePlaidLinkToken, useExchangePlaidToken, usePlaidSync, useDisconnectPlaid } from '@/lib/queries/plaid';
 import { uploadAvatar } from '@/lib/supabase';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
@@ -180,6 +181,178 @@ function GmailSyncSection({ orgId }: { orgId: string | null }) {
                   Only import payment emails sent after this date. Leave blank for the last 30 days.
                 </p>
               </div>
+            )}
+          </div>
+        </MotionCardContent>
+      </MotionCard>
+    </FadeIn>
+  );
+}
+
+function BankConnectionsSection({ orgId }: { orgId: string | null }) {
+  const { data: plaidStatus } = usePlaidStatus(orgId);
+  const { data: plaidData } = usePlaidConnections(orgId);
+  const createLinkToken = useCreatePlaidLinkToken();
+  const exchangeToken = useExchangePlaidToken();
+  const syncPlaid = usePlaidSync();
+  const disconnectPlaid = useDisconnectPlaid();
+  const { toast } = useToast();
+  const [plaidReady, setPlaidReady] = useState(false);
+  const [linkToken, setLinkToken] = useState<string | null>(null);
+
+  const connections = plaidData?.connections ?? [];
+
+  const handleConnect = async () => {
+    if (!orgId) return;
+    try {
+      const result = await createLinkToken.mutateAsync({ orgId });
+      setLinkToken(result.linkToken);
+    } catch {
+      toast({ title: 'Failed to initialize bank connection', variant: 'destructive' });
+    }
+  };
+
+  useEffect(() => {
+    if (!linkToken) return;
+
+    const script = document.createElement('script');
+    script.src = 'https://cdn.plaid.com/link/v2/stable/link-initialize.js';
+    script.onload = () => setPlaidReady(true);
+    if (document.querySelector('script[src*="plaid.com/link"]')) {
+      setPlaidReady(true);
+      return;
+    }
+    document.head.appendChild(script);
+  }, [linkToken]);
+
+  useEffect(() => {
+    if (!linkToken || !plaidReady || !(window as any).Plaid) return;
+
+    const handler = (window as any).Plaid.create({
+      token: linkToken,
+      onSuccess: async (publicToken: string) => {
+        if (!orgId) return;
+        try {
+          await exchangeToken.mutateAsync({ orgId, publicToken });
+          toast({ title: 'Bank account connected' });
+        } catch {
+          toast({ title: 'Failed to connect bank', variant: 'destructive' });
+        }
+        setLinkToken(null);
+      },
+      onExit: () => {
+        setLinkToken(null);
+      },
+    });
+
+    handler.open();
+
+    return () => handler.destroy();
+  }, [linkToken, plaidReady]);
+
+  if (!plaidStatus?.configured) return null;
+
+  const handleDisconnect = async (connectionId: string) => {
+    if (!orgId) return;
+    try {
+      await disconnectPlaid.mutateAsync({ orgId, connectionId });
+      toast({ title: 'Bank disconnected' });
+    } catch {
+      toast({ title: 'Failed to disconnect', variant: 'destructive' });
+    }
+  };
+
+  const handleSync = async () => {
+    if (!orgId) return;
+    try {
+      const result = await syncPlaid.mutateAsync({ orgId });
+      toast({ title: `Synced: ${result.imported} imported, ${result.skipped} skipped` });
+    } catch {
+      toast({ title: 'Sync failed', variant: 'destructive' });
+    }
+  };
+
+  return (
+    <FadeIn delay={0.47}>
+      <MotionCard hover={false}>
+        <MotionCardHeader>
+          <MotionCardTitle className="flex items-center gap-2">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Landmark className="h-4 w-4 text-primary" />
+            </div>
+            Bank Connections
+          </MotionCardTitle>
+        </MotionCardHeader>
+        <MotionCardContent>
+          <div className="space-y-4">
+            {connections.length > 0 && (
+              <div className="space-y-3">
+                {connections.map((conn) => (
+                  <div key={conn.id} className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">
+                        {conn.institutionName || 'Bank Account'}
+                        {conn.accountMask && (
+                          <span className="text-muted-foreground ml-1">
+                            ****{conn.accountMask}
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {conn.accountName && `${conn.accountName} · `}
+                        {conn.lastSyncAt
+                          ? `Last synced ${new Date(conn.lastSyncAt).toLocaleDateString()}`
+                          : 'Connected, waiting for first sync'}
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDisconnect(conn.id)}
+                      disabled={disconnectPlaid.isPending}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      {disconnectPlaid.isPending ? 'Disconnecting...' : 'Disconnect'}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant={connections.length > 0 ? 'outline' : 'default'}
+                onClick={handleConnect}
+                disabled={createLinkToken.isPending}
+              >
+                {createLinkToken.isPending ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Landmark className="w-4 h-4 mr-2" />
+                )}
+                {connections.length > 0 ? 'Add Another Bank' : 'Connect Bank'}
+              </Button>
+
+              {connections.length > 0 && (
+                <Button
+                  variant="outline"
+                  onClick={handleSync}
+                  disabled={syncPlaid.isPending}
+                >
+                  {syncPlaid.isPending ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                  )}
+                  Sync Now
+                </Button>
+              )}
+            </div>
+
+            {connections.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                Connect your bank to automatically import P2P transactions from Venmo, Zelle, Cash App, and PayPal.
+              </p>
             )}
           </div>
         </MotionCardContent>
@@ -823,6 +996,9 @@ export default function SettingsPage() {
 
       {/* Gmail Sync Section — admin/owner only */}
       {isAdminRole && <GmailSyncSection orgId={currentOrgId} />}
+
+      {/* Bank Connections Section — admin/owner only */}
+      {isAdminRole && <BankConnectionsSection orgId={currentOrgId} />}
 
       {/* Payment Instructions — admin/owner only */}
       {isAdminRole && (

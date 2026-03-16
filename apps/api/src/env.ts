@@ -30,6 +30,9 @@ const envSchema = z.object({
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   GOOGLE_REDIRECT_URI: z.string().url().optional(),
   SENTRY_DSN: z.string().optional(),
+  PLAID_CLIENT_ID: z.string().optional(),
+  PLAID_SECRET: z.string().optional(),
+  PLAID_ENV: z.string().optional().default('sandbox'),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -30,6 +30,7 @@ model Organization {
   paymentHandles      Json?            @default("{}") @map("payment_handles")
   chargeSchedules     ChargeSchedule[]
   reminderRules       ReminderRule[]
+  plaidConnections    PlaidConnection[]
 
   @@map("organizations")
 }
@@ -440,6 +441,24 @@ model ReminderLog {
   @@unique([ruleId, chargeId])
   @@index([orgId, sentAt])
   @@map("reminder_logs")
+}
+
+model PlaidConnection {
+  id              String    @id @default(cuid())
+  orgId           String    @map("org_id")
+  accessToken     String    @map("access_token")
+  itemId          String    @map("item_id")
+  institutionName String?   @map("institution_name")
+  accountMask     String?   @map("account_mask")
+  accountName     String?   @map("account_name")
+  cursor          String?
+  lastSyncAt      DateTime? @map("last_sync_at")
+  isActive        Boolean   @default(true) @map("is_active")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  org             Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@map("plaid_connections")
 }
 
 model MatchConfirmation {
