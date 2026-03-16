@@ -13,7 +13,6 @@ import {
   History,
   Check,
   DollarSign,
-  Zap,
   Clock,
   CreditCard,
   Smartphone,
@@ -30,21 +29,18 @@ const howItWorks = [
     title: 'Create Your Org',
     description:
       'Sign up free, name your org, and invite members with a join code.',
-    color: 'from-primary to-violet-500',
   },
   {
     step: 2,
     title: 'Connect Gmail',
     description:
       'Link your Gmail — we auto-detect payment notifications from Venmo, Zelle, CashApp & PayPal.',
-    color: 'from-violet-500 to-cyan-400',
   },
   {
     step: 3,
     title: 'Track Everything',
     description:
       'Payments auto-match to dues. See who\u2019s paid, who hasn\u2019t, and let AI handle follow-ups.',
-    color: 'from-cyan-400 to-emerald-400',
   },
 ];
 
@@ -54,54 +50,36 @@ const featureCards = [
     title: 'Know Who Owes What — Instantly',
     description:
       'Create charges for dues, events, or fines. One glance shows every balance across your whole org.',
-    iconBg: 'bg-amber-500/10',
-    iconText: 'text-amber-500',
-    hoverBorder: 'hover:border-amber-500/30',
   },
   {
     icon: RefreshCw,
     title: 'Payments Match Themselves',
     description:
       'Incoming payments auto-match against unpaid charges. No manual bookkeeping ever again.',
-    iconBg: 'bg-emerald-500/10',
-    iconText: 'text-emerald-500',
-    hoverBorder: 'hover:border-emerald-500/30',
   },
   {
     icon: Mail,
     title: 'Keep Using Venmo & Zelle',
     description:
       'Members pay how they already pay. We read the receipts from your Gmail — no new app for anyone.',
-    iconBg: 'bg-cyan-500/10',
-    iconText: 'text-cyan-500',
-    hoverBorder: 'hover:border-cyan-500/30',
   },
   {
     icon: Sparkles,
     title: 'Just Tell AI What You Need',
     description:
       'Add members, create charges, record payments — type what you want in plain English and it\u2019s done.',
-    iconBg: 'bg-primary/10',
-    iconText: 'text-primary',
-    hoverBorder: 'hover:border-primary/30',
   },
   {
     icon: TrendingDown,
     title: 'Track Where Money Goes',
     description:
       'Categorize expenses by vendor and type. Gmail auto-detects outgoing payments too.',
-    iconBg: 'bg-rose-500/10',
-    iconText: 'text-rose-500',
-    hoverBorder: 'hover:border-rose-500/30',
   },
   {
     icon: History,
     title: 'Every Action Logged & Undoable',
     description:
       'Full audit trail of who did what and when. Undo or redo any change with one click.',
-    iconBg: 'bg-violet-500/10',
-    iconText: 'text-violet-500',
-    hoverBorder: 'hover:border-violet-500/30',
   },
 ];
 
@@ -143,24 +121,18 @@ const whyLedgly = [
     icon: DollarSign,
     title: 'No fees — ever',
     description: 'Crowded charges 2.99% per transaction. Ledgly is 100% free.',
-    iconBg: 'bg-emerald-500/10',
-    iconText: 'text-emerald-500',
   },
   {
     icon: Smartphone,
     title: 'Works with your existing apps',
     description:
       'Members keep paying through Venmo, Zelle, or CashApp. No one downloads anything new.',
-    iconBg: 'bg-cyan-500/10',
-    iconText: 'text-cyan-500',
   },
   {
     icon: Bot,
     title: 'AI-powered',
     description:
       'Natural language commands to manage your entire treasury. No competitor offers this.',
-    iconBg: 'bg-primary/10',
-    iconText: 'text-primary',
   },
 ];
 
@@ -181,15 +153,7 @@ export default function LandingPage() {
   return (
     <div className="min-h-dvh bg-background text-foreground relative overflow-x-hidden">
       {/* Fixed background gradient */}
-      <div className="fixed inset-0 bg-gradient-to-br from-primary/5 via-violet-500/3 to-cyan-500/5 pointer-events-none z-0" />
-
-      {/* Fixed subtle grid */}
-      <div
-        className="fixed inset-0 opacity-[0.02] pointer-events-none z-0"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='32' height='32' fill='none' stroke='rgb(255 255 255 / 0.5)'%3e%3cpath d='M0 .5H31.5V32'/%3e%3c/svg%3e")`,
-        }}
-      />
+      <div className="fixed inset-0 bg-gradient-to-br from-primary/5 to-primary/3 pointer-events-none z-0" />
 
       {/* ── Navbar ────────────────────────────────────────────── */}
       <header
@@ -226,7 +190,7 @@ export default function LandingPage() {
             </Link>
             <Link
               href="/register"
-              className="inline-flex items-center justify-center rounded-xl px-5 py-2.5 text-sm font-medium bg-gradient-to-r from-primary via-violet-500 to-cyan-400 text-primary-foreground hover:opacity-90 transition-all duration-150 shadow-layered-sm active:scale-[0.98]"
+              className="inline-flex items-center justify-center rounded-full px-5 py-2.5 text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 transition-all duration-150 active:scale-[0.98]"
             >
               Sign Up
             </Link>
@@ -235,38 +199,34 @@ export default function LandingPage() {
       </header>
 
       {/* ── Hero ──────────────────────────────────────────────── */}
-      <section className="relative pt-32 pb-16 md:pt-40 md:pb-24 px-6 noise-overlay">
-        {/* Animated gradient orbs */}
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] pointer-events-none">
-          <div className="absolute inset-0 rounded-full bg-gradient-to-br from-primary/20 via-blue-400/15 to-purple-500/10 blur-[120px] animate-float" />
-          <div className="absolute inset-8 rounded-full bg-gradient-to-tr from-blue-400/10 via-primary/15 to-cyan-400/10 blur-[100px] animate-gradient-rotate" />
-          <div className="absolute inset-4 rounded-full bg-gradient-to-bl from-violet-500/15 via-purple-400/10 to-fuchsia-500/10 blur-[110px] animate-float" style={{ animationDelay: '-3s' }} />
-          <div className="absolute inset-12 rounded-full bg-gradient-to-tl from-cyan-400/10 via-teal-400/10 to-emerald-400/5 blur-[100px] animate-gradient-rotate" style={{ animationDelay: '-5s' }} />
+      <section className="relative pt-36 pb-20 md:pt-48 md:pb-32 px-6">
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] pointer-events-none">
+          <div className="absolute inset-0 rounded-full bg-primary/10 blur-[150px]" />
         </div>
 
         <div className="max-w-3xl mx-auto text-center relative z-10">
           {/* Free badge */}
           <div className="animate-reveal-up" style={{ animationDelay: '0ms' }}>
-            <span className="inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium bg-emerald-500/10 text-emerald-500 mb-6">
+            <span className="inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium bg-primary/10 text-primary mb-6">
               <Check className="h-3.5 w-3.5" />
               Free forever — no fees, no credit card
             </span>
           </div>
 
-          <h1 className="text-fluid-5xl font-bold tracking-tight leading-[1.1] animate-reveal-up" style={{ animationDelay: '100ms' }}>
+          <h1 className="text-4xl md:text-6xl font-bold tracking-tight leading-[1.1] animate-reveal-up" style={{ animationDelay: '100ms' }}>
             Stop Chasing Venmo Payments
             <br />
-            <span className="bg-gradient-to-r from-primary via-violet-500 to-cyan-400 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
               in a Spreadsheet
             </span>
           </h1>
-          <p className="mt-6 text-lg text-muted-foreground max-w-xl mx-auto leading-relaxed animate-reveal-up" style={{ animationDelay: '200ms' }}>
+          <p className="mt-6 text-lg text-muted-foreground max-w-xl mx-auto leading-7 animate-reveal-up" style={{ animationDelay: '200ms' }}>
             Connect your Gmail. We auto-import Venmo, Zelle, CashApp &amp; PayPal payments and match them to dues — for free.
           </p>
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4 animate-reveal-up" style={{ animationDelay: '300ms' }}>
             <Link
               href="/register"
-              className="inline-flex items-center justify-center rounded-xl px-8 py-3.5 text-sm font-medium bg-gradient-to-r from-primary via-violet-500 to-cyan-400 text-primary-foreground hover:opacity-90 transition-all duration-150 shadow-layered-lg active:scale-[0.98]"
+              className="inline-flex items-center justify-center rounded-xl px-8 py-3.5 text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 transition-all duration-150 shadow-xl active:scale-[0.98]"
             >
               Get Started Free
               <ArrowRight className="ml-2 h-4 w-4" />
@@ -285,7 +245,7 @@ export default function LandingPage() {
 
         {/* Hero screenshot */}
         <div className="max-w-5xl mx-auto mt-16 relative z-10 animate-reveal-up" style={{ animationDelay: '500ms' }}>
-          <div className="rounded-xl border border-border/50 overflow-hidden shadow-layered-lg bg-card/30 backdrop-blur-sm">
+          <div className="rounded-xl border border-border/50 overflow-hidden shadow-2xl bg-card/30">
             <Image
               src="/screenshots/light/dashboard.png"
               alt="Ledgly dashboard"
@@ -311,17 +271,17 @@ export default function LandingPage() {
         <div className="max-w-4xl mx-auto">
           <ScrollReveal>
             <p className="text-center text-sm text-muted-foreground mb-8">
-              Trusted by student organizations across the country
+              Built for fraternities, clubs, and student organizations
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8">
               {[
-                { icon: DollarSign, label: '100% Free', sublabel: 'No fees, no catches', iconBg: 'bg-emerald-500/10', iconText: 'text-emerald-500' },
-                { icon: CreditCard, label: 'Works with Venmo, Zelle, CashApp & PayPal', sublabel: 'Keep your existing apps', iconBg: 'bg-cyan-500/10', iconText: 'text-cyan-500' },
-                { icon: Clock, label: 'Setup in under 5 minutes', sublabel: 'From signup to tracking', iconBg: 'bg-violet-500/10', iconText: 'text-violet-500' },
+                { icon: DollarSign, label: '100% Free', sublabel: 'No fees, no catches' },
+                { icon: CreditCard, label: 'Works with Venmo, Zelle, CashApp & PayPal', sublabel: 'Keep your existing apps' },
+                { icon: Clock, label: 'Setup in under 5 minutes', sublabel: 'From signup to tracking' },
               ].map((item) => (
                 <div key={item.label} className="flex items-center gap-3 justify-center">
-                  <div className={cn('p-2 rounded-lg shrink-0', item.iconBg)}>
-                    <item.icon className={cn('h-4 w-4', item.iconText)} />
+                  <div className="p-2 rounded-lg shrink-0 bg-primary/10">
+                    <item.icon className="h-4 w-4 text-primary" />
                   </div>
                   <div>
                     <p className="text-sm font-medium">{item.label}</p>
@@ -335,26 +295,23 @@ export default function LandingPage() {
       </section>
 
       {/* ── How It Works ──────────────────────────────────────── */}
-      <section id="how-it-works" className="relative py-32 px-6 scroll-mt-20">
+      <section id="how-it-works" className="relative py-24 md:py-36 px-6 scroll-mt-20">
         <div className="max-w-5xl mx-auto">
           <ScrollReveal>
-            <h2 className="text-center text-fluid-2xl font-bold tracking-tight mb-16">
+            <h2 className="text-center text-3xl md:text-4xl font-bold tracking-tight mb-16">
               How It Works
             </h2>
           </ScrollReveal>
 
           <div className="relative grid gap-12 md:gap-0 md:grid-cols-3">
             {/* Connecting line (desktop) */}
-            <div className="hidden md:block absolute top-8 left-[16.67%] right-[16.67%] h-0.5 bg-gradient-to-r from-primary via-violet-500 to-cyan-400 opacity-20" />
+            <div className="hidden md:block absolute top-8 left-[16.67%] right-[16.67%] h-0.5 bg-primary/20" />
 
             {howItWorks.map((item, i) => (
               <ScrollReveal key={item.step} delay={i * 150}>
                 <div className="flex flex-col items-center text-center px-6">
                   {/* Numbered circle */}
-                  <div className={cn(
-                    'relative z-10 w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold text-white bg-gradient-to-br mb-6',
-                    item.color,
-                  )}>
+                  <div className="relative z-10 w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold text-white bg-gradient-to-br from-primary to-primary/70 mb-6">
                     {item.step}
                   </div>
                   <h3 className="text-lg font-semibold mb-2">{item.title}</h3>
@@ -369,29 +326,25 @@ export default function LandingPage() {
       </section>
 
       {/* ── Feature Grid ──────────────────────────────────────── */}
-      <section id="features" className="relative py-32 px-6 scroll-mt-20">
+      <section id="features" className="relative py-24 md:py-36 px-6 scroll-mt-20">
         <div className="max-w-5xl mx-auto">
           <ScrollReveal>
-            <h2 className="text-center text-fluid-2xl font-bold tracking-tight mb-4">
+            <h2 className="text-center text-3xl md:text-4xl font-bold tracking-tight mb-4">
               Everything You Need
             </h2>
-            <p className="text-center text-muted-foreground mb-16 max-w-xl mx-auto">
+            <p className="text-center text-muted-foreground mb-16 max-w-xl mx-auto leading-7">
               Stop juggling spreadsheets, Venmo screenshots, and group chats. Ledgly handles it all.
             </p>
           </ScrollReveal>
 
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
             {featureCards.map((feature, i) => (
               <ScrollReveal key={feature.title} delay={i * 80}>
                 <div
-                  className={cn(
-                    'rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm p-6',
-                    'hover:bg-card/80 hover:-translate-y-1 hover:shadow-layered-lg transition-all duration-200 h-full',
-                    feature.hoverBorder,
-                  )}
+                  className="rounded-xl border border-border/50 bg-card/50 p-8 hover:bg-card/80 hover:-translate-y-1 hover:border-primary/30 hover:shadow-xl transition-all duration-200 h-full"
                 >
-                  <div className={cn('p-2.5 rounded-lg w-fit mb-4', feature.iconBg)}>
-                    <feature.icon className={cn('h-5 w-5', feature.iconText)} />
+                  <div className="p-2.5 rounded-lg w-fit mb-4 bg-primary/10">
+                    <feature.icon className="h-5 w-5 text-primary" />
                   </div>
                   <h3 className="font-semibold mb-2">{feature.title}</h3>
                   <p className="text-sm text-muted-foreground leading-relaxed">
@@ -405,13 +358,13 @@ export default function LandingPage() {
       </section>
 
       {/* ── Showcase (tabbed) ─────────────────────────────────── */}
-      <section className="relative py-32 px-6">
+      <section className="relative py-24 md:py-36 px-6">
         <div className="max-w-6xl mx-auto">
           <ScrollReveal>
-            <h2 className="text-center text-fluid-2xl font-bold tracking-tight mb-4">
+            <h2 className="text-center text-3xl md:text-4xl font-bold tracking-tight mb-4">
               See It in Action
             </h2>
-            <p className="text-center text-muted-foreground mb-12 max-w-xl mx-auto">
+            <p className="text-center text-muted-foreground mb-12 max-w-xl mx-auto leading-7">
               Click through to explore every view.
             </p>
           </ScrollReveal>
@@ -442,7 +395,7 @@ export default function LandingPage() {
               {/* Screenshot / placeholder */}
               <div className="flex-1 min-w-0 w-full">
                 {currentTab.slug ? (
-                  <div className="rounded-xl border border-border/50 overflow-hidden shadow-layered-lg">
+                  <div className="rounded-xl border border-border/50 overflow-hidden shadow-2xl">
                     <Image
                       src={`/screenshots/light/${currentTab.slug}.png`}
                       alt={`${currentTab.label} screenshot`}
@@ -460,7 +413,7 @@ export default function LandingPage() {
                   </div>
                 ) : (
                   /* AI Agent placeholder */
-                  <div className="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm shadow-layered-lg p-8 md:p-12 flex flex-col items-center justify-center min-h-[320px] md:min-h-[400px]">
+                  <div className="rounded-xl border border-border/50 bg-card/50 shadow-2xl p-8 md:p-12 flex flex-col items-center justify-center min-h-[320px] md:min-h-[400px]">
                     <div className="p-4 rounded-2xl bg-primary/10 mb-6">
                       <Sparkles className="h-10 w-10 text-primary" />
                     </div>
@@ -500,23 +453,23 @@ export default function LandingPage() {
       </section>
 
       {/* ── Why Ledgly ─────────────────────────────────────────── */}
-      <section className="relative py-32 px-6">
+      <section className="relative py-24 md:py-36 px-6">
         <div className="max-w-5xl mx-auto">
           <ScrollReveal>
-            <h2 className="text-center text-fluid-2xl font-bold tracking-tight mb-4">
+            <h2 className="text-center text-3xl md:text-4xl font-bold tracking-tight mb-4">
               Why Ledgly
             </h2>
-            <p className="text-center text-muted-foreground mb-16 max-w-xl mx-auto">
+            <p className="text-center text-muted-foreground mb-16 max-w-xl mx-auto leading-7">
               Other tools charge fees, force members onto new platforms, or lack modern features. We don&apos;t.
             </p>
           </ScrollReveal>
 
-          <div className="grid gap-6 sm:grid-cols-3">
+          <div className="grid gap-8 sm:grid-cols-3">
             {whyLedgly.map((item, i) => (
               <ScrollReveal key={item.title} delay={i * 100}>
-                <div className="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm p-8 text-center hover:bg-card/80 hover:-translate-y-1 hover:shadow-layered-lg transition-all duration-200 h-full">
-                  <div className={cn('p-3 rounded-xl w-fit mx-auto mb-5', item.iconBg)}>
-                    <item.icon className={cn('h-6 w-6', item.iconText)} />
+                <div className="rounded-xl border border-border/50 bg-card/50 p-8 text-center hover:bg-card/80 hover:-translate-y-1 hover:border-primary/30 hover:shadow-xl transition-all duration-200 h-full">
+                  <div className="p-3 rounded-xl w-fit mx-auto mb-5 bg-primary/10">
+                    <item.icon className="h-6 w-6 text-primary" />
                   </div>
                   <h3 className="font-semibold mb-2">{item.title}</h3>
                   <p className="text-sm text-muted-foreground leading-relaxed">
@@ -533,7 +486,7 @@ export default function LandingPage() {
       <section className="relative pb-0 px-6">
         <div className="max-w-3xl mx-auto text-center pb-32">
           <ScrollReveal>
-            <h2 className="text-fluid-3xl font-bold tracking-tight mb-4">
+            <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-4">
               Ready to ditch the spreadsheet?
             </h2>
             <p className="text-muted-foreground mb-8">
@@ -541,7 +494,7 @@ export default function LandingPage() {
             </p>
             <Link
               href="/register"
-              className="inline-flex items-center justify-center rounded-xl px-8 py-3.5 text-sm font-medium bg-gradient-to-r from-primary via-violet-500 to-cyan-400 text-primary-foreground hover:opacity-90 transition-all duration-150 shadow-layered-lg active:scale-[0.98]"
+              className="inline-flex items-center justify-center rounded-xl px-8 py-3.5 text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 transition-all duration-150 shadow-xl active:scale-[0.98]"
             >
               Get Started Free
               <ArrowRight className="ml-2 h-4 w-4" />
