@@ -21,6 +21,7 @@ import {
   CreditCard,
   TrendingDown,
   Sparkles,
+  History,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MEMBERSHIP_ROLE_LABELS } from '@ledgly/shared';
@@ -69,6 +70,7 @@ const secondaryNavItems: NavItem[] = [
   { href: '/payments', label: 'Payments', icon: CreditCard },
   { href: '/expenses', label: 'Expenses', icon: TrendingDown },
   { href: '/agent', label: 'AI Assistant', icon: Sparkles },
+  { href: '/audit', label: 'Audit Log', icon: History },
 ];
 
 export function Sidebar() {
