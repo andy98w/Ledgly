@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   BarChart,
   Bar,
@@ -9,13 +9,19 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Legend,
 } from 'recharts';
 import { usePayments } from '@/lib/queries/payments';
 import { useAuthStore } from '@/lib/stores/auth';
 import { formatCents } from '@/lib/utils';
 import { MotionCard, MotionCardContent, MotionCardHeader, MotionCardTitle } from '@/components/ui/motion-card';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 function getMonthLabel(date: Date): string {
   return date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
@@ -25,36 +31,73 @@ function getMonthKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
 
+const RANGE_OPTIONS = [
+  { value: '3', label: 'Last 3 months' },
+  { value: '6', label: 'Last 6 months' },
+  { value: '12', label: 'This year' },
+  { value: 'all', label: 'All time' },
+];
+
 export function RevenueChart() {
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
   const { data: paymentsData, isLoading } = usePayments(currentOrgId, { limit: 500 });
+  const [range, setRange] = useState('6');
 
   const chartData = useMemo(() => {
     if (!paymentsData?.data) return [];
 
     const now = new Date();
+
+    if (range === 'all') {
+      const allDates = paymentsData.data.map(p => new Date(p.paidAt));
+      if (allDates.length === 0) return [];
+      const earliest = new Date(Math.min(...allDates.map(d => d.getTime())));
+      const monthCount = (now.getFullYear() - earliest.getFullYear()) * 12 + (now.getMonth() - earliest.getMonth()) + 1;
+      const months: { key: string; label: string }[] = [];
+      for (let i = monthCount - 1; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        months.push({ key: getMonthKey(d), label: getMonthLabel(d) });
+      }
+      const collected: Record<string, number> = {};
+      months.forEach(m => { collected[m.key] = 0; });
+      for (const payment of paymentsData.data) {
+        const key = getMonthKey(new Date(payment.paidAt));
+        if (collected[key] !== undefined) collected[key] += payment.amountCents;
+      }
+      return months.map(m => ({ name: m.label, collected: collected[m.key] / 100 }));
+    }
+
+    if (range === '12') {
+      const jan = new Date(now.getFullYear(), 0, 1);
+      const monthCount = now.getMonth() + 1;
+      const months: { key: string; label: string }[] = [];
+      for (let i = 0; i < monthCount; i++) {
+        const d = new Date(jan.getFullYear(), jan.getMonth() + i, 1);
+        months.push({ key: getMonthKey(d), label: getMonthLabel(d) });
+      }
+      const collected: Record<string, number> = {};
+      months.forEach(m => { collected[m.key] = 0; });
+      for (const payment of paymentsData.data) {
+        const key = getMonthKey(new Date(payment.paidAt));
+        if (collected[key] !== undefined) collected[key] += payment.amountCents;
+      }
+      return months.map(m => ({ name: m.label, collected: collected[m.key] / 100 }));
+    }
+
+    const count = parseInt(range);
     const months: { key: string; label: string }[] = [];
-    for (let i = 5; i >= 0; i--) {
+    for (let i = count - 1; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       months.push({ key: getMonthKey(d), label: getMonthLabel(d) });
     }
-
     const collected: Record<string, number> = {};
-    months.forEach((m) => { collected[m.key] = 0; });
-
+    months.forEach(m => { collected[m.key] = 0; });
     for (const payment of paymentsData.data) {
-      const paidDate = new Date(payment.paidAt);
-      const key = getMonthKey(paidDate);
-      if (collected[key] !== undefined) {
-        collected[key] += payment.amountCents;
-      }
+      const key = getMonthKey(new Date(payment.paidAt));
+      if (collected[key] !== undefined) collected[key] += payment.amountCents;
     }
-
-    return months.map((m) => ({
-      name: m.label,
-      collected: collected[m.key] / 100,
-    }));
-  }, [paymentsData]);
+    return months.map(m => ({ name: m.label, collected: collected[m.key] / 100 }));
+  }, [paymentsData, range]);
 
   if (isLoading) {
     return (
@@ -74,7 +117,19 @@ export function RevenueChart() {
   return (
     <MotionCard hover={false}>
       <MotionCardHeader>
-        <MotionCardTitle className="text-lg">Revenue Overview</MotionCardTitle>
+        <div className="flex items-center justify-between">
+          <MotionCardTitle className="text-lg">Revenue Overview</MotionCardTitle>
+          <Select value={range} onValueChange={setRange}>
+            <SelectTrigger className="w-[140px] h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {RANGE_OPTIONS.map(opt => (
+                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </MotionCardHeader>
       <MotionCardContent>
         {!hasData ? (
