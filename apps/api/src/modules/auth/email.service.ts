@@ -234,19 +234,21 @@ export class EmailService {
       const links: string[] = [];
       const buttonStyle = 'display: inline-block; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; text-decoration: none; margin: 4px;';
       if (enabledSources.includes('venmo') && paymentHandles.venmo) {
-        const url = `venmo://paycharge?txn=pay&recipients=${encodeURIComponent(paymentHandles.venmo)}&amount=${amount}&note=${encodeURIComponent(chargeTitle)}`;
-        links.push(`<a href="${url}" style="${buttonStyle} background: #008CFF; color: white;">Pay with Venmo</a>`);
+        const handle = paymentHandles.venmo.replace(/^@/, '');
+        const url = `https://venmo.com/${encodeURIComponent(handle)}?txn=pay&amount=${amount}&note=${encodeURIComponent(chargeTitle)}`;
+        links.push(`<a href="${url}" style="${buttonStyle} background: #008CFF; color: white;">Pay $${amount} on Venmo</a>`);
       }
       if (enabledSources.includes('cashapp') && paymentHandles.cashapp) {
-        const url = `https://cash.app/${paymentHandles.cashapp}/${amount}`;
-        links.push(`<a href="${url}" style="${buttonStyle} background: #00D632; color: white;">Pay with Cash App</a>`);
+        const handle = paymentHandles.cashapp.replace(/^\$/, '');
+        const url = `https://cash.app/$${handle}/${amount}`;
+        links.push(`<a href="${url}" style="${buttonStyle} background: #00D632; color: white;">Pay $${amount} on Cash App</a>`);
       }
       if (enabledSources.includes('paypal') && paymentHandles.paypal) {
         const url = `https://paypal.me/${paymentHandles.paypal}/${amount}`;
-        links.push(`<a href="${url}" style="${buttonStyle} background: #0070BA; color: white;">Pay with PayPal</a>`);
+        links.push(`<a href="${url}" style="${buttonStyle} background: #0070BA; color: white;">Pay $${amount} on PayPal</a>`);
       }
       if (enabledSources.includes('zelle') && paymentHandles.zelle) {
-        links.push(`<p style="margin: 8px 0 0; font-size: 13px; color: #666;">Zelle: <strong>${paymentHandles.zelle}</strong></p>`);
+        links.push(`<p style="margin: 8px 0 0; font-size: 13px; color: #666;">Pay via Zelle to: <strong>${paymentHandles.zelle}</strong></p>`);
       }
       if (links.length > 0) {
         paymentLinksHtml = `
