@@ -148,7 +148,7 @@ export function MessageContent({ content }: { content: string }) {
           const trimmed = line.trimStart();
           if (/^[-*]\s/.test(trimmed)) {
             return (
-              <div key={idx} className="flex gap-2 pl-1">
+              <div key={idx} className="flex gap-2 pl-4">
                 <span className="text-muted-foreground shrink-0">•</span>
                 <span><InlineMarkdown text={trimmed.slice(2)} /></span>
               </div>
@@ -157,7 +157,7 @@ export function MessageContent({ content }: { content: string }) {
           const numMatch = trimmed.match(/^(\d+)\.\s(.*)/);
           if (numMatch) {
             return (
-              <div key={idx} className="flex gap-2 pl-1">
+              <div key={idx} className="flex gap-2 pl-4">
                 <span className="text-muted-foreground shrink-0">{numMatch[1]}.</span>
                 <span><InlineMarkdown text={numMatch[2]} /></span>
               </div>
