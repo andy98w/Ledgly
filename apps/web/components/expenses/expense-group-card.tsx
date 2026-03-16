@@ -61,8 +61,11 @@ export const ExpenseGroupCard = memo(function ExpenseGroupCard({
             onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
             className="flex items-center gap-4 text-left flex-1 min-w-0"
           >
-            <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+            <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0 relative">
               <Layers className="w-4 h-4 text-primary" />
+              <div className="absolute -right-1 -bottom-1 w-4 h-4 rounded-full bg-card flex items-center justify-center">
+                {expanded ? <ChevronDown className="w-3 h-3 text-muted-foreground" /> : <ChevronRight className="w-3 h-3 text-muted-foreground" />}
+              </div>
             </div>
             <div className="min-w-0 space-y-1 flex-1">
               <div className="flex items-center gap-2 min-w-0">
@@ -116,14 +119,6 @@ export const ExpenseGroupCard = memo(function ExpenseGroupCard({
             ) : (
               <div className="w-8 h-8" />
             )}
-            <button
-              onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
-              className="p-2 rounded-lg hover:bg-secondary/50 transition-colors"
-              aria-label={expanded ? 'Collapse' : 'Expand'}
-              aria-expanded={expanded}
-            >
-              {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-            </button>
           </div>
         </div>
 

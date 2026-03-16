@@ -49,10 +49,10 @@ export const ChargeCard = memo(function ChargeCard({
     <MotionCard
       className={cn(
         nested ? 'border-border/30' : '',
-        !nested && onToggleSelect && 'cursor-pointer transition-colors',
-        !nested && isSelected && 'ring-2 ring-primary/50 bg-primary/5',
+        onToggleSelect && 'cursor-pointer transition-colors',
+        isSelected && 'ring-2 ring-primary/50 bg-primary/5',
       )}
-      onClick={!nested && onToggleSelect ? () => onToggleSelect() : undefined}
+      onClick={onToggleSelect ? () => onToggleSelect() : undefined}
     >
       <MotionCardContent className="p-4">
         <div className="flex items-center justify-between">
