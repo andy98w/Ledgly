@@ -753,22 +753,29 @@ export class ChargesService {
       include: {
         membership: {
           select: {
-            user: { select: { email: true } },
+            name: true,
+            user: { select: { email: true, name: true } },
           },
         },
-        org: { select: { name: true } },
+        org: { select: { name: true, paymentHandles: true, enabledPaymentSources: true } },
       },
     });
 
     const emailTasks = charges.map((charge) => {
       const email = charge.membership?.user?.email;
       if (!email) return null;
+      const memberName = charge.membership?.name || charge.membership?.user?.name || '';
+      const handles = (charge.org as any).paymentHandles || {};
+      const sources = (charge.org as any).enabledPaymentSources || [];
       return this.emailService.sendOverdueReminder(
         email,
         charge.title,
         (charge.amountCents / 100).toFixed(2),
         charge.org.name,
-        charge.dueDate ? charge.dueDate.toISOString().split('T')[0] : 'No due date',
+        charge.dueDate ? new Date(charge.dueDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : null,
+        memberName,
+        handles,
+        sources,
       );
     });
 
