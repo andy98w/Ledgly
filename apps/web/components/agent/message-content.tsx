@@ -7,6 +7,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { cn, formatCents } from '@/lib/utils';
 import { useMembers } from '@/lib/queries/members';
 import type { ProposedAction, ActionResult } from '@/lib/queries/agent';
+import { DatePicker } from '@/components/ui/date-picker';
 
 export interface DisplayMessage {
   id: string;
@@ -429,12 +430,13 @@ function InlineSelect({ value, onValueChange, options }: {
   );
 }
 
-/** Themed date input */
 function DateInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
-    <input type="date" value={value?.slice(0, 10) || ''} onChange={(e) => onChange(e.target.value)}
-      className={cn(INPUT_CLASS, '[&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:opacity-50')}
-      style={{ colorScheme: 'dark' }} />
+    <DatePicker
+      value={value?.slice(0, 10) || ''}
+      onChange={onChange}
+      className="h-8 text-xs"
+    />
   );
 }
 

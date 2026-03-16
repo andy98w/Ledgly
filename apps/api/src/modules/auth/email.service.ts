@@ -235,7 +235,7 @@ export class EmailService {
       const buttonStyle = 'display: inline-block; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; text-decoration: none; margin: 4px;';
       if (enabledSources.includes('venmo') && paymentHandles.venmo) {
         const handle = paymentHandles.venmo.replace(/^@/, '');
-        const url = `https://venmo.com/${encodeURIComponent(handle)}?txn=pay&amount=${amount}&note=${encodeURIComponent(chargeTitle)}`;
+        const url = `https://account.venmo.com/pay?recipients=${encodeURIComponent(handle)}&amount=${amount}&note=${encodeURIComponent(chargeTitle)}`;
         links.push(`<a href="${url}" style="${buttonStyle} background: #008CFF; color: white;">Pay $${amount} on Venmo</a>`);
       }
       if (enabledSources.includes('cashapp') && paymentHandles.cashapp) {

@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -54,15 +55,6 @@ function GmailSyncSection({ orgId }: { orgId: string | null }) {
   const updateOrg = useUpdateOrganization(orgId);
   const { toast } = useToast();
 
-  const [syncAfterInput, setSyncAfterInput] = useState('');
-
-  useEffect(() => {
-    if (org?.gmailSyncAfter) {
-      const d = new Date(org.gmailSyncAfter);
-      setSyncAfterInput(`${d.getMonth() + 1}/${d.getDate()}/${(d.getFullYear() % 100).toString().padStart(2, '0')}`);
-    }
-  }, [org?.gmailSyncAfter]);
-
   const handleDisconnect = async (connectionId: string) => {
     if (!orgId) return;
     try {
@@ -73,22 +65,14 @@ function GmailSyncSection({ orgId }: { orgId: string | null }) {
     }
   };
 
-  const handleSaveSyncDate = async () => {
+  const syncAfterValue = org?.gmailSyncAfter
+    ? new Date(org.gmailSyncAfter).toISOString().split('T')[0]
+    : '';
+
+  const handleSyncDateChange = async (dateStr: string) => {
     if (!orgId) return;
-    const match = syncAfterInput.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-    if (!match) {
-      toast({ title: 'Enter a valid date (mm/dd/yy)', variant: 'destructive' });
-      return;
-    }
-    let year = parseInt(match[3]);
-    if (year < 100) year += 2000;
-    const date = new Date(year, parseInt(match[1]) - 1, parseInt(match[2]));
-    if (isNaN(date.getTime())) {
-      toast({ title: 'Invalid date', variant: 'destructive' });
-      return;
-    }
     try {
-      await updateOrg.mutateAsync({ gmailSyncAfter: date.toISOString() });
+      await updateOrg.mutateAsync({ gmailSyncAfter: new Date(dateStr).toISOString() });
       toast({ title: 'Sync date updated' });
     } catch {
       toast({ title: 'Failed to update', variant: 'destructive' });
@@ -156,27 +140,12 @@ function GmailSyncSection({ orgId }: { orgId: string | null }) {
             {hasConnections && (
               <div className="space-y-2">
                 <Label className="text-sm">Sync emails after</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="mm/dd/yy"
-                    value={syncAfterInput}
-                    onChange={(e) => {
-                      const raw = e.target.value.replace(/[^\d/]/g, '');
-                      setSyncAfterInput(raw);
-                    }}
-                    className="h-9 w-32 text-sm"
-                  />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleSaveSyncDate}
-                    disabled={updateOrg.isPending}
-                  >
-                    Save
-                  </Button>
-                </div>
+                <DatePicker
+                  value={syncAfterValue}
+                  onChange={handleSyncDateChange}
+                  placeholder="Select start date"
+                  className="w-48"
+                />
                 <p className="text-xs text-muted-foreground">
                   Only import payment emails sent after this date. Leave blank for the last 30 days.
                 </p>
