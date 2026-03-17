@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useCallback, memo } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Plus, CreditCard, AlertCircle, TrendingUp, Wallet, Search, MoreHorizontal, Pencil, Trash2, Loader2, ChevronDown, Link2, Check, Users, X, UserPlus, Receipt, MoreVertical, FileSpreadsheet, FileText, Mail, RefreshCw, ArrowDownLeft, ArrowUpRight, EyeOff, RotateCcw, Upload } from 'lucide-react';
+import { Plus, CreditCard, AlertCircle, TrendingUp, Wallet, Search, MoreHorizontal, Pencil, Trash2, Loader2, ChevronDown, Link2, Check, Users, X, UserPlus, Receipt, MoreVertical, FileSpreadsheet, FileText, Mail, RefreshCw, ArrowDownLeft, ArrowUpRight, EyeOff, RotateCcw, Upload, Landmark } from 'lucide-react';
 import { useAutoAllocateToCharge, useRemoveAllocation, useBulkAutoAllocate } from '@/lib/queries/payments';
 import { cn } from '@/lib/utils';
 import { groupCharges } from '@/lib/utils/charge-grouping';
@@ -23,6 +23,7 @@ import {
   getGmailConnectUrl,
 } from '@/lib/queries/gmail';
 import type { EmailImport } from '@/lib/queries/gmail';
+import { usePlaidSync, usePlaidConnections } from '@/lib/queries/plaid';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -91,6 +92,21 @@ function cleanPayerName(name: string): string {
   return cleaned
     .toLowerCase()
     .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function formatRelativeTime(dateStr: string): string {
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
+  const diffMs = now - then;
+  const diffMin = Math.floor(diffMs / 60_000);
+  if (diffMin < 1) return 'just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay === 1) return 'yesterday';
+  if (diffDay < 7) return `${diffDay}d ago`;
+  return new Date(dateStr).toLocaleDateString();
 }
 
 function cleanMemo(memo: string): string {
@@ -312,6 +328,11 @@ export default function PaymentsPage() {
   const restoreImportAction = useRestoreImport();
   const disconnectGmail = useDisconnectGmail();
   const [importsExpanded, setImportsExpanded] = useState(false);
+
+  const { data: plaidConnectionsData } = usePlaidConnections(currentOrgId);
+  const plaidSync = usePlaidSync();
+  const plaidConnections = plaidConnectionsData?.connections || [];
+  const plaidConnected = plaidConnections.length > 0;
 
   const gmailConnected = gmailStatus?.connected;
   const gmailImports = gmailImportsData?.data || [];
@@ -945,6 +966,25 @@ export default function PaymentsPage() {
     );
   };
 
+  const handlePlaidSync = () => {
+    if (!currentOrgId) return;
+    plaidSync.mutate(
+      { orgId: currentOrgId },
+      {
+        onSuccess: (data) => {
+          if (data.imported === 0) {
+            toast({ title: 'All caught up!', description: 'No new bank transactions found.' });
+          } else {
+            toast({ title: `${data.imported} transaction${data.imported !== 1 ? 's' : ''} imported from bank` });
+          }
+        },
+        onError: (error: any) => {
+          toast({ title: 'Bank sync failed', description: error.message, variant: 'destructive' });
+        },
+      },
+    );
+  };
+
   const handleDisconnectGmail = (connectionId: string) => {
     if (!currentOrgId) return;
     disconnectGmail.mutate({ orgId: currentOrgId, connectionId }, { onSuccess: () => toast({ title: 'Gmail disconnected' }) });
@@ -959,10 +999,16 @@ export default function PaymentsPage() {
           helpText="View and manage payments received by your organization."
           actions={
             <div className="flex items-center gap-2">
+              {plaidConnected && (
+                <Button variant="outline" size="sm" onClick={handlePlaidSync} disabled={plaidSync.isPending}>
+                  {plaidSync.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <Landmark className="w-4 h-4 mr-1.5" />}
+                  Sync Bank
+                </Button>
+              )}
               {gmailConnected && (
                 <Button variant="outline" size="sm" onClick={handleGmailSync} disabled={syncGmail.isPending}>
-                  {syncGmail.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <RefreshCw className="w-4 h-4 mr-1.5" />}
-                  Sync
+                  {syncGmail.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <Mail className="w-4 h-4 mr-1.5" />}
+                  Sync Gmail
                 </Button>
               )}
               {isAdmin && (
@@ -1025,6 +1071,43 @@ export default function PaymentsPage() {
             color="amber"
           />
         </div>
+      )}
+
+      {plaidConnected && (
+        <FadeIn delay={0.12}>
+          <div className="rounded-xl border border-border/50 bg-card/50 p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                  <Landmark className="w-4 h-4 text-emerald-500" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Bank Connected</p>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    {plaidConnections.map((conn, i) => (
+                      <span key={conn.id}>
+                        {i > 0 && <span className="opacity-30 mr-2">·</span>}
+                        {conn.institutionName || 'Bank'}
+                        {conn.accountMask && ` ····${conn.accountMask}`}
+                        {conn.lastSyncAt && ` · Last synced ${formatRelativeTime(conn.lastSyncAt)}`}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={handlePlaidSync}
+                disabled={plaidSync.isPending}
+              >
+                {plaidSync.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <RefreshCw className="w-3 h-3 mr-1" />}
+                Sync now
+              </Button>
+            </div>
+          </div>
+        </FadeIn>
       )}
 
       {gmailConnected && gmailImports.length > 0 && (
