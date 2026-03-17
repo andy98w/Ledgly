@@ -1075,9 +1075,29 @@ export default function SettingsPage() {
                             </div>
                           </div>
 
-                          <p className="text-xs text-muted-foreground">
-                            Share this code with people who want to join. They can enter it at <span className="font-mono text-foreground">/join</span>.
-                          </p>
+                          <div className="space-y-2">
+                            <Label className="text-xs text-muted-foreground">Share link</Label>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                readOnly
+                                value={`${typeof window !== 'undefined' ? window.location.origin : ''}/join?code=${orgDetails.joinCode}`}
+                                className="h-8 text-xs font-mono bg-secondary/30 border-border/50"
+                                onClick={(e) => (e.target as HTMLInputElement).select()}
+                              />
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="shrink-0 h-8"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(`${window.location.origin}/join?code=${orgDetails.joinCode}`);
+                                  toast({ title: 'Join link copied!' });
+                                }}
+                              >
+                                <Copy className="h-3.5 w-3.5 mr-1" />
+                                Copy link
+                              </Button>
+                            </div>
+                          </div>
 
                           <Separator className="opacity-50" />
 

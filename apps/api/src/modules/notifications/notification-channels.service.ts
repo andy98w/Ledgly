@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GroupMeService } from '../groupme/groupme.service';
 
@@ -9,7 +10,14 @@ export class NotificationChannelsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly groupmeService: GroupMeService,
+    private readonly configService: ConfigService,
   ) {}
+
+  private getJoinLink(joinCode: string | null): string | null {
+    if (!joinCode) return null;
+    const webUrl = this.configService.get<string>('WEB_URL', 'http://localhost:3000');
+    return `${webUrl}/join?code=${joinCode}`;
+  }
 
   async broadcastToOrg(orgId: string, message: string): Promise<void> {
     await this.groupmeService.postMessage(orgId, message).catch(() => {});
@@ -53,6 +61,8 @@ export class NotificationChannelsService {
   }
 
   async notifyWeeklySummary(orgId: string, stats: { paymentsCount: number; collectedDollars: string; outstandingDollars: string; overdueCount: number }): Promise<void> {
+    const org = await this.prisma.organization.findUnique({ where: { id: orgId }, select: { joinCode: true } });
+    const joinLink = this.getJoinLink(org?.joinCode ?? null);
     const lines = [
       `\uD83D\uDCCA Weekly Summary`,
       `\u2022 ${stats.paymentsCount} payments received ($${stats.collectedDollars})`,
@@ -60,6 +70,9 @@ export class NotificationChannelsService {
     ];
     if (stats.overdueCount > 0) {
       lines.push(`\u2022 ${stats.overdueCount} overdue charge${stats.overdueCount !== 1 ? 's' : ''}`);
+    }
+    if (joinLink) {
+      lines.push(`\nJoin: ${joinLink}`);
     }
     await this.broadcastToOrg(orgId, lines.join('\n'));
   }
