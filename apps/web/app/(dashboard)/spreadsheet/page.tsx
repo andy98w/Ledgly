@@ -113,19 +113,13 @@ type EditingCell = {
   column: 'description' | 'category' | 'amount' | 'date' | 'member';
 } | null;
 
-function ColumnFilterPopover({ columnId, filter, onSetFilter, rows }: {
+function ColumnFilterPopover({ columnId, filter, onSetFilter, allCategories }: {
   columnId: string;
   filter: ColumnFilter | null;
   onSetFilter: (f: ColumnFilter | null) => void;
-  rows: SpreadsheetRow[];
+  allCategories?: string[];
 }) {
   const hasFilter = filter !== null;
-  const uniqueCategories = useMemo(() => {
-    if (columnId !== 'category') return [];
-    const cats = new Set<string>();
-    for (const r of rows) if (r.category) cats.add(r.category);
-    return Array.from(cats).sort();
-  }, [columnId, rows]);
 
   const renderFilterUI = () => {
     switch (columnId) {
@@ -161,7 +155,7 @@ function ColumnFilterPopover({ columnId, filter, onSetFilter, rows }: {
         const selected = filter?.type === 'select' ? filter.values : [];
         return (
           <div className="space-y-1 max-h-48 overflow-y-auto">
-            {uniqueCategories.map((cat) => {
+            {(allCategories || []).map((cat) => {
               const isChecked = selected.includes(cat);
               const label = CHARGE_CATEGORY_LABELS[cat as ChargeCategory] || EXPENSE_CATEGORY_LABELS[cat as ExpenseCategory] || cat;
               return (
@@ -546,7 +540,14 @@ export default function SpreadsheetPage() {
     });
 
     return filteredRows;
-  }, [chargesData, expensesData, paymentsData, members, typeFilters, searchQuery, sortSpecs, formulaCategories, formulaStatuses, formulaAmountMin, formulaAmountMax, formulaDateFrom, formulaDateTo, matchesFilters]);
+  }, [chargesData, expensesData, paymentsData, members, typeFilters, searchQuery, sortSpecs, formulaCategories, formulaStatuses, formulaAmountMin, formulaAmountMax, formulaDateFrom, formulaDateTo, matchesFilters, columnFilters]);
+
+  const allCategories = useMemo(() => {
+    const cats = new Set<string>();
+    chargesData?.data.forEach((c) => { if (c.category) cats.add(c.category); });
+    expensesData?.data.forEach((e) => { if (e.category) cats.add(e.category); });
+    return Array.from(cats).sort();
+  }, [chargesData, expensesData]);
 
   // Phase 2: Anomaly detection (computed from rows before insight filtering)
   const insights = useMemo(() => computeInsights(rows), [rows]);
@@ -1944,7 +1945,7 @@ export default function SpreadsheetPage() {
                               columnId={colId}
                               filter={columnFilters[colId] || null}
                               onSetFilter={(f) => setColumnFilter(colId, f)}
-                              rows={rows}
+                              allCategories={colId === 'category' ? allCategories : undefined}
                             />
                           )}
                         </span>
