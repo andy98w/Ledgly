@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Configuration, PlaidApi, PlaidEnvironments, Products, CountryCode } from 'plaid';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -35,7 +35,7 @@ export class PlaidService {
   }
 
   async createLinkToken(orgId: string, userId: string): Promise<string> {
-    if (!this.client) throw new Error('Plaid not configured');
+    if (!this.client) throw new BadRequestException('Plaid not configured — check PLAID_CLIENT_ID and PLAID_SECRET environment variables');
     try {
       const response = await this.client.linkTokenCreate({
         user: { client_user_id: userId },
@@ -47,8 +47,9 @@ export class PlaidService {
       return response.data.link_token;
     } catch (err: any) {
       const plaidError = err?.response?.data;
-      this.logger.error(`Plaid linkTokenCreate failed: ${plaidError?.error_message || err.message}`, plaidError);
-      throw new Error(plaidError?.error_message || 'Failed to initialize bank connection');
+      const msg = plaidError?.error_message || err.message || 'Failed to initialize bank connection';
+      this.logger.error(`Plaid linkTokenCreate failed: ${msg}`, plaidError);
+      throw new BadRequestException(msg);
     }
   }
 
