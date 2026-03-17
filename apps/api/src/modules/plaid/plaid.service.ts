@@ -133,12 +133,18 @@ export class PlaidService {
       where: { orgId, isActive: true },
     });
 
+    const org = await this.prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { gmailSyncAfter: true },
+    });
+    const syncAfter = org?.gmailSyncAfter ?? undefined;
+
     let totalImported = 0;
     let totalSkipped = 0;
 
     for (const conn of connections) {
       try {
-        const result = await this.syncConnection(conn);
+        const result = await this.syncConnection(conn, syncAfter);
         totalImported += result.imported;
         totalSkipped += result.skipped;
       } catch (err) {
@@ -149,7 +155,7 @@ export class PlaidService {
     return { imported: totalImported, skipped: totalSkipped };
   }
 
-  private async syncConnection(conn: any): Promise<{ imported: number; skipped: number }> {
+  private async syncConnection(conn: any, syncAfter?: Date): Promise<{ imported: number; skipped: number }> {
     let cursor = conn.cursor || undefined;
     let imported = 0;
     let skipped = 0;
@@ -166,6 +172,11 @@ export class PlaidService {
       cursor = next_cursor;
 
       for (const txn of added) {
+        if (syncAfter && txn.date && new Date(txn.date) < syncAfter) {
+          skipped++;
+          continue;
+        }
+
         const name = (txn.name || '').toLowerCase().trim();
         const merchantName = (txn.merchant_name || '').toLowerCase().trim();
         const isP2P =

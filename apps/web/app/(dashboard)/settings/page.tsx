@@ -130,14 +130,16 @@ function GmailSyncSection({ orgId }: { orgId: string | null }) {
       )}
 
       {hasConnections && (
-        <div className="space-y-2">
+        <div className="space-y-3">
           <Label className="text-sm">Sync emails after</Label>
-          <DatePicker
-            value={syncAfterValue}
-            onChange={handleSyncDateChange}
-            placeholder="Select start date"
-            className="w-48"
-          />
+          <div>
+            <DatePicker
+              value={syncAfterValue}
+              onChange={handleSyncDateChange}
+              placeholder="Select start date"
+              className="w-52"
+            />
+          </div>
           <p className="text-xs text-muted-foreground">
             Only import payment emails sent after this date. Leave blank for the last 30 days.
           </p>
@@ -150,6 +152,8 @@ function GmailSyncSection({ orgId }: { orgId: string | null }) {
 function BankConnectionsSection({ orgId }: { orgId: string | null }) {
   const { data: plaidStatus } = usePlaidStatus(orgId);
   const { data: plaidData } = usePlaidConnections(orgId);
+  const { data: org } = useOrganization(orgId);
+  const updateOrg = useUpdateOrganization(orgId);
   const createLinkToken = useCreatePlaidLinkToken();
   const createUpdateLinkToken = useCreatePlaidUpdateLinkToken();
   const exchangeToken = useExchangePlaidToken();
@@ -329,6 +333,31 @@ function BankConnectionsSection({ orgId }: { orgId: string | null }) {
           </Button>
         )}
       </div>
+
+      {connections.length > 0 && (
+        <div className="space-y-3">
+          <Label className="text-sm">Sync transactions after</Label>
+          <div>
+            <DatePicker
+              value={org?.gmailSyncAfter ? new Date(org.gmailSyncAfter).toISOString().split('T')[0] : ''}
+              onChange={async (dateStr) => {
+                if (!orgId) return;
+                try {
+                  await updateOrg.mutateAsync({ gmailSyncAfter: new Date(dateStr).toISOString() });
+                  toast({ title: 'Sync date updated' });
+                } catch {
+                  toast({ title: 'Failed to update', variant: 'destructive' });
+                }
+              }}
+              placeholder="Select start date"
+              className="w-52"
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Only import transactions after this date. Applies to both Gmail and bank sync.
+          </p>
+        </div>
+      )}
 
       {connections.length === 0 && (
         <p className="text-sm text-muted-foreground">
