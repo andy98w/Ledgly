@@ -43,9 +43,8 @@ class UpdateChargeDto {
   @IsOptional()
   amountCents?: number;
 
-  @IsString()
   @IsOptional()
-  dueDate?: string;
+  dueDate?: string | null;
 
   @IsEnum(ChargeStatus)
   @IsOptional()
