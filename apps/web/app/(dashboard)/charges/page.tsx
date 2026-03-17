@@ -49,6 +49,7 @@ import { ChargeGroupDeleteDialog } from '@/components/charges/charge-group-delet
 import { ChargeCreateDialog } from '@/components/charges/charge-create-dialog';
 import { ChargeAllocatePaymentDialog } from '@/components/charges/charge-allocate-payment-dialog';
 import { Pagination } from '@/components/ui/pagination';
+import { usePageKeyboard } from '@/hooks/use-page-keyboard';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useChargeFilters } from '@/hooks/use-charge-filters';
 import { useBulkSelection } from '@/hooks/use-bulk-selection';
@@ -209,6 +210,8 @@ export default function ChargesPage() {
     const start = (page - 1) * pageSize;
     return groupedCharges.slice(start, start + pageSize);
   }, [groupedCharges, page, pageSize]);
+
+  usePageKeyboard(page, totalPages, setPage);
 
   // Bulk selection
   const allChargeIds = useMemo(

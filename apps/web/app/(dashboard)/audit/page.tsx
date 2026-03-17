@@ -73,8 +73,31 @@ function getDisplayAction(log: AuditLogEntry): string {
   return log.action;
 }
 
+function humanizeFieldName(field: string): string {
+  const map: Record<string, string> = {
+    joinCode: 'Join code',
+    joinCodeEnabled: 'Join code enabled',
+    joinRequiresApproval: 'Requires approval',
+    dueDate: 'Due date',
+    amountCents: 'Amount',
+    rawPayerName: 'Payer name',
+    membershipId: 'Member',
+    enabledPaymentSources: 'Payment sources',
+    paymentInstructions: 'Payment instructions',
+    paymentHandles: 'Payment links',
+    gmailSyncAfter: 'Gmail sync date',
+    balanceDueCents: 'Balance due',
+    allocatedCents: 'Allocated',
+    createdById: 'Created by',
+    paidAt: 'Paid date',
+    isActive: 'Active',
+    displayName: 'Display name',
+  };
+  return map[field] || field.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()).trim();
+}
+
 const formatValue = (value: any, field?: string): string => {
-  if (value === null || value === undefined) return 'null';
+  if (value === null || value === undefined) return 'None';
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   if (typeof value === 'number') {
     if (field && /[Cc]ents$/.test(field)) {
@@ -82,8 +105,13 @@ const formatValue = (value: any, field?: string): string => {
     }
     return String(value);
   }
-  if (typeof value === 'string' && value.length > 50) {
-    return value.substring(0, 50) + '...';
+  if (typeof value === 'string') {
+    if (field && /(?:date|At|After)$/i.test(field) && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+      try {
+        return new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      } catch { /* fall through */ }
+    }
+    if (value.length > 50) return value.substring(0, 50) + '...';
   }
   return String(value);
 };
@@ -203,7 +231,7 @@ function renderDiff(log: AuditLogEntry) {
       <div className="mt-2 space-y-1">
         {changes.slice(0, 3).map(([field, change]: [string, any]) => (
           <div key={field} className="text-xs">
-            <span className="text-muted-foreground">{field}: </span>
+            <span className="text-muted-foreground">{humanizeFieldName(field)}: </span>
             <span className="text-destructive/70 line-through">{formatValue(change.from, field)}</span>
             <span className="mx-1">&rarr;</span>
             <span className="text-success">{formatValue(change.to, field)}</span>

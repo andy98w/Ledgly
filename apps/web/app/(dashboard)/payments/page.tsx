@@ -29,6 +29,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Pagination } from '@/components/ui/pagination';
+import { usePageKeyboard } from '@/hooks/use-page-keyboard';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select,
@@ -70,6 +71,39 @@ import {
 import { BatchActionsBar } from '@/components/ui/batch-actions-bar';
 import { ExportDropdown } from '@/components/export-dropdown';
 import { exportCSV, exportPDF } from '@/lib/export';
+
+function cleanPayerName(name: string): string {
+  const indnMatch = name.match(/INDN:([A-Z][A-Z ]+?)(?:\s+(?:CO ID|ID|PPD)[\s:]|$)/i);
+  if (indnMatch) {
+    const extracted = indnMatch[1].trim();
+    if (extracted) return extracted.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+  let cleaned = name
+    .replace(/\s*Conf#\s*\S*/gi, '')
+    .replace(/\s*DES:\S+/gi, '')
+    .replace(/\s*INDN:\S+/gi, '')
+    .replace(/\s*(?:CO ID|ID):\S+/gi, '')
+    .replace(/\s*PPD\b/gi, '')
+    .replace(/^PAYPAL\b\s*/i, '')
+    .replace(/^Zelle (?:payment|transfer) from\s+/i, '')
+    .trim();
+  if (!cleaned) return name.trim();
+  return cleaned
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function cleanMemo(memo: string): string {
+  return memo
+    .replace(/\s*Conf#\s*\S*/gi, '')
+    .replace(/\s*DES:\S+/gi, '')
+    .replace(/\s*INDN:\S+/gi, '')
+    .replace(/\s*(?:CO ID|ID):\S+/gi, '')
+    .replace(/\s*PPD\b/gi, '')
+    .replace(/^PAYPAL\b\s*/i, '')
+    .replace(/^Zelle (?:payment|transfer) from\s+/i, '')
+    .trim();
+}
 
 interface EditPaymentData {
   id: string;
@@ -113,14 +147,14 @@ const PaymentCard = memo(function PaymentCard({
       <MotionCardContent className="p-4">
         <div className="flex items-start gap-4">
             <AvatarGradient
-              name={payment.rawPayerName || 'Unknown'}
+              name={payment.rawPayerName ? cleanPayerName(payment.rawPayerName) : 'Unknown'}
               size="md"
               className="shrink-0"
             />
             <div className="flex-1 min-w-0 space-y-1">
               <div className="flex items-center gap-2 min-w-0">
-                <p className="font-medium truncate" title={payment.rawPayerName || 'Unknown Payer'}>
-                  {payment.rawPayerName || 'Unknown Payer'}
+                <p className="font-medium truncate" title={payment.rawPayerName ? cleanPayerName(payment.rawPayerName) : 'Unknown Payer'}>
+                  {payment.rawPayerName ? cleanPayerName(payment.rawPayerName) : 'Unknown Payer'}
                 </p>
                 {isDuplicate && (
                   <Badge variant="destructive" className="text-xs">
@@ -133,10 +167,10 @@ const PaymentCard = memo(function PaymentCard({
                 <span>{formatDate(payment.paidAt)}</span>
                 <span className="opacity-30">•</span>
                 <Badge variant="outline" className="text-xs">{payment.source}</Badge>
-                {payment.memo && (
+                {payment.memo && cleanMemo(payment.memo) && (
                   <>
                     <span className="opacity-30">•</span>
-                    <span className="truncate max-w-[120px] sm:max-w-[200px]">"{payment.memo}"</span>
+                    <span className="truncate max-w-[120px] sm:max-w-[200px]">"{cleanMemo(payment.memo)}"</span>
                   </>
                 )}
               </div>
@@ -359,6 +393,8 @@ export default function PaymentsPage() {
     const start = (page - 1) * pageSize;
     return filteredPayments.slice(start, start + pageSize);
   }, [filteredPayments, page, pageSize]);
+
+  usePageKeyboard(page, totalPages, setPage);
 
   const handlePageSizeChange = (newSize: number) => {
     setPageSize(newSize);

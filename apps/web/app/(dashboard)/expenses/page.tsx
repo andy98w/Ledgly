@@ -50,6 +50,7 @@ import { AnimatedList } from '@/components/ui/animated-list';
 import { PageHeader } from '@/components/ui/page-header';
 import { ToastUndoButton } from '@/components/ui/toast-undo-button';
 import { Pagination } from '@/components/ui/pagination';
+import { usePageKeyboard } from '@/hooks/use-page-keyboard';
 import { EmptyState } from '@/components/ui/empty-state';
 import { AvatarGradient } from '@/components/ui/avatar-gradient';
 import { BatchActionsBar } from '@/components/ui/batch-actions-bar';
@@ -466,6 +467,8 @@ export default function ExpensesPage() {
     const start = (page - 1) * pageSize;
     return expenses.slice(start, start + pageSize);
   }, [expenses, page, pageSize]);
+
+  usePageKeyboard(page, totalPages, setPage);
 
   // Reset to page 1 when filters change
   const handlePageSizeChange = (newSize: number) => {

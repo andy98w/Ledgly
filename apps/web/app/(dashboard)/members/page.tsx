@@ -41,6 +41,7 @@ import { MotionCard, MotionCardContent } from '@/components/ui/motion-card';
 import { FadeIn } from '@/components/ui/page-transition';
 import { AnimatedList } from '@/components/ui/animated-list';
 import { Pagination } from '@/components/ui/pagination';
+import { usePageKeyboard } from '@/hooks/use-page-keyboard';
 import { PageHeader } from '@/components/ui/page-header';
 import { ToastUndoButton } from '@/components/ui/toast-undo-button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -650,6 +651,8 @@ export default function MembersPage() {
     const start = (page - 1) * pageSize;
     return sortedMembers.slice(start, start + pageSize);
   }, [sortedMembers, page, pageSize]);
+
+  usePageKeyboard(page, totalPages, setPage);
 
   // Reset to page 1 and clear selection when filters change
   useEffect(() => {

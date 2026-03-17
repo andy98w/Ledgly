@@ -53,6 +53,7 @@ import { ToastUndoButton } from '@/components/ui/toast-undo-button';
 import { FadeIn } from '@/components/ui/page-transition';
 import { PageHeader } from '@/components/ui/page-header';
 import { Pagination } from '@/components/ui/pagination';
+import { usePageKeyboard } from '@/hooks/use-page-keyboard';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
@@ -591,6 +592,8 @@ export default function SpreadsheetPage() {
   }, [displayRows, page, pageSize, expandedParents]);
 
   const rowIds = useMemo(() => paginatedRows.map(r => r.id), [paginatedRows]);
+
+  usePageKeyboard(page, totalPages, setPage);
 
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -1863,7 +1866,7 @@ export default function SpreadsheetPage() {
             )}
           </div>
         )}
-        <div ref={tableRef} className="rounded-xl border bg-card overflow-hidden">
+        <div ref={tableRef} className="rounded-xl border bg-card overflow-hidden" data-spreadsheet>
           <div className="overflow-x-auto">
             <table className="w-full text-sm table-fixed">
               <thead>
