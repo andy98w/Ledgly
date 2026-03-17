@@ -15,6 +15,7 @@ import {
   Check,
   PanelLeftClose,
   PanelLeft,
+  Megaphone,
 } from 'lucide-react';
 import { useMe, useLogout } from '@/lib/queries/auth';
 import { useAuthStore } from '@/lib/stores/auth';
@@ -36,6 +37,7 @@ const navItems = [
   { href: '/portal', label: 'Home', icon: LayoutDashboard },
   { href: '/portal/members', label: 'Members', icon: Users },
   { href: '/portal/ledger', label: 'Ledger', icon: FileSpreadsheet },
+  { href: '/portal/announcements', label: 'Announcements', icon: Megaphone },
 ];
 
 export default function PortalLayout({

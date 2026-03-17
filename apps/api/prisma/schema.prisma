@@ -36,6 +36,7 @@ model Organization {
   groupmeConnections    GroupMeConnection[]
   discordConnections    DiscordConnection[]
   slackConnections      SlackConnection[]
+  announcements         Announcement[]
 
   @@map("organizations")
 }
@@ -122,6 +123,7 @@ model Membership {
   paymentsCreated        Payment[]           @relation("PaymentCreatedBy")
   agentSessions          AgentSession[]
   chargeSchedulesCreated ChargeSchedule[]    @relation("ScheduleCreator")
+  announcements          Announcement[]
 
   @@unique([orgId, userId])
   @@index([orgId])
@@ -540,4 +542,19 @@ model AgentMemory {
 
   @@index([orgId])
   @@map("agent_memories")
+}
+
+model Announcement {
+  id          String       @id @default(cuid())
+  orgId       String       @map("org_id")
+  title       String
+  body        String       @db.Text
+  createdById String       @map("created_by_id")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  createdBy   Membership   @relation(fields: [createdById], references: [id])
+
+  @@index([orgId])
+  @@index([orgId, createdAt])
+  @@map("announcements")
 }

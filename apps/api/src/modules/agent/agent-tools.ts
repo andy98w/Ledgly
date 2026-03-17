@@ -722,6 +722,39 @@ export const agentTools: AgentTool[] = [
       },
     },
   },
+  {
+    requiresConfirmation: true,
+    definition: {
+      name: 'create_announcement',
+      description:
+        'Create an organization-wide announcement. Optionally broadcast to connected chat channels (GroupMe, Discord, Slack).',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          title: { type: 'string', description: 'Announcement title' },
+          body: { type: 'string', description: 'Announcement body text' },
+          broadcast: { type: 'boolean', description: 'Whether to also send to connected chat channels' },
+        },
+        required: ['title', 'body'],
+      },
+    },
+  },
+  {
+    requiresConfirmation: false,
+    definition: {
+      name: 'sync_gmail',
+      description: 'Trigger a Gmail sync to import new payment emails',
+      input_schema: { type: 'object' as const, properties: {}, required: [] },
+    },
+  },
+  {
+    requiresConfirmation: false,
+    definition: {
+      name: 'sync_bank',
+      description: 'Trigger a bank account sync via Plaid to import new transactions',
+      input_schema: { type: 'object' as const, properties: {}, required: [] },
+    },
+  },
 ];
 
 export const toolDefinitions = agentTools.map((t) => t.definition);

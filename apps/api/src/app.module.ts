@@ -20,6 +20,7 @@ import { RemindersModule } from './modules/reminders/reminders.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { PlaidModule } from './modules/plaid/plaid.module';
 import { GroupMeModule } from './modules/groupme/groupme.module';
+import { AnnouncementsModule } from './modules/announcements/announcements.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { GroupMeModule } from './modules/groupme/groupme.module';
     ReportsModule,
     PlaidModule,
     GroupMeModule,
+    AnnouncementsModule,
   ],
   providers: [
     {

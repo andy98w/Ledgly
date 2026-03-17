@@ -91,4 +91,7 @@ export const queryKeys = {
   slack: {
     all: (orgId: string | null) => ['organizations', orgId, 'slack'] as const,
   },
+  announcements: {
+    all: (orgId: string | null) => ['organizations', orgId, 'announcements'] as const,
+  },
 };

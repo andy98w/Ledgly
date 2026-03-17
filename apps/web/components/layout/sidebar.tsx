@@ -23,6 +23,7 @@ import {
   TrendingDown,
   Sparkles,
   History,
+  Megaphone,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MEMBERSHIP_ROLE_LABELS } from '@ledgly/shared';
@@ -71,6 +72,7 @@ const secondaryNavItems: NavItem[] = [
   { href: '/payments', label: 'Payments', icon: CreditCard },
   { href: '/expenses', label: 'Expenses', icon: TrendingDown },
   { href: '/agent', label: 'AI Assistant', icon: Sparkles },
+  { href: '/announcements', label: 'Announcements', icon: Megaphone },
   { href: '/audit', label: 'Audit Log', icon: History },
 ];
 

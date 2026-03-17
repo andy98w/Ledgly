@@ -6,6 +6,9 @@ import { ChargesService } from '../charges/charges.service';
 import { PaymentsService } from '../payments/payments.service';
 import { ExpensesService } from '../expenses/expenses.service';
 import { AuditService } from '../audit/audit.service';
+import { AnnouncementsService } from '../announcements/announcements.service';
+import { GmailService } from '../gmail/gmail.service';
+import { PlaidService } from '../plaid/plaid.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { toolDefinitions, toolMap } from './agent-tools';
 
@@ -39,6 +42,9 @@ export class AgentService {
     private paymentsService: PaymentsService,
     private expensesService: ExpensesService,
     private auditService: AuditService,
+    private announcementsService: AnnouncementsService,
+    private gmailService: GmailService,
+    private plaidService: PlaidService,
     private prisma: PrismaService,
     private configService: ConfigService,
   ) {
@@ -510,6 +516,24 @@ Return ONLY the JSON object, no markdown or explanation.`;
         return this.generateReportForAgent(orgId, args);
       }
 
+      case 'sync_gmail': {
+        try {
+          const result = await this.gmailService.syncEmails(orgId);
+          return { success: true, ...result };
+        } catch (err: any) {
+          return { success: false, error: err.message };
+        }
+      }
+
+      case 'sync_bank': {
+        try {
+          const result = await this.plaidService.syncTransactions(orgId);
+          return { success: true, ...result };
+        } catch (err: any) {
+          return { success: false, error: err.message };
+        }
+      }
+
       default:
         throw new Error(`Unknown read tool: ${toolName}`);
     }
@@ -772,7 +796,6 @@ Return ONLY the JSON object, no markdown or explanation.`;
         return this.paymentsService.bulkRemoveAllocations(orgId, args.allocationIds, actorId);
 
       case 'send_reminders': {
-        // If no chargeIds specified, find all unpaid charges
         let chargeIds = args.chargeIds;
         if (!chargeIds || chargeIds.length === 0) {
           const unpaid = await this.prisma.charge.findMany({
@@ -784,6 +807,15 @@ Return ONLY the JSON object, no markdown or explanation.`;
         if (chargeIds.length === 0) return { sent: 0, skipped: 0 };
         return this.chargesService.sendReminders(orgId, chargeIds);
       }
+
+      case 'create_announcement':
+        return this.announcementsService.create(
+          orgId,
+          actorId,
+          args.title,
+          args.body,
+          args.broadcast ?? false,
+        );
 
       default:
         throw new Error(`Unknown write tool: ${toolName}`);
@@ -990,9 +1022,13 @@ Return ONLY the JSON object, no markdown or explanation.`;
         break;
 
       case 'send_reminders':
-        // chargeIds is optional; if provided, validate
         if (args.chargeIds && !Array.isArray(args.chargeIds))
           throw new Error('chargeIds must be an array if provided');
+        break;
+
+      case 'create_announcement':
+        this.validateRequiredString(args.title, 'title');
+        this.validateRequiredString(args.body, 'body');
         break;
     }
   }
@@ -1241,6 +1277,8 @@ Return ONLY the JSON object, no markdown or explanation.`;
         return args.chargeIds?.length
           ? `Send reminders for ${args.chargeIds.length} charge(s)`
           : 'Send reminders for all unpaid charges';
+      case 'create_announcement':
+        return `Post announcement "${args.title}"${args.broadcast ? ' (broadcast to chat)' : ''}`;
       default:
         return toolName;
     }
