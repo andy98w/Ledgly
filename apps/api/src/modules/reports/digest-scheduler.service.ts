@@ -3,6 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EmailService } from '../auth/email.service';
+import { GroupMeService } from '../groupme/groupme.service';
 
 @Injectable()
 export class DigestSchedulerService {
@@ -12,6 +13,7 @@ export class DigestSchedulerService {
     private prisma: PrismaService,
     private emailService: EmailService,
     private configService: ConfigService,
+    private groupmeService: GroupMeService,
   ) {}
 
   @Cron('0 9 * * 1')
@@ -76,6 +78,15 @@ export class DigestSchedulerService {
       outstandingCents,
       overdueCount,
     };
+
+    try {
+      await this.groupmeService.notifyWeeklySummary(orgId, {
+        paymentsCount: stats.paymentsCount,
+        collectedDollars: (stats.paymentsTotalCents / 100).toFixed(2),
+        outstandingDollars: (stats.outstandingCents / 100).toFixed(2),
+        overdueCount: stats.overdueCount,
+      });
+    } catch {}
 
     const admins = await this.prisma.membership.findMany({
       where: {

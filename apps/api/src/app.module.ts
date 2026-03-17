@@ -19,6 +19,7 @@ import { SchedulesModule } from './modules/schedules/schedules.module';
 import { RemindersModule } from './modules/reminders/reminders.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { PlaidModule } from './modules/plaid/plaid.module';
+import { GroupMeModule } from './modules/groupme/groupme.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { PlaidModule } from './modules/plaid/plaid.module';
     RemindersModule,
     ReportsModule,
     PlaidModule,
+    GroupMeModule,
   ],
   providers: [
     {

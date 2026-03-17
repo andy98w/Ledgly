@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { Moon, Sun, Monitor, User, Building2, Shield, Loader2, Camera, Plus, AlertTriangle, Mail, GraduationCap, KeyRound, Eye, EyeOff, Link2, Copy, Check, RefreshCw, ArrowRightLeft, Banknote, Bell, Trash2, Landmark, Wrench } from 'lucide-react';
+import { Moon, Sun, Monitor, User, Building2, Shield, Loader2, Camera, Plus, AlertTriangle, Mail, GraduationCap, KeyRound, Eye, EyeOff, Link2, Copy, Check, RefreshCw, ArrowRightLeft, Banknote, Bell, Trash2, Landmark, Wrench, MessageSquare, Send, ExternalLink } from 'lucide-react';
 import { useAuthStore, useIsOwner } from '@/lib/stores/auth';
 import { useUpdateProfile, useChangePassword } from '@/lib/queries/auth';
 import { useCreateOrganization, useDeleteOrganization, useOrganization, useUpdateOrganization, useGenerateJoinCode, useDisableJoinCode, useUpdateJoinCodeSettings } from '@/lib/queries/organizations';
@@ -11,6 +11,7 @@ import { useMembers, useTransferOwnership } from '@/lib/queries/members';
 import { useReminderRules, useCreateReminderRule, useDeleteReminderRule } from '@/lib/queries/reminders';
 import { useGmailStatus, useDisconnectGmail, getGmailConnectUrl } from '@/lib/queries/gmail';
 import { usePlaidStatus, usePlaidConnections, useCreatePlaidLinkToken, useCreatePlaidUpdateLinkToken, useExchangePlaidToken, usePlaidSync, useDisconnectPlaid } from '@/lib/queries/plaid';
+import { useGroupMeConnections, useConnectGroupMe, useDisconnectGroupMe, useTestGroupMe } from '@/lib/queries/groupme';
 import { uploadAvatar } from '@/lib/supabase';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
@@ -357,6 +358,157 @@ function BankConnectionsSection({ orgId }: { orgId: string | null }) {
                 Connect your bank to automatically import P2P transactions from Venmo, Zelle, Cash App, and PayPal.
               </p>
             )}
+          </div>
+        </MotionCardContent>
+      </MotionCard>
+    </FadeIn>
+  );
+}
+
+function GroupMeSection({ orgId }: { orgId: string | null }) {
+  const { data: groupmeData } = useGroupMeConnections(orgId);
+  const connectGroupMe = useConnectGroupMe();
+  const disconnectGroupMe = useDisconnectGroupMe();
+  const testGroupMe = useTestGroupMe();
+  const { toast } = useToast();
+  const [botId, setBotId] = useState('');
+  const [groupName, setGroupName] = useState('');
+
+  const connections = groupmeData?.connections ?? [];
+
+  const handleConnect = async () => {
+    if (!orgId || !botId.trim()) {
+      toast({ title: 'Please enter a Bot ID', variant: 'destructive' });
+      return;
+    }
+    try {
+      await connectGroupMe.mutateAsync({ orgId, botId: botId.trim(), groupName: groupName.trim() || undefined });
+      toast({ title: 'GroupMe bot connected' });
+      setBotId('');
+      setGroupName('');
+    } catch {
+      toast({ title: 'Failed to connect', variant: 'destructive' });
+    }
+  };
+
+  const handleDisconnect = async (connectionId: string) => {
+    if (!orgId) return;
+    try {
+      await disconnectGroupMe.mutateAsync({ orgId, connectionId });
+      toast({ title: 'GroupMe bot disconnected' });
+    } catch {
+      toast({ title: 'Failed to disconnect', variant: 'destructive' });
+    }
+  };
+
+  const handleTest = async () => {
+    if (!orgId) return;
+    try {
+      await testGroupMe.mutateAsync({ orgId });
+      toast({ title: 'Test message sent to GroupMe' });
+    } catch {
+      toast({ title: 'Failed to send test message', variant: 'destructive' });
+    }
+  };
+
+  return (
+    <FadeIn delay={0.48}>
+      <MotionCard hover={false}>
+        <MotionCardHeader>
+          <MotionCardTitle className="flex items-center gap-2">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <MessageSquare className="h-4 w-4 text-primary" />
+            </div>
+            GroupMe
+          </MotionCardTitle>
+        </MotionCardHeader>
+        <MotionCardContent>
+          <div className="space-y-4">
+            {connections.length > 0 && (
+              <div className="space-y-3">
+                {connections.map((conn) => (
+                  <div key={conn.id} className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">{conn.groupName || 'GroupMe Bot'}</p>
+                      <p className="text-xs text-muted-foreground font-mono">{conn.botId}</p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDisconnect(conn.id)}
+                      disabled={disconnectGroupMe.isPending}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      {disconnectGroupMe.isPending ? 'Removing...' : 'Remove'}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label className="text-sm">Bot ID</Label>
+                <Input
+                  value={botId}
+                  onChange={(e) => setBotId(e.target.value)}
+                  placeholder="Paste your GroupMe Bot ID"
+                  className="bg-secondary/30 border-border/50 focus:border-primary font-mono text-sm"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm">Group Name (optional)</Label>
+                <Input
+                  value={groupName}
+                  onChange={(e) => setGroupName(e.target.value)}
+                  placeholder="e.g., Chapter Main Chat"
+                  className="bg-secondary/30 border-border/50 focus:border-primary"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={handleConnect}
+                  disabled={connectGroupMe.isPending || !botId.trim()}
+                >
+                  {connectGroupMe.isPending ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Plus className="w-4 h-4 mr-2" />
+                  )}
+                  Connect
+                </Button>
+                {connections.length > 0 && (
+                  <Button
+                    variant="outline"
+                    onClick={handleTest}
+                    disabled={testGroupMe.isPending}
+                  >
+                    {testGroupMe.isPending ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Send className="w-4 h-4 mr-2" />
+                    )}
+                    Send Test Message
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            <div className="text-sm text-muted-foreground space-y-1">
+              <p>
+                <a
+                  href="https://dev.groupme.com/bots"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline inline-flex items-center gap-1"
+                >
+                  Create a bot at dev.groupme.com/bots
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+                {' '}and paste the Bot ID above.
+              </p>
+              <p>Payment notifications, reminders, and weekly summaries will be posted to your group.</p>
+            </div>
           </div>
         </MotionCardContent>
       </MotionCard>
@@ -1002,6 +1154,8 @@ export default function SettingsPage() {
 
       {/* Bank Connections Section — admin/owner only */}
       {isAdminRole && <BankConnectionsSection orgId={currentOrgId} />}
+
+      {isAdminRole && <GroupMeSection orgId={currentOrgId} />}
 
       {/* Payment Instructions — admin/owner only */}
       {isAdminRole && (

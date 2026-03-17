@@ -82,4 +82,7 @@ export const queryKeys = {
     connections: (orgId: string | null) =>
       ['organizations', orgId, 'plaid', 'connections'] as const,
   },
+  groupme: {
+    all: (orgId: string | null) => ['organizations', orgId, 'groupme'] as const,
+  },
 };

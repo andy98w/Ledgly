@@ -3,6 +3,7 @@ import { ChargeCategory, ChargeStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { EmailService } from '../auth/email.service';
+import { GroupMeService } from '../groupme/groupme.service';
 
 interface CreateChargeDto {
   membershipIds: string[];
@@ -44,6 +45,7 @@ export class ChargesService {
     private prisma: PrismaService,
     private auditService: AuditService,
     private emailService: EmailService,
+    private groupmeService: GroupMeService,
   ) {}
 
   async findAll(orgId: string, filters: ChargeFilters = {}) {
@@ -784,6 +786,18 @@ export class ChargesService {
 
     const sent = results.filter((r) => r.status === 'fulfilled').length;
     const skipped = noEmail + results.filter((r) => r.status === 'rejected').length;
+
+    for (const charge of charges) {
+      const memberName = charge.membership?.name || charge.membership?.user?.name || 'Member';
+      try {
+        await this.groupmeService.notifyOverdue(
+          orgId,
+          memberName,
+          (charge.amountCents / 100).toFixed(2),
+          charge.title,
+        );
+      } catch {}
+    }
 
     return { sent, skipped };
   }
