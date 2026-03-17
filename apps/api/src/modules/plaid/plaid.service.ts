@@ -166,8 +166,8 @@ export class PlaidService {
       cursor = next_cursor;
 
       for (const txn of added) {
-        const name = (txn.name || '').toLowerCase();
-        const merchantName = (txn.merchant_name || '').toLowerCase();
+        const name = (txn.name || '').toLowerCase().trim();
+        const merchantName = (txn.merchant_name || '').toLowerCase().trim();
         const isP2P =
           name.includes('zelle') ||
           name.includes('venmo') ||
@@ -178,6 +178,15 @@ export class PlaidService {
           merchantName.includes('venmo');
 
         if (!isP2P) {
+          skipped++;
+          continue;
+        }
+
+        const platformOnly = /^(venmo|cash\s*app|cashapp|paypal|zelle)$/i;
+        const isTransfer = platformOnly.test(name) || platformOnly.test(merchantName) && !name.match(/[a-z]{2,}\s+[a-z]{2,}/i) ||
+          name.includes('transfer') || name.includes('withdrawal');
+
+        if (isTransfer) {
           skipped++;
           continue;
         }
@@ -197,12 +206,19 @@ export class PlaidService {
           .trim();
         if (!payerName) payerName = 'Unknown';
 
+        const dayRange = 2;
+        const txnDate = txn.date ? new Date(txn.date) : new Date();
+        const startDate = new Date(txnDate);
+        startDate.setDate(startDate.getDate() - dayRange);
+        const endDate = new Date(txnDate);
+        endDate.setDate(endDate.getDate() + dayRange);
+
         const existingPayment = await this.prisma.payment.findFirst({
           where: {
             orgId: conn.orgId,
             amountCents,
-            paidAt: txn.date ? new Date(txn.date) : undefined,
-            rawPayerName: { contains: payerName.split(' ')[0], mode: 'insensitive' },
+            paidAt: { gte: startDate, lte: endDate },
+            deletedAt: null,
           },
         });
 
