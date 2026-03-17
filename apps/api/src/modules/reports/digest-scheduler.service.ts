@@ -3,7 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EmailService } from '../auth/email.service';
-import { GroupMeService } from '../groupme/groupme.service';
+import { NotificationChannelsService } from '../notifications/notification-channels.service';
 
 @Injectable()
 export class DigestSchedulerService {
@@ -13,7 +13,7 @@ export class DigestSchedulerService {
     private prisma: PrismaService,
     private emailService: EmailService,
     private configService: ConfigService,
-    private groupmeService: GroupMeService,
+    private notificationChannels: NotificationChannelsService,
   ) {}
 
   @Cron('0 9 * * 1')
@@ -80,7 +80,7 @@ export class DigestSchedulerService {
     };
 
     try {
-      await this.groupmeService.notifyWeeklySummary(orgId, {
+      await this.notificationChannels.notifyWeeklySummary(orgId, {
         paymentsCount: stats.paymentsCount,
         collectedDollars: (stats.paymentsTotalCents / 100).toFixed(2),
         outstandingDollars: (stats.outstandingCents / 100).toFixed(2),

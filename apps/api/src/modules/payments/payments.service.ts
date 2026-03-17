@@ -4,7 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ChargesService } from '../charges/charges.service';
 import { ExpensesService } from '../expenses/expenses.service';
 import { AuditService } from '../audit/audit.service';
-import { GroupMeService } from '../groupme/groupme.service';
+import { NotificationChannelsService } from '../notifications/notification-channels.service';
 import { sanitizeText } from '../../common/utils/sanitize';
 import { deriveCategoryFromMemo } from '../../common/utils/category-matcher';
 
@@ -47,7 +47,7 @@ export class PaymentsService {
     private chargesService: ChargesService,
     private expensesService: ExpensesService,
     private auditService: AuditService,
-    private groupmeService: GroupMeService,
+    private notificationChannels: NotificationChannelsService,
   ) {}
 
   async findAll(orgId: string, filters: PaymentFilters = {}) {
@@ -304,7 +304,7 @@ export class PaymentsService {
     }
 
     try {
-      await this.groupmeService.notifyPaymentReceived(
+      await this.notificationChannels.notifyPaymentReceived(
         orgId,
         payment.rawPayerName || 'Someone',
         (payment.amountCents / 100).toFixed(2),

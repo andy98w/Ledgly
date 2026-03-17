@@ -9,40 +9,42 @@ datasource db {
 }
 
 model Organization {
-  id              String           @id @default(cuid())
-  name            String
-  timezone        String           @default("America/New_York")
-  createdAt       DateTime         @default(now()) @map("created_at")
-  auditLogs       AuditLog[]
-  charges         Charge[]
-  expenses        Expense[]
-  enabledPaymentSources   String[]         @default(["venmo", "zelle", "cashapp", "paypal"]) @map("enabled_payment_sources")
-  joinCode                String?          @unique @map("join_code")
-  joinCodeEnabled         Boolean          @default(true) @map("join_code_enabled")
-  joinRequiresApproval    Boolean          @default(false) @map("join_requires_approval")
-  gmailConnections        GmailConnection[]
-  memberships         Membership[]
-  notifications       Notification[]
-  payments            Payment[]
-  agentSessions       AgentSession[]
-  paymentInstructions String?          @map("payment_instructions")
-  gmailSyncAfter      DateTime?        @map("gmail_sync_after")
-  paymentHandles      Json?            @default("{}") @map("payment_handles")
-  chargeSchedules     ChargeSchedule[]
-  reminderRules       ReminderRule[]
-  plaidConnections    PlaidConnection[]
-  agentFailureLogs    AgentFailureLog[]
-  agentMemories       AgentMemory[]
-  groupmeConnections  GroupMeConnection[]
+  id                    String              @id @default(cuid())
+  name                  String
+  timezone              String              @default("America/New_York")
+  createdAt             DateTime            @default(now()) @map("created_at")
+  auditLogs             AuditLog[]
+  charges               Charge[]
+  expenses              Expense[]
+  enabledPaymentSources String[]            @default(["venmo", "zelle", "cashapp", "paypal"]) @map("enabled_payment_sources")
+  joinCode              String?             @unique @map("join_code")
+  joinCodeEnabled       Boolean             @default(true) @map("join_code_enabled")
+  joinRequiresApproval  Boolean             @default(false) @map("join_requires_approval")
+  gmailConnections      GmailConnection[]
+  memberships           Membership[]
+  notifications         Notification[]
+  payments              Payment[]
+  agentSessions         AgentSession[]
+  paymentInstructions   String?             @map("payment_instructions")
+  gmailSyncAfter        DateTime?           @map("gmail_sync_after")
+  paymentHandles        Json?               @default("{}") @map("payment_handles")
+  chargeSchedules       ChargeSchedule[]
+  reminderRules         ReminderRule[]
+  plaidConnections      PlaidConnection[]
+  agentFailureLogs      AgentFailureLog[]
+  agentMemories         AgentMemory[]
+  groupmeConnections    GroupMeConnection[]
+  discordConnections    DiscordConnection[]
+  slackConnections      SlackConnection[]
 
   @@map("organizations")
 }
 
 model User {
-  id           String       @id @default(cuid())
-  email        String       @unique
-  name         String?
-  phone        String?
+  id                  String         @id @default(cuid())
+  email               String         @unique
+  name                String?
+  phone               String?
   passwordHash        String?        @map("password_hash")
   createdAt           DateTime       @default(now()) @map("created_at")
   emailVerifiedAt     DateTime?      @map("email_verified_at")
@@ -98,28 +100,28 @@ model AuthEvent {
 }
 
 model Membership {
-  id                 String              @id @default(cuid())
-  orgId              String              @map("org_id")
-  userId             String?             @map("user_id")
-  role               MembershipRole      @default(MEMBER)
-  status             MembershipStatus    @default(ACTIVE)
-  name               String?
-  paymentAliases     String[]            @default([]) @map("payment_aliases")
-  joinedAt           DateTime            @default(now()) @map("joined_at")
-  leftAt             DateTime?           @map("left_at")
-  auditLogsCreated   AuditLog[]
-  chargesCreated     Charge[]            @relation("ChargeCreatedBy")
-  chargesAssigned    Charge[]            @relation("ChargeAssignedTo")
-  expensesCreated    Expense[]           @relation("ExpenseCreatedBy")
-  invitedEmail       String?             @map("invited_email")
-  inviteExpiresAt    DateTime?           @map("invite_expires_at")
-  inviteToken        String?             @unique @map("invite_token")
-  org                Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  user               User?               @relation(fields: [userId], references: [id])
-  allocationsCreated PaymentAllocation[] @relation("AllocationCreatedBy")
-  paymentsCreated    Payment[]           @relation("PaymentCreatedBy")
-  agentSessions      AgentSession[]
-  chargeSchedulesCreated ChargeSchedule[] @relation("ScheduleCreator")
+  id                     String              @id @default(cuid())
+  orgId                  String              @map("org_id")
+  userId                 String?             @map("user_id")
+  role                   MembershipRole      @default(MEMBER)
+  status                 MembershipStatus    @default(ACTIVE)
+  name                   String?
+  paymentAliases         String[]            @default([]) @map("payment_aliases")
+  joinedAt               DateTime            @default(now()) @map("joined_at")
+  leftAt                 DateTime?           @map("left_at")
+  auditLogsCreated       AuditLog[]
+  chargesCreated         Charge[]            @relation("ChargeCreatedBy")
+  chargesAssigned        Charge[]            @relation("ChargeAssignedTo")
+  expensesCreated        Expense[]           @relation("ExpenseCreatedBy")
+  invitedEmail           String?             @map("invited_email")
+  inviteExpiresAt        DateTime?           @map("invite_expires_at")
+  inviteToken            String?             @unique @map("invite_token")
+  org                    Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user                   User?               @relation(fields: [userId], references: [id])
+  allocationsCreated     PaymentAllocation[] @relation("AllocationCreatedBy")
+  paymentsCreated        Payment[]           @relation("PaymentCreatedBy")
+  agentSessions          AgentSession[]
+  chargeSchedulesCreated ChargeSchedule[]    @relation("ScheduleCreator")
 
   @@unique([orgId, userId])
   @@index([orgId])
@@ -380,8 +382,8 @@ model AgentSession {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  actor     Membership   @relation(fields: [actorId], references: [id])
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  actor Membership   @relation(fields: [actorId], references: [id])
 
   @@index([orgId, updatedAt])
   @@map("agent_sessions")
@@ -447,17 +449,17 @@ model ReminderLog {
 }
 
 model PlaidConnection {
-  id              String    @id @default(cuid())
-  orgId           String    @map("org_id")
-  accessToken     String    @map("access_token")
-  itemId          String    @map("item_id")
-  institutionName String?   @map("institution_name")
-  accountMask     String?   @map("account_mask")
-  accountName     String?   @map("account_name")
+  id              String       @id @default(cuid())
+  orgId           String       @map("org_id")
+  accessToken     String       @map("access_token")
+  itemId          String       @map("item_id")
+  institutionName String?      @map("institution_name")
+  accountMask     String?      @map("account_mask")
+  accountName     String?      @map("account_name")
   cursor          String?
-  lastSyncAt      DateTime? @map("last_sync_at")
-  isActive        Boolean   @default(true) @map("is_active")
-  createdAt       DateTime  @default(now()) @map("created_at")
+  lastSyncAt      DateTime?    @map("last_sync_at")
+  isActive        Boolean      @default(true) @map("is_active")
+  createdAt       DateTime     @default(now()) @map("created_at")
   org             Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@index([orgId])
@@ -490,17 +492,43 @@ model MatchConfirmation {
 }
 
 model GroupMeConnection {
-  id        String   @id @default(cuid())
-  orgId     String   @map("org_id")
-  botId     String   @map("bot_id")
-  groupId   String?  @map("group_id")
-  groupName String?  @map("group_name")
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
+  id        String       @id @default(cuid())
+  orgId     String       @map("org_id")
+  botId     String       @map("bot_id")
+  groupId   String?      @map("group_id")
+  groupName String?      @map("group_name")
+  isActive  Boolean      @default(true) @map("is_active")
+  createdAt DateTime     @default(now()) @map("created_at")
   org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@index([orgId])
   @@map("groupme_connections")
+}
+
+model DiscordConnection {
+  id          String       @id @default(cuid())
+  orgId       String       @map("org_id")
+  webhookUrl  String       @map("webhook_url")
+  channelName String?      @map("channel_name")
+  isActive    Boolean      @default(true) @map("is_active")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@map("discord_connections")
+}
+
+model SlackConnection {
+  id          String       @id @default(cuid())
+  orgId       String       @map("org_id")
+  webhookUrl  String       @map("webhook_url")
+  channelName String?      @map("channel_name")
+  isActive    Boolean      @default(true) @map("is_active")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@map("slack_connections")
 }
 
 model AgentMemory {

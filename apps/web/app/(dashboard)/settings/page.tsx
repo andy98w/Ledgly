@@ -12,6 +12,8 @@ import { useReminderRules, useCreateReminderRule, useDeleteReminderRule } from '
 import { useGmailStatus, useDisconnectGmail, getGmailConnectUrl } from '@/lib/queries/gmail';
 import { usePlaidStatus, usePlaidConnections, useCreatePlaidLinkToken, useCreatePlaidUpdateLinkToken, useExchangePlaidToken, usePlaidSync, useDisconnectPlaid } from '@/lib/queries/plaid';
 import { useGroupMeConnections, useConnectGroupMe, useDisconnectGroupMe, useTestGroupMe } from '@/lib/queries/groupme';
+import { useDiscordConnections, useConnectDiscord, useDisconnectDiscord, useTestDiscord } from '@/lib/queries/discord';
+import { useSlackConnections, useConnectSlack, useDisconnectSlack, useTestSlack } from '@/lib/queries/slack';
 import { uploadAvatar } from '@/lib/supabase';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
@@ -508,6 +510,286 @@ function GroupMeSection({ orgId }: { orgId: string | null }) {
                 {' '}and paste the Bot ID above.
               </p>
               <p>Payment notifications, reminders, and weekly summaries will be posted to your group.</p>
+            </div>
+          </div>
+        </MotionCardContent>
+      </MotionCard>
+    </FadeIn>
+  );
+}
+
+function DiscordSection({ orgId }: { orgId: string | null }) {
+  const { data: discordData } = useDiscordConnections(orgId);
+  const connectDiscord = useConnectDiscord();
+  const disconnectDiscord = useDisconnectDiscord();
+  const testDiscord = useTestDiscord();
+  const { toast } = useToast();
+  const [webhookUrl, setWebhookUrl] = useState('');
+  const [channelName, setChannelName] = useState('');
+
+  const connections = discordData?.connections ?? [];
+
+  const handleConnect = async () => {
+    if (!orgId || !webhookUrl.trim()) {
+      toast({ title: 'Please enter a webhook URL', variant: 'destructive' });
+      return;
+    }
+    try {
+      await connectDiscord.mutateAsync({ orgId, webhookUrl: webhookUrl.trim(), channelName: channelName.trim() || undefined });
+      toast({ title: 'Discord webhook connected' });
+      setWebhookUrl('');
+      setChannelName('');
+    } catch {
+      toast({ title: 'Failed to connect', variant: 'destructive' });
+    }
+  };
+
+  const handleDisconnect = async (connectionId: string) => {
+    if (!orgId) return;
+    try {
+      await disconnectDiscord.mutateAsync({ orgId, connectionId });
+      toast({ title: 'Discord webhook disconnected' });
+    } catch {
+      toast({ title: 'Failed to disconnect', variant: 'destructive' });
+    }
+  };
+
+  const handleTest = async () => {
+    if (!orgId) return;
+    try {
+      await testDiscord.mutateAsync({ orgId });
+      toast({ title: 'Test message sent to Discord' });
+    } catch {
+      toast({ title: 'Failed to send test message', variant: 'destructive' });
+    }
+  };
+
+  return (
+    <FadeIn delay={0.5}>
+      <MotionCard hover={false}>
+        <MotionCardHeader>
+          <MotionCardTitle className="flex items-center gap-2">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <MessageSquare className="h-4 w-4 text-primary" />
+            </div>
+            Discord
+          </MotionCardTitle>
+        </MotionCardHeader>
+        <MotionCardContent>
+          <div className="space-y-4">
+            {connections.length > 0 && (
+              <div className="space-y-3">
+                {connections.map((conn) => (
+                  <div key={conn.id} className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">{conn.channelName || 'Discord Webhook'}</p>
+                      <p className="text-xs text-muted-foreground font-mono truncate max-w-[200px]">{conn.webhookUrl}</p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDisconnect(conn.id)}
+                      disabled={disconnectDiscord.isPending}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      {disconnectDiscord.isPending ? 'Removing...' : 'Remove'}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label className="text-sm">Webhook URL</Label>
+                <Input
+                  value={webhookUrl}
+                  onChange={(e) => setWebhookUrl(e.target.value)}
+                  placeholder="https://discord.com/api/webhooks/..."
+                  className="bg-secondary/30 border-border/50 focus:border-primary font-mono text-sm"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm">Channel Name (optional)</Label>
+                <Input
+                  value={channelName}
+                  onChange={(e) => setChannelName(e.target.value)}
+                  placeholder="e.g., #treasury"
+                  className="bg-secondary/30 border-border/50 focus:border-primary"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={handleConnect}
+                  disabled={connectDiscord.isPending || !webhookUrl.trim()}
+                >
+                  {connectDiscord.isPending ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Plus className="w-4 h-4 mr-2" />
+                  )}
+                  Connect
+                </Button>
+                {connections.length > 0 && (
+                  <Button
+                    variant="outline"
+                    onClick={handleTest}
+                    disabled={testDiscord.isPending}
+                  >
+                    {testDiscord.isPending ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Send className="w-4 h-4 mr-2" />
+                    )}
+                    Send Test Message
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            <div className="text-sm text-muted-foreground space-y-1">
+              <p>Create a webhook in your Discord channel settings and paste the URL above.</p>
+              <p>Payment notifications, reminders, and weekly summaries will be posted to your channel.</p>
+            </div>
+          </div>
+        </MotionCardContent>
+      </MotionCard>
+    </FadeIn>
+  );
+}
+
+function SlackSection({ orgId }: { orgId: string | null }) {
+  const { data: slackData } = useSlackConnections(orgId);
+  const connectSlack = useConnectSlack();
+  const disconnectSlack = useDisconnectSlack();
+  const testSlack = useTestSlack();
+  const { toast } = useToast();
+  const [webhookUrl, setWebhookUrl] = useState('');
+  const [channelName, setChannelName] = useState('');
+
+  const connections = slackData?.connections ?? [];
+
+  const handleConnect = async () => {
+    if (!orgId || !webhookUrl.trim()) {
+      toast({ title: 'Please enter a webhook URL', variant: 'destructive' });
+      return;
+    }
+    try {
+      await connectSlack.mutateAsync({ orgId, webhookUrl: webhookUrl.trim(), channelName: channelName.trim() || undefined });
+      toast({ title: 'Slack webhook connected' });
+      setWebhookUrl('');
+      setChannelName('');
+    } catch {
+      toast({ title: 'Failed to connect', variant: 'destructive' });
+    }
+  };
+
+  const handleDisconnect = async (connectionId: string) => {
+    if (!orgId) return;
+    try {
+      await disconnectSlack.mutateAsync({ orgId, connectionId });
+      toast({ title: 'Slack webhook disconnected' });
+    } catch {
+      toast({ title: 'Failed to disconnect', variant: 'destructive' });
+    }
+  };
+
+  const handleTest = async () => {
+    if (!orgId) return;
+    try {
+      await testSlack.mutateAsync({ orgId });
+      toast({ title: 'Test message sent to Slack' });
+    } catch {
+      toast({ title: 'Failed to send test message', variant: 'destructive' });
+    }
+  };
+
+  return (
+    <FadeIn delay={0.52}>
+      <MotionCard hover={false}>
+        <MotionCardHeader>
+          <MotionCardTitle className="flex items-center gap-2">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <MessageSquare className="h-4 w-4 text-primary" />
+            </div>
+            Slack
+          </MotionCardTitle>
+        </MotionCardHeader>
+        <MotionCardContent>
+          <div className="space-y-4">
+            {connections.length > 0 && (
+              <div className="space-y-3">
+                {connections.map((conn) => (
+                  <div key={conn.id} className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">{conn.channelName || 'Slack Webhook'}</p>
+                      <p className="text-xs text-muted-foreground font-mono truncate max-w-[200px]">{conn.webhookUrl}</p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDisconnect(conn.id)}
+                      disabled={disconnectSlack.isPending}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      {disconnectSlack.isPending ? 'Removing...' : 'Remove'}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label className="text-sm">Webhook URL</Label>
+                <Input
+                  value={webhookUrl}
+                  onChange={(e) => setWebhookUrl(e.target.value)}
+                  placeholder="https://hooks.slack.com/services/..."
+                  className="bg-secondary/30 border-border/50 focus:border-primary font-mono text-sm"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm">Channel Name (optional)</Label>
+                <Input
+                  value={channelName}
+                  onChange={(e) => setChannelName(e.target.value)}
+                  placeholder="e.g., #treasury"
+                  className="bg-secondary/30 border-border/50 focus:border-primary"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={handleConnect}
+                  disabled={connectSlack.isPending || !webhookUrl.trim()}
+                >
+                  {connectSlack.isPending ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Plus className="w-4 h-4 mr-2" />
+                  )}
+                  Connect
+                </Button>
+                {connections.length > 0 && (
+                  <Button
+                    variant="outline"
+                    onClick={handleTest}
+                    disabled={testSlack.isPending}
+                  >
+                    {testSlack.isPending ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Send className="w-4 h-4 mr-2" />
+                    )}
+                    Send Test Message
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            <div className="text-sm text-muted-foreground space-y-1">
+              <p>Create an incoming webhook in your Slack workspace settings and paste the URL above.</p>
+              <p>Payment notifications, reminders, and weekly summaries will be posted to your channel.</p>
             </div>
           </div>
         </MotionCardContent>
@@ -1156,6 +1438,10 @@ export default function SettingsPage() {
       {isAdminRole && <BankConnectionsSection orgId={currentOrgId} />}
 
       {isAdminRole && <GroupMeSection orgId={currentOrgId} />}
+
+      {isAdminRole && <DiscordSection orgId={currentOrgId} />}
+
+      {isAdminRole && <SlackSection orgId={currentOrgId} />}
 
       {/* Payment Instructions — admin/owner only */}
       {isAdminRole && (

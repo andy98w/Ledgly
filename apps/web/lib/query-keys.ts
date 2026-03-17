@@ -85,4 +85,10 @@ export const queryKeys = {
   groupme: {
     all: (orgId: string | null) => ['organizations', orgId, 'groupme'] as const,
   },
+  discord: {
+    all: (orgId: string | null) => ['organizations', orgId, 'discord'] as const,
+  },
+  slack: {
+    all: (orgId: string | null) => ['organizations', orgId, 'slack'] as const,
+  },
 };

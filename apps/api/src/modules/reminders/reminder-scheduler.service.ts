@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EmailService } from '../auth/email.service';
-import { GroupMeService } from '../groupme/groupme.service';
+import { NotificationChannelsService } from '../notifications/notification-channels.service';
 
 @Injectable()
 export class ReminderSchedulerService {
@@ -11,7 +11,7 @@ export class ReminderSchedulerService {
   constructor(
     private prisma: PrismaService,
     private emailService: EmailService,
-    private groupmeService: GroupMeService,
+    private notificationChannels: NotificationChannelsService,
   ) {}
 
   @Cron(CronExpression.EVERY_HOUR)
@@ -120,7 +120,7 @@ export class ReminderSchedulerService {
 
         const memberName = charge.membership?.name || charge.membership?.user?.name || email;
         try {
-          await this.groupmeService.notifyOverdue(
+          await this.notificationChannels.notifyOverdue(
             rule.orgId,
             memberName,
             (charge.amountCents / 100).toFixed(2),
