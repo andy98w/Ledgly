@@ -116,6 +116,13 @@ Return ONLY the JSON object, no markdown or explanation.`;
     spreadsheetContext?: { selectedRows: Array<Record<string, any>> },
   ): AsyncGenerator<SSEEvent> {
     try {
+      const lastUserMsg = messages[messages.length - 1]?.content || '';
+      const prevAssistantMsg = messages.length >= 2 ? messages[messages.length - 2]?.content : null;
+      const negativeSignals = /\b(no|wrong|not what|undo|cancel|that's not|incorrect|mistake)\b/i;
+      if (negativeSignals.test(lastUserMsg) && prevAssistantMsg) {
+        this.logFailure(orgId, lastUserMsg, prevAssistantMsg, 'user_correction').catch(() => {});
+      }
+
       const systemPrompt = await this.buildSystemPrompt(orgId, csvContent, spreadsheetContext);
 
       const anthropicMessages: Anthropic.MessageParam[] = messages.map((m) => ({
@@ -123,8 +130,9 @@ Return ONLY the JSON object, no markdown or explanation.`;
         content: m.content,
       }));
 
-      // Inner loop: keep calling Claude until we get a final text response or write tool calls
-      // Cap iterations to prevent runaway API costs
+      const complexity = this.detectComplexity(messages);
+      const model = complexity === 'complex' ? 'claude-opus-4-20250514' : 'claude-sonnet-4-20250514';
+
       const MAX_TOOL_ROUNDS = 10;
       let toolRounds = 0;
       let continueLoop = true;
@@ -134,7 +142,7 @@ Return ONLY the JSON object, no markdown or explanation.`;
           break;
         }
         const stream = this.anthropic.messages.stream({
-          model: 'claude-sonnet-4-20250514',
+          model,
           max_tokens: 4096,
           system: systemPrompt,
           messages: anthropicMessages,
@@ -241,6 +249,7 @@ Return ONLY the JSON object, no markdown or explanation.`;
                 content: JSON.stringify(result),
               });
             } catch (err: any) {
+              this.logFailure(orgId, lastUserMsg, null, 'tool_execution_error', block.name).catch(() => {});
               toolResults.push({
                 type: 'tool_result',
                 tool_use_id: block.id,
@@ -1290,6 +1299,49 @@ Return ONLY the JSON object, no markdown or explanation.`;
     return this.prisma.agentSession.delete({ where: { id: sessionId } });
   }
 
+  private detectComplexity(messages: ChatMessage[]): 'simple' | 'complex' {
+    const lastMessage = messages[messages.length - 1]?.content || '';
+    const lower = lastMessage.toLowerCase();
+
+    const complexPatterns = [
+      /respectively/i,
+      /and then/i,
+      /after that/i,
+      /for each/i,
+      /\band\b.*\band\b/i,
+      /charge.*\$.*charge.*\$/i,
+      /remind.*who.*haven't/i,
+      /match.*all.*payments/i,
+      /import.*csv/i,
+    ];
+
+    if (complexPatterns.some(p => p.test(lower))) return 'complex';
+    if (lower.split(/[,;]/).length > 3) return 'complex';
+    return 'simple';
+  }
+
+  private async logFailure(
+    orgId: string,
+    userMessage: string,
+    aiResponse: string | null,
+    errorType: string,
+    toolName?: string,
+  ): Promise<void> {
+    try {
+      await this.prisma.agentFailureLog.create({
+        data: {
+          orgId,
+          userMessage: userMessage.slice(0, 10_000),
+          aiResponse: aiResponse?.slice(0, 10_000) ?? null,
+          errorType,
+          toolName: toolName ?? null,
+        },
+      });
+    } catch (err: any) {
+      this.logger.error(`Failed to log agent failure: ${err.message}`);
+    }
+  }
+
   private async buildSystemPrompt(orgId: string, csvContent?: string, spreadsheetContext?: { selectedRows: Array<Record<string, any>> }): Promise<string> {
     let orgContext = '';
     try {
@@ -1368,13 +1420,50 @@ These rules are absolute — violating any of them is a bug:
 5. **Never mention cents.** Convert internally. Say "$50.00", never "5000 cents".
 6. **NEVER say "I'll...", "Let me...", "I need to...", "I'll first..."** — these phrases are banned. If you need to do a lookup before an action, do it silently with zero commentary.
 
-## Behavior rules
-- When editing an item, look it up first to get its ID — silently. If nothing matches, say it doesn't exist and offer to create it.
-- When charging "all members" or "everyone", look up active members first, then create a grouped charge. Always group charges for 2+ members.
-- When the user asks to "apply" or "extend" an existing single charge to all/more members, void the original charge first, then create a new multi-charge with all the desired members. Do NOT create a duplicate — replace the original.
-- When a user provides multiple expense line items (e.g., "cups $15, plates $20"), create a grouped expense with those line items.
-- When a user asks to apply or allocate a payment to charges, use auto-allocation for automatic matching or manual allocation for specific charge targeting.
-- Users may paste wizard templates with bullet lists. Ignore placeholder text (e.g., "[name]", "YYYY-MM-DD"). Use defaults for optional blank fields. Process ALL entries in a single action.
+## Examples
+User: "charge everyone $50 for spring dues"
+→ list_members (silent) → create_multi_charge(membershipIds=all, amountCents=5000, category=DUES, title="Spring Dues")
+
+User: "charge Bryan $50 for dues and Sarah $30 for event fee"
+→ list_members (silent) → create_charges(Bryan, 5000, DUES, "Dues") + create_charges(Sarah, 3000, EVENT, "Event Fee")
+
+User: "charge X, Y, Z to A, B, C respectively"
+→ list_members (silent) → create_charges(A, X) + create_charges(B, Y) + create_charges(C, Z)
+
+User: "add expense: cups $15, plates $20, napkins $5"
+→ create_multi_expense(title="Event Supplies", children=[{title:"cups",amount:1500},{title:"plates",amount:2000},{title:"napkins",amount:500}])
+
+User: "record that Bryan paid $50 on venmo"
+→ list_members (silent) → record_payments([{membershipId=Bryan, amount=5000, source="venmo"}])
+
+User: "match Bryan's payment to his dues charge"
+→ list_payments + list_charges (silent) → allocate_payment(paymentId, chargeId, amount)
+
+User: "auto match all payments"
+→ list_charges (silent) → auto_allocate_payment for each unmatched charge
+
+User: "send reminders for all overdue charges"
+→ list_charges(status=OPEN, overdue=true) (silent) → send_reminders(chargeIds=[...])
+
+User: "undo that"
+→ Look at [Actions confirmed. Results: ...] → call reverse tool (e.g., void_charges for created charges)
+
+User: "remove the due date"
+→ list_charges (silent) → update_charge(chargeId, dueDate=null)
+
+User: "convert that expense to a charge"
+→ list_expenses (silent) → delete_expenses + create_charges (same amount/title, in one confirmation)
+
+User: "extend that charge to all members"
+→ void original charge (silent) → create_multi_charge with all members (replace, don't duplicate)
+
+User: "what does Bryan owe"
+→ get_balances (silent) → respond with Bryan's balance
+
+User: "who hasn't paid yet"
+→ list_charges(status=OPEN) (silent) → respond with unpaid members list
+
+If nothing matches a lookup, say it doesn't exist and offer to create it. Users may paste wizard templates — ignore placeholders, use defaults for blanks, process ALL entries in one action.
 
 ## Date handling
 - When a user provides a date without a year (e.g., "Feb 2", "March 15"):
@@ -1422,64 +1511,17 @@ When a user asks to "change this to a charge", "convert this expense to a charge
 - If a search for charges/expenses/payments returns nothing, proactively check the related entity type. For example, if the user says "delete the dues charge" and no charges match, also check expenses — they may have meant "expense" instead of "charge", and vice versa. Suggest what you found: "I didn't find a dues charge, but I found a dues expense — would you like me to delete that instead?"
 
 ## Natural language understanding
-Users speak casually. Handle all of these patterns gracefully:
+Users speak casually. Fuzzy-match member names, parse relative dates against today (${today}), and resolve "$5k", "fifty bucks", etc. to cents internally. "Start of semester" = Jan 15 (spring) or Aug 25 (fall). Prefer the most likely interpretation over asking clarifying questions.
 
-**Amount parsing:**
-- "$50", "50 dollars", "fifty bucks", "50.00" → 5000 cents
-- "twenty five" → 2500 cents
-- "$5k" → 500000 cents
-
-**Date parsing:**
-- "today", "yesterday", "last friday", "next monday" → resolve relative to today (${today})
-- "March 15", "3/15", "03/15/26" → ISO date
-- "last month", "this semester", "beginning of the year" → appropriate date range
-- "start of semester" without more context: assume Jan 15 for spring, Aug 25 for fall
-
-**Member references:**
-- First name only ("charge Bryan $50") → fuzzy match against member list
-- Partial names ("charge Bry" or "the one named lui") → fuzzy match
-- "everyone", "all members", "the whole org" → all active members
-- "new members", "members who joined this month" → filter by joinedAt
-
-**Quantity and batch:**
-- "charge everyone $50 for dues" → multi-charge to all active members
-- "charge Bryan and Sarah $30 each" → multi-charge to 2 members
-- "add 3 expenses: cups $15, plates $20, napkins $5" → multi-expense
-
-**Corrections and follow-ups:**
-- "actually make that $60" → modify the most recent action
-- "same thing but for expenses" → repeat pattern with different type
-- "do that for everyone else too" → extend to remaining members
-- "wait, not Sarah" → modify to exclude that member
-- "change the category to EVENT" → update most recent item
-
-**Ambiguity resolution:**
-- If a query is ambiguous, pick the most likely interpretation and proceed. Don't ask clarifying questions unless truly necessary.
-- "the dues" → look up the most recent charge with category DUES
-- "that payment" → the most recently discussed or created payment
-- "his charges" → charges assigned to the most recently mentioned member
+**Corrections:** "actually make that $60" → modify last action. "wait, not Sarah" → exclude. "do that for everyone else too" → extend. "same thing but for expenses" → repeat with different type.
 
 **Error recovery:**
-- If a member name doesn't match anyone, suggest the closest match: "I don't see 'Brian'. Did you mean Bryan Lui?"
-- If an amount seems wrong (e.g., $5000 for a typical $50 dues org), confirm: "That's $5,000 — just making sure that's correct."
-- If no data matches, be helpful: "No expenses found. Would you like to create one?"
+- Name mismatch → suggest closest: "I don't see 'Brian'. Did you mean Bryan Lui?"
+- Suspicious amount → confirm: "That's $5,000 — just making sure that's correct."
+- No results → be helpful: "No expenses found. Would you like to create one?"
 
-## Complex multi-entity commands
-When a user specifies DIFFERENT charges/items for DIFFERENT members, create SEPARATE charges — NOT a single multi-charge:
-- "charge A $50 and B $30 to Bryan and Sarah" → create_charges for Bryan ($50, title "A") AND create_charges for Sarah ($30, title "B") — TWO separate tool calls
-- "charge A and B $50 each for members A and B respectively" → create_charges for member A ($50, title "A") AND create_charges for member B ($50, title "B")
-- "charge everyone $50 for dues" → ONE create_multi_charge with all members (this IS a single charge type)
-
-The rule: if all members get the SAME charge (same title, amount, category), use create_multi_charge. If members get DIFFERENT charges (different titles or amounts), create individual charges with separate tool calls.
-
-More examples of commands that should produce MULTIPLE actions:
-- "charge Bryan $50 for dues and Sarah $30 for event fee" → 2 separate charges
-- "record that Bryan paid $50 on venmo and Sarah paid $30 on zelle" → 2 separate payments
-- "add expense $20 for cups and $30 for plates" → 1 multi-expense with 2 line items (same vendor, grouped)
-- "charge all members $50 for spring dues and $25 for event" → 2 multi-charges (one for $50, one for $25), each to all members
-
-When a user says "respectively", they're mapping items 1:1:
-- "charge X, Y, Z to members A, B, C respectively" → charge X to A, Y to B, Z to C (3 separate charges)
+## Multi-charge rule
+Same charge for all members → one multi-charge. Different charges per member → separate tool calls. "Respectively" maps items 1:1.
 
 ${orgContext}${csvInstruction}${this.buildSpreadsheetContextSection(spreadsheetContext)}`;
   }

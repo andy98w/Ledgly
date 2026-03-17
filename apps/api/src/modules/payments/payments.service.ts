@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, ConflictException }
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ChargesService } from '../charges/charges.service';
+import { ExpensesService } from '../expenses/expenses.service';
 import { AuditService } from '../audit/audit.service';
 import { sanitizeText } from '../../common/utils/sanitize';
 import { deriveCategoryFromMemo } from '../../common/utils/category-matcher';
@@ -43,6 +44,7 @@ export class PaymentsService {
   constructor(
     private prisma: PrismaService,
     private chargesService: ChargesService,
+    private expensesService: ExpensesService,
     private auditService: AuditService,
   ) {}
 

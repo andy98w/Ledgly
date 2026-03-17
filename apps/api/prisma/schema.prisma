@@ -31,6 +31,8 @@ model Organization {
   chargeSchedules     ChargeSchedule[]
   reminderRules       ReminderRule[]
   plaidConnections    PlaidConnection[]
+  agentFailureLogs    AgentFailureLog[]
+  agentMemories       AgentMemory[]
 
   @@map("organizations")
 }
@@ -461,6 +463,20 @@ model PlaidConnection {
   @@map("plaid_connections")
 }
 
+model AgentFailureLog {
+  id          String       @id @default(cuid())
+  orgId       String       @map("org_id")
+  userMessage String       @map("user_message") @db.Text
+  aiResponse  String?      @map("ai_response") @db.Text
+  errorType   String       @map("error_type")
+  toolName    String?      @map("tool_name")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@map("agent_failure_logs")
+}
+
 model MatchConfirmation {
   id              String   @id @default(cuid())
   orgId           String   @map("org_id")
@@ -470,4 +486,15 @@ model MatchConfirmation {
 
   @@index([orgId, rawPayerName])
   @@map("match_confirmations")
+}
+
+model AgentMemory {
+  id        String       @id @default(cuid())
+  orgId     String       @map("org_id")
+  pattern   String       @db.Text
+  createdAt DateTime     @default(now()) @map("created_at")
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@map("agent_memories")
 }
