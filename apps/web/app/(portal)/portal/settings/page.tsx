@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
-import { Sun, Moon, Monitor, Loader2, Eye, EyeOff } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Sun, Moon, Monitor, Loader2, Eye, EyeOff, Camera } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useAuthStore } from '@/lib/stores/auth';
 import { useUpdateProfile, useChangePassword } from '@/lib/queries/auth';
+import { uploadAvatar } from '@/lib/supabase';
 import { useToast } from '@/components/ui/use-toast';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -27,12 +28,35 @@ export default function PortalSettingsPage() {
   const changePassword = useChangePassword();
 
   const [name, setName] = useState(user?.name || '');
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [currentPw, setCurrentPw] = useState('');
   const [newPw, setNewPw] = useState('');
   const [showCurrentPw, setShowCurrentPw] = useState(false);
   const [showNewPw, setShowNewPw] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const hasNameChanges = name !== (user?.name || '');
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    setIsUploadingAvatar(true);
+    try {
+      const avatarUrl = await uploadAvatar(file, user.id);
+      updateProfile.mutate(
+        { avatarUrl },
+        {
+          onSuccess: () => toast({ title: 'Profile picture updated!' }),
+          onError: (err: any) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
+        },
+      );
+    } catch (err: any) {
+      toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
 
   const handleSaveName = () => {
     if (!name.trim()) return;
@@ -75,7 +99,17 @@ export default function PortalSettingsPage() {
         <MotionCardContent>
           <div className="space-y-5">
             <div className="flex items-center gap-4">
-              <AvatarGradient name={user?.name || user?.email || ''} size="lg" />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="relative group shrink-0"
+                disabled={isUploadingAvatar}
+              >
+                <AvatarGradient name={user?.name || user?.email || ''} size="lg" />
+                <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  {isUploadingAvatar ? <Loader2 className="h-5 w-5 text-white animate-spin" /> : <Camera className="h-5 w-5 text-white" />}
+                </div>
+                <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
+              </button>
               <div className="min-w-0">
                 <p className="font-medium truncate">{user?.name || 'User'}</p>
                 <p className="text-sm text-muted-foreground truncate">{user?.email}</p>
@@ -112,11 +146,18 @@ export default function PortalSettingsPage() {
 
       <MotionCard>
         <MotionCardHeader>
-          <MotionCardTitle>Change Password</MotionCardTitle>
+          <div className="flex items-center justify-between">
+            <MotionCardTitle>Password</MotionCardTitle>
+            {!showPasswordForm && (
+              <Button variant="outline" size="sm" onClick={() => setShowPasswordForm(true)}>
+                Change password
+              </Button>
+            )}
+          </div>
         </MotionCardHeader>
-        <MotionCardContent>
-          <form onSubmit={handleChangePassword} className="space-y-4">
-            {user?.hasPassword && (
+        {showPasswordForm && (
+          <MotionCardContent>
+            <form onSubmit={handleChangePassword} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="current-pw">Current password</Label>
                 <div className="relative">
@@ -136,32 +177,37 @@ export default function PortalSettingsPage() {
                   </button>
                 </div>
               </div>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="new-pw">New password</Label>
-              <div className="relative">
-                <Input
-                  id="new-pw"
-                  type={showNewPw ? 'text' : 'password'}
-                  value={newPw}
-                  onChange={(e) => setNewPw(e.target.value)}
-                  className="h-10 bg-secondary/50 border-border/50 pr-10"
-                  placeholder="At least 8 characters"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowNewPw(!showNewPw)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {showNewPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
+              <div className="space-y-2">
+                <Label htmlFor="new-pw">New password</Label>
+                <div className="relative">
+                  <Input
+                    id="new-pw"
+                    type={showNewPw ? 'text' : 'password'}
+                    value={newPw}
+                    onChange={(e) => setNewPw(e.target.value)}
+                    className="h-10 bg-secondary/50 border-border/50 pr-10"
+                    placeholder="At least 8 characters"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPw(!showNewPw)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {showNewPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
-            </div>
-            <Button type="submit" disabled={!newPw || changePassword.isPending}>
-              {changePassword.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Updating...</> : 'Update password'}
-            </Button>
-          </form>
-        </MotionCardContent>
+              <div className="flex gap-2">
+                <Button type="submit" disabled={!newPw || changePassword.isPending}>
+                  {changePassword.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Updating...</> : 'Update password'}
+                </Button>
+                <Button type="button" variant="ghost" onClick={() => { setShowPasswordForm(false); setCurrentPw(''); setNewPw(''); }}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </MotionCardContent>
+        )}
       </MotionCard>
 
       <MotionCard>

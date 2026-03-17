@@ -68,6 +68,9 @@ export default function PortalMembersPage() {
                       {roleLabel}
                     </Badge>
                   </div>
+                  {(member.user?.email || member.invitedEmail) && (
+                    <p className="text-xs text-muted-foreground truncate">{member.user?.email || member.invitedEmail}</p>
+                  )}
                   {member.joinedAt && (
                     <p className="text-xs text-muted-foreground mt-0.5">
                       Joined {formatDate(member.joinedAt)}
