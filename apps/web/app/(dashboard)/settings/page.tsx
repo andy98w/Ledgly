@@ -3,14 +3,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { Moon, Sun, Monitor, User, Building2, Shield, Loader2, Camera, Plus, AlertTriangle, Mail, GraduationCap, KeyRound, Eye, EyeOff, Link2, Copy, Check, RefreshCw, ArrowRightLeft, Banknote, Bell, Trash2, Landmark } from 'lucide-react';
+import { Moon, Sun, Monitor, User, Building2, Shield, Loader2, Camera, Plus, AlertTriangle, Mail, GraduationCap, KeyRound, Eye, EyeOff, Link2, Copy, Check, RefreshCw, ArrowRightLeft, Banknote, Bell, Trash2, Landmark, Wrench } from 'lucide-react';
 import { useAuthStore, useIsOwner } from '@/lib/stores/auth';
 import { useUpdateProfile, useChangePassword } from '@/lib/queries/auth';
 import { useCreateOrganization, useDeleteOrganization, useOrganization, useUpdateOrganization, useGenerateJoinCode, useDisableJoinCode, useUpdateJoinCodeSettings } from '@/lib/queries/organizations';
 import { useMembers, useTransferOwnership } from '@/lib/queries/members';
 import { useReminderRules, useCreateReminderRule, useDeleteReminderRule } from '@/lib/queries/reminders';
 import { useGmailStatus, useDisconnectGmail, getGmailConnectUrl } from '@/lib/queries/gmail';
-import { usePlaidStatus, usePlaidConnections, useCreatePlaidLinkToken, useExchangePlaidToken, usePlaidSync, useDisconnectPlaid } from '@/lib/queries/plaid';
+import { usePlaidStatus, usePlaidConnections, useCreatePlaidLinkToken, useCreatePlaidUpdateLinkToken, useExchangePlaidToken, usePlaidSync, useDisconnectPlaid } from '@/lib/queries/plaid';
 import { uploadAvatar } from '@/lib/supabase';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
@@ -162,12 +162,14 @@ function BankConnectionsSection({ orgId }: { orgId: string | null }) {
   const { data: plaidStatus } = usePlaidStatus(orgId);
   const { data: plaidData } = usePlaidConnections(orgId);
   const createLinkToken = useCreatePlaidLinkToken();
+  const createUpdateLinkToken = useCreatePlaidUpdateLinkToken();
   const exchangeToken = useExchangePlaidToken();
   const syncPlaid = usePlaidSync();
   const disconnectPlaid = useDisconnectPlaid();
   const { toast } = useToast();
   const [plaidReady, setPlaidReady] = useState(false);
   const [linkToken, setLinkToken] = useState<string | null>(null);
+  const [isUpdateMode, setIsUpdateMode] = useState(false);
 
   const connections = plaidData?.connections ?? [];
 
@@ -175,9 +177,21 @@ function BankConnectionsSection({ orgId }: { orgId: string | null }) {
     if (!orgId) return;
     try {
       const result = await createLinkToken.mutateAsync({ orgId });
+      setIsUpdateMode(false);
       setLinkToken(result.linkToken);
     } catch {
       toast({ title: 'Failed to initialize bank connection', variant: 'destructive' });
+    }
+  };
+
+  const handleFixConnection = async (connectionId: string) => {
+    if (!orgId) return;
+    try {
+      const result = await createUpdateLinkToken.mutateAsync({ orgId, connectionId });
+      setIsUpdateMode(true);
+      setLinkToken(result.linkToken);
+    } catch {
+      toast({ title: 'Failed to initialize connection repair', variant: 'destructive' });
     }
   };
 
@@ -200,17 +214,22 @@ function BankConnectionsSection({ orgId }: { orgId: string | null }) {
     const handler = (window as any).Plaid.create({
       token: linkToken,
       onSuccess: async (publicToken: string) => {
-        if (!orgId) return;
-        try {
-          await exchangeToken.mutateAsync({ orgId, publicToken });
-          toast({ title: 'Bank account connected' });
-        } catch {
-          toast({ title: 'Failed to connect bank', variant: 'destructive' });
+        if (isUpdateMode) {
+          toast({ title: 'Connection updated' });
+        } else if (orgId) {
+          try {
+            await exchangeToken.mutateAsync({ orgId, publicToken });
+            toast({ title: 'Bank account connected' });
+          } catch {
+            toast({ title: 'Failed to connect bank', variant: 'destructive' });
+          }
         }
         setLinkToken(null);
+        setIsUpdateMode(false);
       },
       onExit: () => {
         setLinkToken(null);
+        setIsUpdateMode(false);
       },
     });
 
@@ -274,15 +293,30 @@ function BankConnectionsSection({ orgId }: { orgId: string | null }) {
                           : 'Connected, waiting for first sync'}
                       </p>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDisconnect(conn.id)}
-                      disabled={disconnectPlaid.isPending}
-                      className="text-destructive hover:text-destructive"
-                    >
-                      {disconnectPlaid.isPending ? 'Disconnecting...' : 'Disconnect'}
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleFixConnection(conn.id)}
+                        disabled={createUpdateLinkToken.isPending}
+                      >
+                        {createUpdateLinkToken.isPending ? (
+                          <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                        ) : (
+                          <Wrench className="w-3.5 h-3.5 mr-1.5" />
+                        )}
+                        Fix
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDisconnect(conn.id)}
+                        disabled={disconnectPlaid.isPending}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        {disconnectPlaid.isPending ? 'Disconnecting...' : 'Disconnect'}
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>

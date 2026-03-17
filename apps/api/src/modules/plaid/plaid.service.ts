@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ConflictException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Configuration, PlaidApi, PlaidEnvironments, Products, CountryCode } from 'plaid';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -46,14 +46,51 @@ export class PlaidService {
     return response.data.link_token;
   }
 
+  async createUpdateLinkToken(connectionId: string, userId: string): Promise<string> {
+    if (!this.client) throw new Error('Plaid not configured');
+    const conn = await this.prisma.plaidConnection.findUnique({ where: { id: connectionId } });
+    if (!conn) throw new NotFoundException('Connection not found');
+
+    const response = await this.client.linkTokenCreate({
+      user: { client_user_id: userId },
+      client_name: 'Ledgly',
+      access_token: conn.accessToken,
+      country_codes: [CountryCode.Us],
+      language: 'en',
+    });
+    return response.data.link_token;
+  }
+
   async exchangePublicToken(orgId: string, publicToken: string): Promise<{ connectionId: string }> {
     if (!this.client) throw new Error('Plaid not configured');
     const exchange = await this.client.itemPublicTokenExchange({ public_token: publicToken });
     const accessToken = exchange.data.access_token;
     const itemId = exchange.data.item_id;
 
+    const existing = await this.prisma.plaidConnection.findFirst({
+      where: { orgId, itemId },
+    });
+    if (existing) {
+      await this.client.itemRemove({ access_token: accessToken });
+      throw new ConflictException('This bank account is already connected');
+    }
+
     const accounts = await this.client.accountsGet({ access_token: accessToken });
     const account = accounts.data.accounts[0];
+
+    if (account?.mask && accounts.data.item.institution_id) {
+      const duplicateAccount = await this.prisma.plaidConnection.findFirst({
+        where: {
+          orgId,
+          accountMask: account.mask,
+          institutionName: { not: null },
+        },
+      });
+      if (duplicateAccount) {
+        await this.client.itemRemove({ access_token: accessToken });
+        throw new ConflictException('This bank account is already connected');
+      }
+    }
 
     const connection = await this.prisma.plaidConnection.create({
       data: {

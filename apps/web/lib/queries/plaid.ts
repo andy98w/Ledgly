@@ -37,6 +37,13 @@ export function useCreatePlaidLinkToken() {
   });
 }
 
+export function useCreatePlaidUpdateLinkToken() {
+  return useMutation({
+    mutationFn: ({ orgId, connectionId }: { orgId: string; connectionId: string }) =>
+      api.post<{ linkToken: string }>(`/organizations/${orgId}/plaid/connections/${connectionId}/update-link-token`),
+  });
+}
+
 export function useExchangePlaidToken() {
   const queryClient = useQueryClient();
 

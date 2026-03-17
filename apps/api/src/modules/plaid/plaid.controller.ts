@@ -51,6 +51,13 @@ export class PlaidController {
     return this.plaidService.syncTransactions(orgId);
   }
 
+  @Post('connections/:connectionId/update-link-token')
+  @Roles('ADMIN', 'TREASURER')
+  async createUpdateLinkToken(@Param('connectionId') connectionId: string, @Req() req: any) {
+    const token = await this.plaidService.createUpdateLinkToken(connectionId, req.user.sub);
+    return { linkToken: token };
+  }
+
   @Delete('connections/:connectionId')
   @Roles('ADMIN', 'TREASURER')
   async disconnect(@Param('connectionId') connectionId: string) {
