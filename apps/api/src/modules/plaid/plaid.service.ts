@@ -36,14 +36,20 @@ export class PlaidService {
 
   async createLinkToken(orgId: string, userId: string): Promise<string> {
     if (!this.client) throw new Error('Plaid not configured');
-    const response = await this.client.linkTokenCreate({
-      user: { client_user_id: userId },
-      client_name: 'Ledgly',
-      products: [Products.Transactions],
-      country_codes: [CountryCode.Us],
-      language: 'en',
-    });
-    return response.data.link_token;
+    try {
+      const response = await this.client.linkTokenCreate({
+        user: { client_user_id: userId },
+        client_name: 'Ledgly',
+        products: [Products.Transactions],
+        country_codes: [CountryCode.Us],
+        language: 'en',
+      });
+      return response.data.link_token;
+    } catch (err: any) {
+      const plaidError = err?.response?.data;
+      this.logger.error(`Plaid linkTokenCreate failed: ${plaidError?.error_message || err.message}`, plaidError);
+      throw new Error(plaidError?.error_message || 'Failed to initialize bank connection');
+    }
   }
 
   async createUpdateLinkToken(connectionId: string, userId: string): Promise<string> {
