@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { Moon, Sun, Monitor, User, Building2, Shield, Loader2, Camera, Plus, AlertTriangle, Mail, GraduationCap, KeyRound, Eye, EyeOff, Link2, Copy, Check, RefreshCw, ArrowRightLeft, Banknote, Bell, Trash2, Landmark, Wrench, MessageSquare, Send, ExternalLink } from 'lucide-react';
+import { Moon, Sun, Monitor, User, Building2, Shield, Loader2, Camera, Plus, AlertTriangle, Mail, GraduationCap, KeyRound, Eye, EyeOff, Link2, Copy, Check, RefreshCw, ArrowRightLeft, Banknote, Bell, Trash2, Landmark, Wrench, MessageSquare, Send, ExternalLink, ChevronDown } from 'lucide-react';
 import { useAuthStore, useIsOwner } from '@/lib/stores/auth';
 import { useUpdateProfile, useChangePassword } from '@/lib/queries/auth';
 import { useCreateOrganization, useDeleteOrganization, useOrganization, useUpdateOrganization, useGenerateJoinCode, useDisableJoinCode, useUpdateJoinCodeSettings } from '@/lib/queries/organizations';
@@ -86,78 +86,64 @@ function GmailSyncSection({ orgId }: { orgId: string | null }) {
   const hasConnections = gmailStatus?.connected;
 
   return (
-    <FadeIn delay={0.45}>
-      <MotionCard hover={false}>
-        <MotionCardHeader>
-          <MotionCardTitle className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Mail className="h-4 w-4 text-primary" />
-            </div>
-            Gmail Sync
-          </MotionCardTitle>
-        </MotionCardHeader>
-        <MotionCardContent>
-          <div className="space-y-4">
-            {connections.length > 0 && (
-              <div className="space-y-3">
-                {connections.map((conn) => (
-                  <div key={conn.id} className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium">{conn.email}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {conn.lastSyncAt
-                          ? `Last synced ${new Date(conn.lastSyncAt).toLocaleDateString()}`
-                          : 'Connected, waiting for first sync'}
-                      </p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDisconnect(conn.id)}
-                      disabled={disconnectGmail.isPending}
-                      className="text-destructive hover:text-destructive"
-                    >
-                      {disconnectGmail.isPending ? 'Disconnecting...' : 'Disconnect'}
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {orgId && (
-              <Button
-                variant={hasConnections ? 'outline' : 'default'}
-                onClick={() => { window.location.href = getGmailConnectUrl(orgId, '/settings'); }}
-              >
-                <Mail className="w-4 h-4 mr-2" />
-                {hasConnections ? 'Add another Gmail' : 'Connect Gmail'}
-              </Button>
-            )}
-
-            {!hasConnections && (
-              <p className="text-sm text-muted-foreground">
-                Connect Gmail to automatically import payment notifications from Venmo, Zelle, Cash App, and PayPal.
-              </p>
-            )}
-
-            {hasConnections && (
-              <div className="space-y-2">
-                <Label className="text-sm">Sync emails after</Label>
-                <DatePicker
-                  value={syncAfterValue}
-                  onChange={handleSyncDateChange}
-                  placeholder="Select start date"
-                  className="w-48"
-                />
+    <div className="space-y-4">
+      {connections.length > 0 && (
+        <div className="space-y-3">
+          {connections.map((conn) => (
+            <div key={conn.id} className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">{conn.email}</p>
                 <p className="text-xs text-muted-foreground">
-                  Only import payment emails sent after this date. Leave blank for the last 30 days.
+                  {conn.lastSyncAt
+                    ? `Last synced ${new Date(conn.lastSyncAt).toLocaleDateString()}`
+                    : 'Connected, waiting for first sync'}
                 </p>
               </div>
-            )}
-          </div>
-        </MotionCardContent>
-      </MotionCard>
-    </FadeIn>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleDisconnect(conn.id)}
+                disabled={disconnectGmail.isPending}
+                className="text-destructive hover:text-destructive"
+              >
+                {disconnectGmail.isPending ? 'Disconnecting...' : 'Disconnect'}
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {orgId && (
+        <Button
+          variant={hasConnections ? 'outline' : 'default'}
+          onClick={() => { window.location.href = getGmailConnectUrl(orgId, '/settings'); }}
+        >
+          <Mail className="w-4 h-4 mr-2" />
+          {hasConnections ? 'Add another Gmail' : 'Connect Gmail'}
+        </Button>
+      )}
+
+      {!hasConnections && (
+        <p className="text-sm text-muted-foreground">
+          Connect Gmail to automatically import payment notifications from Venmo, Zelle, Cash App, and PayPal.
+        </p>
+      )}
+
+      {hasConnections && (
+        <div className="space-y-2">
+          <Label className="text-sm">Sync emails after</Label>
+          <DatePicker
+            value={syncAfterValue}
+            onChange={handleSyncDateChange}
+            placeholder="Select start date"
+            className="w-48"
+          />
+          <p className="text-xs text-muted-foreground">
+            Only import payment emails sent after this date. Leave blank for the last 30 days.
+          </p>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -264,106 +250,92 @@ function BankConnectionsSection({ orgId }: { orgId: string | null }) {
   };
 
   return (
-    <FadeIn delay={0.47}>
-      <MotionCard hover={false}>
-        <MotionCardHeader>
-          <MotionCardTitle className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Landmark className="h-4 w-4 text-primary" />
-            </div>
-            Bank Connections
-          </MotionCardTitle>
-        </MotionCardHeader>
-        <MotionCardContent>
-          <div className="space-y-4">
-            {connections.length > 0 && (
-              <div className="space-y-3">
-                {connections.map((conn) => (
-                  <div key={conn.id} className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium">
-                        {conn.institutionName || 'Bank Account'}
-                        {conn.accountMask && (
-                          <span className="text-muted-foreground ml-1">
-                            ****{conn.accountMask}
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {conn.accountName && `${conn.accountName} · `}
-                        {conn.lastSyncAt
-                          ? `Last synced ${new Date(conn.lastSyncAt).toLocaleDateString()}`
-                          : 'Connected, waiting for first sync'}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleFixConnection(conn.id)}
-                        disabled={createUpdateLinkToken.isPending}
-                      >
-                        {createUpdateLinkToken.isPending ? (
-                          <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                        ) : (
-                          <Wrench className="w-3.5 h-3.5 mr-1.5" />
-                        )}
-                        Fix
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDisconnect(conn.id)}
-                        disabled={disconnectPlaid.isPending}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        {disconnectPlaid.isPending ? 'Disconnecting...' : 'Disconnect'}
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+    <div className="space-y-4">
+      {connections.length > 0 && (
+        <div className="space-y-3">
+          {connections.map((conn) => (
+            <div key={conn.id} className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">
+                  {conn.institutionName || 'Bank Account'}
+                  {conn.accountMask && (
+                    <span className="text-muted-foreground ml-1">
+                      ****{conn.accountMask}
+                    </span>
+                  )}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {conn.accountName && `${conn.accountName} · `}
+                  {conn.lastSyncAt
+                    ? `Last synced ${new Date(conn.lastSyncAt).toLocaleDateString()}`
+                    : 'Connected, waiting for first sync'}
+                </p>
               </div>
-            )}
-
-            <div className="flex items-center gap-2">
-              <Button
-                variant={connections.length > 0 ? 'outline' : 'default'}
-                onClick={handleConnect}
-                disabled={createLinkToken.isPending}
-              >
-                {createLinkToken.isPending ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Landmark className="w-4 h-4 mr-2" />
-                )}
-                {connections.length > 0 ? 'Add Another Bank' : 'Connect Bank'}
-              </Button>
-
-              {connections.length > 0 && (
+              <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
-                  onClick={handleSync}
-                  disabled={syncPlaid.isPending}
+                  size="sm"
+                  onClick={() => handleFixConnection(conn.id)}
+                  disabled={createUpdateLinkToken.isPending}
                 >
-                  {syncPlaid.isPending ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  {createUpdateLinkToken.isPending ? (
+                    <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
                   ) : (
-                    <RefreshCw className="w-4 h-4 mr-2" />
+                    <Wrench className="w-3.5 h-3.5 mr-1.5" />
                   )}
-                  Sync Now
+                  Fix
                 </Button>
-              )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleDisconnect(conn.id)}
+                  disabled={disconnectPlaid.isPending}
+                  className="text-destructive hover:text-destructive"
+                >
+                  {disconnectPlaid.isPending ? 'Disconnecting...' : 'Disconnect'}
+                </Button>
+              </div>
             </div>
+          ))}
+        </div>
+      )}
 
-            {connections.length === 0 && (
-              <p className="text-sm text-muted-foreground">
-                Connect your bank to automatically import P2P transactions from Venmo, Zelle, Cash App, and PayPal.
-              </p>
+      <div className="flex items-center gap-2">
+        <Button
+          variant={connections.length > 0 ? 'outline' : 'default'}
+          onClick={handleConnect}
+          disabled={createLinkToken.isPending}
+        >
+          {createLinkToken.isPending ? (
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          ) : (
+            <Landmark className="w-4 h-4 mr-2" />
+          )}
+          {connections.length > 0 ? 'Add Another Bank' : 'Connect Bank'}
+        </Button>
+
+        {connections.length > 0 && (
+          <Button
+            variant="outline"
+            onClick={handleSync}
+            disabled={syncPlaid.isPending}
+          >
+            {syncPlaid.isPending ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="w-4 h-4 mr-2" />
             )}
-          </div>
-        </MotionCardContent>
-      </MotionCard>
-    </FadeIn>
+            Sync Now
+          </Button>
+        )}
+      </div>
+
+      {connections.length === 0 && (
+        <p className="text-sm text-muted-foreground">
+          Connect your bank to automatically import P2P transactions from Venmo, Zelle, Cash App, and PayPal.
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -414,107 +386,93 @@ function GroupMeSection({ orgId }: { orgId: string | null }) {
   };
 
   return (
-    <FadeIn delay={0.48}>
-      <MotionCard hover={false}>
-        <MotionCardHeader>
-          <MotionCardTitle className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <MessageSquare className="h-4 w-4 text-primary" />
-            </div>
-            GroupMe
-          </MotionCardTitle>
-        </MotionCardHeader>
-        <MotionCardContent>
-          <div className="space-y-4">
-            {connections.length > 0 && (
-              <div className="space-y-3">
-                {connections.map((conn) => (
-                  <div key={conn.id} className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium">{conn.groupName || 'GroupMe Bot'}</p>
-                      <p className="text-xs text-muted-foreground font-mono">{conn.botId}</p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDisconnect(conn.id)}
-                      disabled={disconnectGroupMe.isPending}
-                      className="text-destructive hover:text-destructive"
-                    >
-                      {disconnectGroupMe.isPending ? 'Removing...' : 'Remove'}
-                    </Button>
-                  </div>
-                ))}
+    <div className="space-y-4">
+      {connections.length > 0 && (
+        <div className="space-y-3">
+          {connections.map((conn) => (
+            <div key={conn.id} className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">{conn.groupName || 'GroupMe Bot'}</p>
+                <p className="text-xs text-muted-foreground font-mono">{conn.botId}</p>
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleDisconnect(conn.id)}
+                disabled={disconnectGroupMe.isPending}
+                className="text-destructive hover:text-destructive"
+              >
+                {disconnectGroupMe.isPending ? 'Removing...' : 'Remove'}
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="space-y-3">
+        <div className="space-y-2">
+          <Label className="text-sm">Bot ID</Label>
+          <Input
+            value={botId}
+            onChange={(e) => setBotId(e.target.value)}
+            placeholder="Paste your GroupMe Bot ID"
+            className="bg-secondary/30 border-border/50 focus:border-primary font-mono text-sm"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label className="text-sm">Group Name (optional)</Label>
+          <Input
+            value={groupName}
+            onChange={(e) => setGroupName(e.target.value)}
+            placeholder="e.g., Chapter Main Chat"
+            className="bg-secondary/30 border-border/50 focus:border-primary"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={handleConnect}
+            disabled={connectGroupMe.isPending || !botId.trim()}
+          >
+            {connectGroupMe.isPending ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Plus className="w-4 h-4 mr-2" />
             )}
+            Connect
+          </Button>
+          {connections.length > 0 && (
+            <Button
+              variant="outline"
+              onClick={handleTest}
+              disabled={testGroupMe.isPending}
+            >
+              {testGroupMe.isPending ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4 mr-2" />
+              )}
+              Send Test Message
+            </Button>
+          )}
+        </div>
+      </div>
 
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <Label className="text-sm">Bot ID</Label>
-                <Input
-                  value={botId}
-                  onChange={(e) => setBotId(e.target.value)}
-                  placeholder="Paste your GroupMe Bot ID"
-                  className="bg-secondary/30 border-border/50 focus:border-primary font-mono text-sm"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm">Group Name (optional)</Label>
-                <Input
-                  value={groupName}
-                  onChange={(e) => setGroupName(e.target.value)}
-                  placeholder="e.g., Chapter Main Chat"
-                  className="bg-secondary/30 border-border/50 focus:border-primary"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  onClick={handleConnect}
-                  disabled={connectGroupMe.isPending || !botId.trim()}
-                >
-                  {connectGroupMe.isPending ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Plus className="w-4 h-4 mr-2" />
-                  )}
-                  Connect
-                </Button>
-                {connections.length > 0 && (
-                  <Button
-                    variant="outline"
-                    onClick={handleTest}
-                    disabled={testGroupMe.isPending}
-                  >
-                    {testGroupMe.isPending ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <Send className="w-4 h-4 mr-2" />
-                    )}
-                    Send Test Message
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            <div className="text-sm text-muted-foreground space-y-1">
-              <p>
-                <a
-                  href="https://dev.groupme.com/bots"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline inline-flex items-center gap-1"
-                >
-                  Create a bot at dev.groupme.com/bots
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-                {' '}and paste the Bot ID above.
-              </p>
-              <p>Payment notifications, reminders, and weekly summaries will be posted to your group.</p>
-            </div>
-          </div>
-        </MotionCardContent>
-      </MotionCard>
-    </FadeIn>
+      <div className="text-sm text-muted-foreground space-y-1">
+        <p>
+          <a
+            href="https://dev.groupme.com/bots"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline inline-flex items-center gap-1"
+          >
+            Create a bot at dev.groupme.com/bots
+            <ExternalLink className="w-3 h-3" />
+          </a>
+          {' '}and paste the Bot ID above.
+        </p>
+        <p>Payment notifications, reminders, and weekly summaries will be posted to your group.</p>
+      </div>
+    </div>
   );
 }
 
@@ -565,96 +523,82 @@ function DiscordSection({ orgId }: { orgId: string | null }) {
   };
 
   return (
-    <FadeIn delay={0.5}>
-      <MotionCard hover={false}>
-        <MotionCardHeader>
-          <MotionCardTitle className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <MessageSquare className="h-4 w-4 text-primary" />
-            </div>
-            Discord
-          </MotionCardTitle>
-        </MotionCardHeader>
-        <MotionCardContent>
-          <div className="space-y-4">
-            {connections.length > 0 && (
-              <div className="space-y-3">
-                {connections.map((conn) => (
-                  <div key={conn.id} className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium">{conn.channelName || 'Discord Webhook'}</p>
-                      <p className="text-xs text-muted-foreground font-mono truncate max-w-[200px]">{conn.webhookUrl}</p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDisconnect(conn.id)}
-                      disabled={disconnectDiscord.isPending}
-                      className="text-destructive hover:text-destructive"
-                    >
-                      {disconnectDiscord.isPending ? 'Removing...' : 'Remove'}
-                    </Button>
-                  </div>
-                ))}
+    <div className="space-y-4">
+      {connections.length > 0 && (
+        <div className="space-y-3">
+          {connections.map((conn) => (
+            <div key={conn.id} className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">{conn.channelName || 'Discord Webhook'}</p>
+                <p className="text-xs text-muted-foreground font-mono truncate max-w-[200px]">{conn.webhookUrl}</p>
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleDisconnect(conn.id)}
+                disabled={disconnectDiscord.isPending}
+                className="text-destructive hover:text-destructive"
+              >
+                {disconnectDiscord.isPending ? 'Removing...' : 'Remove'}
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="space-y-3">
+        <div className="space-y-2">
+          <Label className="text-sm">Webhook URL</Label>
+          <Input
+            value={webhookUrl}
+            onChange={(e) => setWebhookUrl(e.target.value)}
+            placeholder="https://discord.com/api/webhooks/..."
+            className="bg-secondary/30 border-border/50 focus:border-primary font-mono text-sm"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label className="text-sm">Channel Name (optional)</Label>
+          <Input
+            value={channelName}
+            onChange={(e) => setChannelName(e.target.value)}
+            placeholder="e.g., #treasury"
+            className="bg-secondary/30 border-border/50 focus:border-primary"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={handleConnect}
+            disabled={connectDiscord.isPending || !webhookUrl.trim()}
+          >
+            {connectDiscord.isPending ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Plus className="w-4 h-4 mr-2" />
             )}
+            Connect
+          </Button>
+          {connections.length > 0 && (
+            <Button
+              variant="outline"
+              onClick={handleTest}
+              disabled={testDiscord.isPending}
+            >
+              {testDiscord.isPending ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4 mr-2" />
+              )}
+              Send Test Message
+            </Button>
+          )}
+        </div>
+      </div>
 
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <Label className="text-sm">Webhook URL</Label>
-                <Input
-                  value={webhookUrl}
-                  onChange={(e) => setWebhookUrl(e.target.value)}
-                  placeholder="https://discord.com/api/webhooks/..."
-                  className="bg-secondary/30 border-border/50 focus:border-primary font-mono text-sm"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm">Channel Name (optional)</Label>
-                <Input
-                  value={channelName}
-                  onChange={(e) => setChannelName(e.target.value)}
-                  placeholder="e.g., #treasury"
-                  className="bg-secondary/30 border-border/50 focus:border-primary"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  onClick={handleConnect}
-                  disabled={connectDiscord.isPending || !webhookUrl.trim()}
-                >
-                  {connectDiscord.isPending ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Plus className="w-4 h-4 mr-2" />
-                  )}
-                  Connect
-                </Button>
-                {connections.length > 0 && (
-                  <Button
-                    variant="outline"
-                    onClick={handleTest}
-                    disabled={testDiscord.isPending}
-                  >
-                    {testDiscord.isPending ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <Send className="w-4 h-4 mr-2" />
-                    )}
-                    Send Test Message
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            <div className="text-sm text-muted-foreground space-y-1">
-              <p>Create a webhook in your Discord channel settings and paste the URL above.</p>
-              <p>Payment notifications, reminders, and weekly summaries will be posted to your channel.</p>
-            </div>
-          </div>
-        </MotionCardContent>
-      </MotionCard>
-    </FadeIn>
+      <div className="text-sm text-muted-foreground space-y-1">
+        <p>Create a webhook in your Discord channel settings and paste the URL above.</p>
+        <p>Payment notifications, reminders, and weekly summaries will be posted to your channel.</p>
+      </div>
+    </div>
   );
 }
 
@@ -705,96 +649,82 @@ function SlackSection({ orgId }: { orgId: string | null }) {
   };
 
   return (
-    <FadeIn delay={0.52}>
-      <MotionCard hover={false}>
-        <MotionCardHeader>
-          <MotionCardTitle className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <MessageSquare className="h-4 w-4 text-primary" />
-            </div>
-            Slack
-          </MotionCardTitle>
-        </MotionCardHeader>
-        <MotionCardContent>
-          <div className="space-y-4">
-            {connections.length > 0 && (
-              <div className="space-y-3">
-                {connections.map((conn) => (
-                  <div key={conn.id} className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium">{conn.channelName || 'Slack Webhook'}</p>
-                      <p className="text-xs text-muted-foreground font-mono truncate max-w-[200px]">{conn.webhookUrl}</p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDisconnect(conn.id)}
-                      disabled={disconnectSlack.isPending}
-                      className="text-destructive hover:text-destructive"
-                    >
-                      {disconnectSlack.isPending ? 'Removing...' : 'Remove'}
-                    </Button>
-                  </div>
-                ))}
+    <div className="space-y-4">
+      {connections.length > 0 && (
+        <div className="space-y-3">
+          {connections.map((conn) => (
+            <div key={conn.id} className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">{conn.channelName || 'Slack Webhook'}</p>
+                <p className="text-xs text-muted-foreground font-mono truncate max-w-[200px]">{conn.webhookUrl}</p>
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleDisconnect(conn.id)}
+                disabled={disconnectSlack.isPending}
+                className="text-destructive hover:text-destructive"
+              >
+                {disconnectSlack.isPending ? 'Removing...' : 'Remove'}
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="space-y-3">
+        <div className="space-y-2">
+          <Label className="text-sm">Webhook URL</Label>
+          <Input
+            value={webhookUrl}
+            onChange={(e) => setWebhookUrl(e.target.value)}
+            placeholder="https://hooks.slack.com/services/..."
+            className="bg-secondary/30 border-border/50 focus:border-primary font-mono text-sm"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label className="text-sm">Channel Name (optional)</Label>
+          <Input
+            value={channelName}
+            onChange={(e) => setChannelName(e.target.value)}
+            placeholder="e.g., #treasury"
+            className="bg-secondary/30 border-border/50 focus:border-primary"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={handleConnect}
+            disabled={connectSlack.isPending || !webhookUrl.trim()}
+          >
+            {connectSlack.isPending ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Plus className="w-4 h-4 mr-2" />
             )}
+            Connect
+          </Button>
+          {connections.length > 0 && (
+            <Button
+              variant="outline"
+              onClick={handleTest}
+              disabled={testSlack.isPending}
+            >
+              {testSlack.isPending ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4 mr-2" />
+              )}
+              Send Test Message
+            </Button>
+          )}
+        </div>
+      </div>
 
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <Label className="text-sm">Webhook URL</Label>
-                <Input
-                  value={webhookUrl}
-                  onChange={(e) => setWebhookUrl(e.target.value)}
-                  placeholder="https://hooks.slack.com/services/..."
-                  className="bg-secondary/30 border-border/50 focus:border-primary font-mono text-sm"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm">Channel Name (optional)</Label>
-                <Input
-                  value={channelName}
-                  onChange={(e) => setChannelName(e.target.value)}
-                  placeholder="e.g., #treasury"
-                  className="bg-secondary/30 border-border/50 focus:border-primary"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  onClick={handleConnect}
-                  disabled={connectSlack.isPending || !webhookUrl.trim()}
-                >
-                  {connectSlack.isPending ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Plus className="w-4 h-4 mr-2" />
-                  )}
-                  Connect
-                </Button>
-                {connections.length > 0 && (
-                  <Button
-                    variant="outline"
-                    onClick={handleTest}
-                    disabled={testSlack.isPending}
-                  >
-                    {testSlack.isPending ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <Send className="w-4 h-4 mr-2" />
-                    )}
-                    Send Test Message
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            <div className="text-sm text-muted-foreground space-y-1">
-              <p>Create an incoming webhook in your Slack workspace settings and paste the URL above.</p>
-              <p>Payment notifications, reminders, and weekly summaries will be posted to your channel.</p>
-            </div>
-          </div>
-        </MotionCardContent>
-      </MotionCard>
-    </FadeIn>
+      <div className="text-sm text-muted-foreground space-y-1">
+        <p>Create an incoming webhook in your Slack workspace settings and paste the URL above.</p>
+        <p>Payment notifications, reminders, and weekly summaries will be posted to your channel.</p>
+      </div>
+    </div>
   );
 }
 
@@ -835,6 +765,16 @@ export default function SettingsPage() {
   const [paymentHandles, setPaymentHandles] = useState<Record<string, string>>(orgDetails?.paymentHandles || {});
   const [newRuleTrigger, setNewRuleTrigger] = useState('BEFORE_DUE');
   const [newRuleDays, setNewRuleDays] = useState('3');
+  const [openSections, setOpenSections] = useState<Set<string>>(new Set(['organization', 'profile', 'integrations', 'danger']));
+
+  const toggleSection = (id: string) => {
+    setOpenSections(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const generateJoinCode = useGenerateJoinCode(currentOrgId ?? null);
   const disableJoinCode = useDisableJoinCode(currentOrgId ?? null);
@@ -1025,8 +965,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="space-y-8 max-w-4xl mx-auto">
-      {/* Header */}
+    <div className="space-y-6 max-w-4xl mx-auto">
       <FadeIn>
         <PageHeader
           title="Settings"
@@ -1034,194 +973,22 @@ export default function SettingsPage() {
         />
       </FadeIn>
 
-      {/* Profile Section */}
       <FadeIn delay={0.1}>
         <MotionCard hover={false}>
-          <MotionCardHeader>
-            <MotionCardTitle className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <User className="h-4 w-4 text-primary" />
-              </div>
-              Profile
-            </MotionCardTitle>
-          </MotionCardHeader>
-          <MotionCardContent className="space-y-6">
-            <div className="flex items-center gap-4">
-              <div className="relative group">
-                {user?.avatarUrl ? (
-                  <img
-                    src={user.avatarUrl}
-                    alt={user.name || 'Profile'}
-                    className="w-16 h-16 rounded-full object-cover"
-                  />
-                ) : (
-                  <AvatarGradient name={user?.name || user?.email || 'User'} size="lg" />
-                )}
-                <button
-                  onClick={handleAvatarClick}
-                  disabled={isUploadingAvatar}
-                  className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                >
-                  {isUploadingAvatar ? (
-                    <Loader2 className="h-5 w-5 text-white animate-spin" />
-                  ) : (
-                    <Camera className="h-5 w-5 text-white" />
-                  )}
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleAvatarChange}
-                  className="hidden"
-                />
-              </div>
-              <div>
-                <p className="font-medium">{user?.name || 'No name set'}</p>
-                <p className="text-sm text-muted-foreground">{user?.email}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Click avatar to change photo
-                </p>
-              </div>
-            </div>
-
-            <Separator className="opacity-50" />
-
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name" className="text-sm font-medium">Display Name</Label>
-                <Input
-                  id="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Your name"
-                  className="h-11 bg-secondary/30 border-border/50 focus:border-primary"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Email Address</Label>
-                <Input
-                  value={user?.email || ''}
-                  disabled
-                  className="h-11 bg-secondary/30 border-border/50 opacity-60"
-                />
-              </div>
-
-              <Button
-                className="hover:opacity-90"
-                disabled={!hasChanges || updateProfile.isPending}
-                onClick={handleSave}
-              >
-                {updateProfile.isPending ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  'Save Changes'
-                )}
-              </Button>
-            </div>
-          </MotionCardContent>
-        </MotionCard>
-      </FadeIn>
-
-      {/* Security Section */}
-      <FadeIn delay={0.15}>
-        <MotionCard hover={false}>
-          <MotionCardHeader>
-            <MotionCardTitle className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <KeyRound className="h-4 w-4 text-primary" />
-              </div>
-              Security
-            </MotionCardTitle>
-          </MotionCardHeader>
-          <MotionCardContent>
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-medium">Password</p>
-                <p className="text-xs text-muted-foreground">
-                  {user?.hasPassword
-                    ? 'Change your account password'
-                    : 'Set a password so you can sign in without a magic link'}
-                </p>
-              </div>
-              <Button variant="outline" size="sm" onClick={() => setShowPasswordDialog(true)}>
-                {user?.hasPassword ? 'Change password' : 'Set password'}
-              </Button>
-            </div>
-          </MotionCardContent>
-        </MotionCard>
-      </FadeIn>
-
-      {/* Appearance Section */}
-      <FadeIn delay={0.2}>
-        <MotionCard hover={false}>
-          <MotionCardHeader>
-            <MotionCardTitle className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Sun className="h-4 w-4 text-primary" />
-              </div>
-              Appearance
-            </MotionCardTitle>
-          </MotionCardHeader>
-          <MotionCardContent>
-            <div className="space-y-4">
-              <Label className="text-sm font-medium">Theme</Label>
-              <div className="grid grid-cols-3 gap-3">
-                {themeOptions.map((option) => {
-                  const isActive = theme === option.value;
-                  const Icon = option.icon;
-                  return (
-                    <button
-                      key={option.value}
-                      onClick={() => setTheme(option.value)}
-                      className={cn(
-                        'flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all hover:scale-[1.02] active:scale-[0.98] transition-transform',
-                        isActive
-                          ? 'border-primary bg-primary/10'
-                          : 'border-border/50 hover:border-border hover:bg-secondary/50'
-                      )}
-                    >
-                      <div className={cn(
-                        'p-3 rounded-xl',
-                        isActive ? 'bg-primary/20' : 'bg-secondary'
-                      )}>
-                        <Icon className={cn(
-                          'h-5 w-5',
-                          isActive ? 'text-primary' : 'text-muted-foreground'
-                        )} />
-                      </div>
-                      <span className={cn(
-                        'text-sm font-medium',
-                        isActive ? 'text-primary' : 'text-muted-foreground'
-                      )}>
-                        {option.label}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </MotionCardContent>
-        </MotionCard>
-      </FadeIn>
-
-      {/* Organization Section */}
-      <FadeIn delay={0.3}>
-        <MotionCard hover={false}>
-          <MotionCardHeader>
-            <MotionCardTitle className="flex items-center gap-2">
+          <button
+            onClick={() => toggleSection('organization')}
+            className="flex items-center justify-between w-full p-5 text-left"
+          >
+            <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-primary/10">
                 <Building2 className="h-4 w-4 text-primary" />
               </div>
-              Organization
-            </MotionCardTitle>
-          </MotionCardHeader>
-          <MotionCardContent>
-            <div className="space-y-4">
+              <span className="font-semibold">Organization</span>
+            </div>
+            <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", openSections.has('organization') && "rotate-180")} />
+          </button>
+          {openSections.has('organization') && (
+            <MotionCardContent className="pt-0 space-y-6">
               {currentOrg && (
                 <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/30">
                   <div className="flex items-center gap-3">
@@ -1252,12 +1019,644 @@ export default function SettingsPage() {
                 </div>
               )}
 
+              {isAdminRole && (
+                <>
+                  <Separator className="opacity-50" />
+
+                  <div>
+                    <h3 className="text-sm font-medium mb-3">Member Join Code</h3>
+                    <div className="space-y-4">
+                      {orgDetails?.joinCode ? (
+                        <>
+                          <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/30">
+                            <div className="flex items-center gap-3">
+                              <code className="text-2xl font-mono font-bold tracking-[0.3em] text-foreground">
+                                {orgDetails.joinCode}
+                              </code>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(orgDetails.joinCode!);
+                                  setCopiedCode(true);
+                                  setTimeout(() => setCopiedCode(false), 2000);
+                                  toast({ title: 'Code copied!' });
+                                }}
+                              >
+                                {copiedCode ? <Check className="h-4 w-4 mr-1" /> : <Copy className="h-4 w-4 mr-1" />}
+                                {copiedCode ? 'Copied' : 'Copy'}
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  if (showRegenerateConfirm) {
+                                    generateJoinCode.mutate(undefined, {
+                                      onSuccess: () => {
+                                        toast({ title: 'Join code regenerated' });
+                                        setShowRegenerateConfirm(false);
+                                      },
+                                      onError: (error: any) => {
+                                        toast({ title: 'Error', description: error.message, variant: 'destructive' });
+                                      },
+                                    });
+                                  } else {
+                                    setShowRegenerateConfirm(true);
+                                    setTimeout(() => setShowRegenerateConfirm(false), 3000);
+                                  }
+                                }}
+                                disabled={generateJoinCode.isPending}
+                              >
+                                <RefreshCw className="h-4 w-4 mr-1" />
+                                {showRegenerateConfirm ? 'Confirm?' : 'Regenerate'}
+                              </Button>
+                            </div>
+                          </div>
+
+                          <p className="text-xs text-muted-foreground">
+                            Share this code with people who want to join. They can enter it at <span className="font-mono text-foreground">/join</span>.
+                          </p>
+
+                          <Separator className="opacity-50" />
+
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-1">
+                              <Label className="text-sm font-medium">Enable join code</Label>
+                              <p className="text-xs text-muted-foreground">
+                                When disabled, the code cannot be used to join
+                              </p>
+                            </div>
+                            <Switch
+                              checked={orgDetails.joinCodeEnabled}
+                              onCheckedChange={(checked) =>
+                                updateJoinCodeSettings.mutate({ enabled: checked })
+                              }
+                            />
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-1">
+                              <Label className="text-sm font-medium">Require admin approval</Label>
+                              <p className="text-xs text-muted-foreground">
+                                New members will be pending until an admin approves them
+                              </p>
+                            </div>
+                            <Switch
+                              checked={orgDetails.joinRequiresApproval}
+                              onCheckedChange={(checked) =>
+                                updateJoinCodeSettings.mutate({ requiresApproval: checked })
+                              }
+                            />
+                          </div>
+
+                          <Separator className="opacity-50" />
+
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => {
+                              disableJoinCode.mutate(undefined, {
+                                onSuccess: () => toast({ title: 'Join code disabled' }),
+                                onError: (error: any) => toast({ title: 'Error', description: error.message, variant: 'destructive' }),
+                              });
+                            }}
+                            disabled={disableJoinCode.isPending}
+                          >
+                            Disable & Remove Code
+                          </Button>
+                        </>
+                      ) : (
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium">No join code set</p>
+                            <p className="text-xs text-muted-foreground">
+                              Generate a code to let members self-join your organization
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              generateJoinCode.mutate(undefined, {
+                                onSuccess: () => toast({ title: 'Join code generated!' }),
+                                onError: (error: any) => toast({ title: 'Error', description: error.message, variant: 'destructive' }),
+                              });
+                            }}
+                            disabled={generateJoinCode.isPending}
+                          >
+                            {generateJoinCode.isPending ? (
+                              <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                Generating...
+                              </>
+                            ) : (
+                              'Generate Code'
+                            )}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <Separator className="opacity-50" />
+
+                  <div>
+                    <h3 className="text-sm font-medium mb-3">Payment Instructions</h3>
+                    <div className="space-y-4">
+                      <p className="text-sm text-muted-foreground">
+                        Instructions shown to members on how to pay (Venmo, Zelle, etc.)
+                      </p>
+                      <Textarea
+                        value={paymentInstructions}
+                        onChange={(e) => setPaymentInstructions(e.target.value)}
+                        placeholder="e.g., Venmo: @ThetaChi, Zelle: treasurer@theta.org"
+                        maxLength={500}
+                        className="min-h-[100px] bg-secondary/30 border-border/50 focus:border-primary"
+                      />
+                      <Button
+                        disabled={updateOrganization.isPending || paymentInstructions === (orgDetails?.paymentInstructions || '')}
+                        onClick={() =>
+                          updateOrganization.mutate(
+                            { paymentInstructions },
+                            {
+                              onSuccess: () => toast({ title: 'Payment instructions saved!' }),
+                              onError: (error: any) =>
+                                toast({
+                                  title: 'Error',
+                                  description: error.message || 'Failed to save payment instructions',
+                                  variant: 'destructive',
+                                }),
+                            },
+                          )
+                        }
+                      >
+                        {updateOrganization.isPending ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          'Save Instructions'
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <Separator className="opacity-50" />
+
+                  <div>
+                    <h3 className="text-sm font-medium mb-3">Payment Links</h3>
+                    <div className="space-y-4">
+                      <p className="text-sm text-muted-foreground">
+                        Add your payment handles so members can pay with one tap.
+                      </p>
+                      <div className="space-y-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-sm">Venmo</Label>
+                          <Input
+                            value={paymentHandles.venmo || ''}
+                            onChange={(e) => setPaymentHandles((h) => ({ ...h, venmo: e.target.value }))}
+                            placeholder="@username"
+                            className="bg-secondary/30 border-border/50 focus:border-primary"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-sm">Zelle</Label>
+                          <Input
+                            value={paymentHandles.zelle || ''}
+                            onChange={(e) => setPaymentHandles((h) => ({ ...h, zelle: e.target.value }))}
+                            placeholder="email@example.com or phone"
+                            className="bg-secondary/30 border-border/50 focus:border-primary"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-sm">Cash App</Label>
+                          <Input
+                            value={paymentHandles.cashapp || ''}
+                            onChange={(e) => setPaymentHandles((h) => ({ ...h, cashapp: e.target.value }))}
+                            placeholder="$cashtag"
+                            className="bg-secondary/30 border-border/50 focus:border-primary"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-sm">PayPal</Label>
+                          <Input
+                            value={paymentHandles.paypal || ''}
+                            onChange={(e) => setPaymentHandles((h) => ({ ...h, paypal: e.target.value }))}
+                            placeholder="username"
+                            className="bg-secondary/30 border-border/50 focus:border-primary"
+                          />
+                        </div>
+                      </div>
+                      <Button
+                        disabled={updateOrganization.isPending || JSON.stringify(paymentHandles) === JSON.stringify(orgDetails?.paymentHandles || {})}
+                        onClick={() => {
+                          const cleaned = Object.fromEntries(
+                            Object.entries(paymentHandles).filter(([, v]) => v.trim())
+                          );
+                          updateOrganization.mutate(
+                            { paymentHandles: cleaned },
+                            {
+                              onSuccess: () => toast({ title: 'Payment links saved!' }),
+                              onError: (error: any) =>
+                                toast({
+                                  title: 'Error',
+                                  description: error.message || 'Failed to save payment links',
+                                  variant: 'destructive',
+                                }),
+                            },
+                          );
+                        }}
+                      >
+                        {updateOrganization.isPending ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          'Save Payment Links'
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <Separator className="opacity-50" />
+
+                  <div>
+                    <h3 className="text-sm font-medium mb-3">Email Reminders</h3>
+                    <div className="space-y-4">
+                      {(reminderRules as any)?.length > 0 ? (
+                        <div className="space-y-2">
+                          {(reminderRules as any).map((rule: { id: string; triggerType: string; daysOffset: number; isActive: boolean }) => (
+                            <div
+                              key={rule.id}
+                              className="flex items-center justify-between p-3 rounded-xl bg-secondary/30"
+                            >
+                              <span className="text-sm">
+                                <span className="font-medium">{rule.daysOffset} day{rule.daysOffset !== 1 ? 's' : ''}</span>{' '}
+                                {rule.triggerType === 'BEFORE_DUE' ? 'before due date' : 'after due date'}
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                                onClick={() => {
+                                  if (!currentOrgId) return;
+                                  deleteReminderRule.mutate(
+                                    { orgId: currentOrgId, id: rule.id },
+                                    {
+                                      onSuccess: () => toast({ title: 'Reminder rule deleted' }),
+                                      onError: (error: any) =>
+                                        toast({
+                                          title: 'Error',
+                                          description: error.message || 'Failed to delete rule',
+                                          variant: 'destructive',
+                                        }),
+                                    },
+                                  );
+                                }}
+                                disabled={deleteReminderRule.isPending}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          No reminder rules configured. Add one below to automatically email members about upcoming or overdue charges.
+                        </p>
+                      )}
+
+                      <Separator className="opacity-50" />
+
+                      <div className="space-y-3">
+                        <Label className="text-sm font-medium">Add Rule</Label>
+                        <div className="flex items-center gap-3">
+                          <Input
+                            type="number"
+                            min="1"
+                            max="90"
+                            value={newRuleDays}
+                            onChange={(e) => setNewRuleDays(e.target.value)}
+                            className="w-20 h-10 bg-secondary/30 border-border/50"
+                          />
+                          <span className="text-sm text-muted-foreground whitespace-nowrap">days</span>
+                          <Select value={newRuleTrigger} onValueChange={setNewRuleTrigger}>
+                            <SelectTrigger className="h-10 bg-secondary/30 border-border/50">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="BEFORE_DUE">Before due date</SelectItem>
+                              <SelectItem value="AFTER_DUE">After due date</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            size="sm"
+                            disabled={createReminderRule.isPending || !newRuleDays || parseInt(newRuleDays) < 1}
+                            onClick={() => {
+                              if (!currentOrgId) return;
+                              createReminderRule.mutate(
+                                {
+                                  orgId: currentOrgId,
+                                  data: {
+                                    triggerType: newRuleTrigger,
+                                    daysOffset: parseInt(newRuleDays),
+                                  },
+                                },
+                                {
+                                  onSuccess: () => {
+                                    toast({ title: 'Reminder rule added!' });
+                                    setNewRuleDays('3');
+                                    setNewRuleTrigger('BEFORE_DUE');
+                                  },
+                                  onError: (error: any) =>
+                                    toast({
+                                      title: 'Error',
+                                      description: error.message || 'Failed to create rule',
+                                      variant: 'destructive',
+                                    }),
+                                },
+                              );
+                            }}
+                          >
+                            {createReminderRule.isPending ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Plus className="w-4 h-4" />
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </MotionCardContent>
+          )}
+        </MotionCard>
+      </FadeIn>
+
+      <FadeIn delay={0.2}>
+        <MotionCard hover={false}>
+          <button
+            onClick={() => toggleSection('profile')}
+            className="flex items-center justify-between w-full p-5 text-left"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <User className="h-4 w-4 text-primary" />
+              </div>
+              <span className="font-semibold">Profile & Security</span>
+            </div>
+            <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", openSections.has('profile') && "rotate-180")} />
+          </button>
+          {openSections.has('profile') && (
+            <MotionCardContent className="pt-0 space-y-6">
+              <div className="flex items-center gap-4">
+                <div className="relative group">
+                  {user?.avatarUrl ? (
+                    <img
+                      src={user.avatarUrl}
+                      alt={user.name || 'Profile'}
+                      className="w-16 h-16 rounded-full object-cover"
+                    />
+                  ) : (
+                    <AvatarGradient name={user?.name || user?.email || 'User'} size="lg" />
+                  )}
+                  <button
+                    onClick={handleAvatarClick}
+                    disabled={isUploadingAvatar}
+                    className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                  >
+                    {isUploadingAvatar ? (
+                      <Loader2 className="h-5 w-5 text-white animate-spin" />
+                    ) : (
+                      <Camera className="h-5 w-5 text-white" />
+                    )}
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarChange}
+                    className="hidden"
+                  />
+                </div>
+                <div>
+                  <p className="font-medium">{user?.name || 'No name set'}</p>
+                  <p className="text-sm text-muted-foreground">{user?.email}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Click avatar to change photo
+                  </p>
+                </div>
+              </div>
+
               <Separator className="opacity-50" />
 
-              <div className="pt-2">
-                <p className="text-sm text-muted-foreground mb-3">
-                  Create a new organization to manage a different group.
-                </p>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name" className="text-sm font-medium">Display Name</Label>
+                  <Input
+                    id="name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Your name"
+                    className="h-11 bg-secondary/30 border-border/50 focus:border-primary"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Email Address</Label>
+                  <Input
+                    value={user?.email || ''}
+                    disabled
+                    className="h-11 bg-secondary/30 border-border/50 opacity-60"
+                  />
+                </div>
+
+                <Button
+                  className="hover:opacity-90"
+                  disabled={!hasChanges || updateProfile.isPending}
+                  onClick={handleSave}
+                >
+                  {updateProfile.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    'Save Changes'
+                  )}
+                </Button>
+              </div>
+
+              <Separator className="opacity-50" />
+
+              <div>
+                <h3 className="text-sm font-medium mb-3">Security</h3>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">Password</p>
+                    <p className="text-xs text-muted-foreground">
+                      {user?.hasPassword
+                        ? 'Change your account password'
+                        : 'Set a password so you can sign in without a magic link'}
+                    </p>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => setShowPasswordDialog(true)}>
+                    {user?.hasPassword ? 'Change password' : 'Set password'}
+                  </Button>
+                </div>
+              </div>
+
+              <Separator className="opacity-50" />
+
+              <div>
+                <h3 className="text-sm font-medium mb-3">Appearance</h3>
+                <div className="space-y-4">
+                  <Label className="text-sm font-medium">Theme</Label>
+                  <div className="grid grid-cols-3 gap-3">
+                    {themeOptions.map((option) => {
+                      const isActive = theme === option.value;
+                      const Icon = option.icon;
+                      return (
+                        <button
+                          key={option.value}
+                          onClick={() => setTheme(option.value)}
+                          className={cn(
+                            'flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all hover:scale-[1.02] active:scale-[0.98] transition-transform',
+                            isActive
+                              ? 'border-primary bg-primary/10'
+                              : 'border-border/50 hover:border-border hover:bg-secondary/50'
+                          )}
+                        >
+                          <div className={cn(
+                            'p-3 rounded-xl',
+                            isActive ? 'bg-primary/20' : 'bg-secondary'
+                          )}>
+                            <Icon className={cn(
+                              'h-5 w-5',
+                              isActive ? 'text-primary' : 'text-muted-foreground'
+                            )} />
+                          </div>
+                          <span className={cn(
+                            'text-sm font-medium',
+                            isActive ? 'text-primary' : 'text-muted-foreground'
+                          )}>
+                            {option.label}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </MotionCardContent>
+          )}
+        </MotionCard>
+      </FadeIn>
+
+      {isAdminRole && (
+        <FadeIn delay={0.3}>
+          <MotionCard hover={false}>
+            <button
+              onClick={() => toggleSection('integrations')}
+              className="flex items-center justify-between w-full p-5 text-left"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Link2 className="h-4 w-4 text-primary" />
+                </div>
+                <span className="font-semibold">Integrations</span>
+              </div>
+              <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", openSections.has('integrations') && "rotate-180")} />
+            </button>
+            {openSections.has('integrations') && (
+              <MotionCardContent className="pt-0">
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="text-sm font-medium mb-3">Gmail Sync</h3>
+                    <GmailSyncSection orgId={currentOrgId} />
+                  </div>
+                  <Separator />
+                  <div>
+                    <h3 className="text-sm font-medium mb-3">Bank Connections</h3>
+                    <BankConnectionsSection orgId={currentOrgId} />
+                  </div>
+                  <Separator />
+                  <div>
+                    <h3 className="text-sm font-medium mb-3">GroupMe</h3>
+                    <GroupMeSection orgId={currentOrgId} />
+                  </div>
+                  <Separator />
+                  <div>
+                    <h3 className="text-sm font-medium mb-3">Discord</h3>
+                    <DiscordSection orgId={currentOrgId} />
+                  </div>
+                  <Separator />
+                  <div>
+                    <h3 className="text-sm font-medium mb-3">Slack</h3>
+                    <SlackSection orgId={currentOrgId} />
+                  </div>
+                </div>
+              </MotionCardContent>
+            )}
+          </MotionCard>
+        </FadeIn>
+      )}
+
+      {isOwner && (
+        <FadeIn delay={0.4}>
+          <MotionCard hover={false} className="border-destructive/30">
+            <button
+              onClick={() => toggleSection('danger')}
+              className="flex items-center justify-between w-full p-5 text-left"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-destructive/10">
+                  <AlertTriangle className="h-4 w-4 text-destructive" />
+                </div>
+                <span className="font-semibold text-destructive">Danger Zone</span>
+              </div>
+              <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", openSections.has('danger') && "rotate-180")} />
+            </button>
+            {openSections.has('danger') && (
+              <MotionCardContent className="pt-0 space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">Transfer Ownership</p>
+                    <p className="text-xs text-muted-foreground">
+                      The new owner will have full control. You will become an Admin.
+                    </p>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => setShowTransferDialog(true)}>
+                    Transfer
+                  </Button>
+                </div>
+
+                <Separator className="opacity-50" />
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">Delete Organization</p>
+                    <p className="text-xs text-muted-foreground">
+                      Permanently delete {currentOrg?.orgName} and all its data
+                    </p>
+                  </div>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setShowDeleteOrgDialog(true)}
+                  >
+                    Delete
+                  </Button>
+                </div>
+
+                <Separator className="opacity-50" />
+
                 <div className="flex items-center gap-3">
                   <Button
                     variant="outline"
@@ -1274,488 +1673,8 @@ export default function SettingsPage() {
                     Launch Setup Wizard
                   </Button>
                 </div>
-              </div>
-            </div>
-          </MotionCardContent>
-        </MotionCard>
-      </FadeIn>
-
-      {/* Join Code Section — admin/owner only */}
-      {isAdminRole && (
-        <FadeIn delay={0.35}>
-          <MotionCard hover={false}>
-            <MotionCardHeader>
-              <MotionCardTitle className="flex items-center gap-2">
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <Link2 className="h-4 w-4 text-primary" />
-                </div>
-                Member Join Code
-              </MotionCardTitle>
-            </MotionCardHeader>
-            <MotionCardContent>
-              <div className="space-y-4">
-                {orgDetails?.joinCode ? (
-                  <>
-                    <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/30">
-                      <div className="flex items-center gap-3">
-                        <code className="text-2xl font-mono font-bold tracking-[0.3em] text-foreground">
-                          {orgDetails.joinCode}
-                        </code>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            navigator.clipboard.writeText(orgDetails.joinCode!);
-                            setCopiedCode(true);
-                            setTimeout(() => setCopiedCode(false), 2000);
-                            toast({ title: 'Code copied!' });
-                          }}
-                        >
-                          {copiedCode ? <Check className="h-4 w-4 mr-1" /> : <Copy className="h-4 w-4 mr-1" />}
-                          {copiedCode ? 'Copied' : 'Copy'}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            if (showRegenerateConfirm) {
-                              generateJoinCode.mutate(undefined, {
-                                onSuccess: () => {
-                                  toast({ title: 'Join code regenerated' });
-                                  setShowRegenerateConfirm(false);
-                                },
-                                onError: (error: any) => {
-                                  toast({ title: 'Error', description: error.message, variant: 'destructive' });
-                                },
-                              });
-                            } else {
-                              setShowRegenerateConfirm(true);
-                              setTimeout(() => setShowRegenerateConfirm(false), 3000);
-                            }
-                          }}
-                          disabled={generateJoinCode.isPending}
-                        >
-                          <RefreshCw className="h-4 w-4 mr-1" />
-                          {showRegenerateConfirm ? 'Confirm?' : 'Regenerate'}
-                        </Button>
-                      </div>
-                    </div>
-
-                    <p className="text-xs text-muted-foreground">
-                      Share this code with people who want to join. They can enter it at <span className="font-mono text-foreground">/join</span>.
-                    </p>
-
-                    <Separator className="opacity-50" />
-
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-1">
-                        <Label className="text-sm font-medium">Enable join code</Label>
-                        <p className="text-xs text-muted-foreground">
-                          When disabled, the code cannot be used to join
-                        </p>
-                      </div>
-                      <Switch
-                        checked={orgDetails.joinCodeEnabled}
-                        onCheckedChange={(checked) =>
-                          updateJoinCodeSettings.mutate({ enabled: checked })
-                        }
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-1">
-                        <Label className="text-sm font-medium">Require admin approval</Label>
-                        <p className="text-xs text-muted-foreground">
-                          New members will be pending until an admin approves them
-                        </p>
-                      </div>
-                      <Switch
-                        checked={orgDetails.joinRequiresApproval}
-                        onCheckedChange={(checked) =>
-                          updateJoinCodeSettings.mutate({ requiresApproval: checked })
-                        }
-                      />
-                    </div>
-
-                    <Separator className="opacity-50" />
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => {
-                        disableJoinCode.mutate(undefined, {
-                          onSuccess: () => toast({ title: 'Join code disabled' }),
-                          onError: (error: any) => toast({ title: 'Error', description: error.message, variant: 'destructive' }),
-                        });
-                      }}
-                      disabled={disableJoinCode.isPending}
-                    >
-                      Disable & Remove Code
-                    </Button>
-                  </>
-                ) : (
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium">No join code set</p>
-                      <p className="text-xs text-muted-foreground">
-                        Generate a code to let members self-join your organization
-                      </p>
-                    </div>
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        generateJoinCode.mutate(undefined, {
-                          onSuccess: () => toast({ title: 'Join code generated!' }),
-                          onError: (error: any) => toast({ title: 'Error', description: error.message, variant: 'destructive' }),
-                        });
-                      }}
-                      disabled={generateJoinCode.isPending}
-                    >
-                      {generateJoinCode.isPending ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Generating...
-                        </>
-                      ) : (
-                        'Generate Code'
-                      )}
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </MotionCardContent>
-          </MotionCard>
-        </FadeIn>
-      )}
-
-      {/* Gmail Sync Section — admin/owner only */}
-      {isAdminRole && <GmailSyncSection orgId={currentOrgId} />}
-
-      {/* Bank Connections Section — admin/owner only */}
-      {isAdminRole && <BankConnectionsSection orgId={currentOrgId} />}
-
-      {isAdminRole && <GroupMeSection orgId={currentOrgId} />}
-
-      {isAdminRole && <DiscordSection orgId={currentOrgId} />}
-
-      {isAdminRole && <SlackSection orgId={currentOrgId} />}
-
-      {/* Payment Instructions — admin/owner only */}
-      {isAdminRole && (
-        <FadeIn delay={0.5}>
-          <MotionCard hover={false}>
-            <MotionCardHeader>
-              <MotionCardTitle className="flex items-center gap-2">
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <Banknote className="h-4 w-4 text-primary" />
-                </div>
-                Payment Instructions
-              </MotionCardTitle>
-            </MotionCardHeader>
-            <MotionCardContent>
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Instructions shown to members on how to pay (Venmo, Zelle, etc.)
-                </p>
-                <Textarea
-                  value={paymentInstructions}
-                  onChange={(e) => setPaymentInstructions(e.target.value)}
-                  placeholder="e.g., Venmo: @ThetaChi, Zelle: treasurer@theta.org"
-                  maxLength={500}
-                  className="min-h-[100px] bg-secondary/30 border-border/50 focus:border-primary"
-                />
-                <Button
-                  disabled={updateOrganization.isPending || paymentInstructions === (orgDetails?.paymentInstructions || '')}
-                  onClick={() =>
-                    updateOrganization.mutate(
-                      { paymentInstructions },
-                      {
-                        onSuccess: () => toast({ title: 'Payment instructions saved!' }),
-                        onError: (error: any) =>
-                          toast({
-                            title: 'Error',
-                            description: error.message || 'Failed to save payment instructions',
-                            variant: 'destructive',
-                          }),
-                      },
-                    )
-                  }
-                >
-                  {updateOrganization.isPending ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    'Save Instructions'
-                  )}
-                </Button>
-
-                <Separator className="opacity-50" />
-
-                <p className="text-sm font-medium">Payment Links</p>
-                <p className="text-sm text-muted-foreground">
-                  Add your payment handles so members can pay with one tap.
-                </p>
-                <div className="space-y-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-sm">Venmo</Label>
-                    <Input
-                      value={paymentHandles.venmo || ''}
-                      onChange={(e) => setPaymentHandles((h) => ({ ...h, venmo: e.target.value }))}
-                      placeholder="@username"
-                      className="bg-secondary/30 border-border/50 focus:border-primary"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-sm">Zelle</Label>
-                    <Input
-                      value={paymentHandles.zelle || ''}
-                      onChange={(e) => setPaymentHandles((h) => ({ ...h, zelle: e.target.value }))}
-                      placeholder="email@example.com or phone"
-                      className="bg-secondary/30 border-border/50 focus:border-primary"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-sm">Cash App</Label>
-                    <Input
-                      value={paymentHandles.cashapp || ''}
-                      onChange={(e) => setPaymentHandles((h) => ({ ...h, cashapp: e.target.value }))}
-                      placeholder="$cashtag"
-                      className="bg-secondary/30 border-border/50 focus:border-primary"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-sm">PayPal</Label>
-                    <Input
-                      value={paymentHandles.paypal || ''}
-                      onChange={(e) => setPaymentHandles((h) => ({ ...h, paypal: e.target.value }))}
-                      placeholder="username"
-                      className="bg-secondary/30 border-border/50 focus:border-primary"
-                    />
-                  </div>
-                </div>
-                <Button
-                  disabled={updateOrganization.isPending || JSON.stringify(paymentHandles) === JSON.stringify(orgDetails?.paymentHandles || {})}
-                  onClick={() => {
-                    const cleaned = Object.fromEntries(
-                      Object.entries(paymentHandles).filter(([, v]) => v.trim())
-                    );
-                    updateOrganization.mutate(
-                      { paymentHandles: cleaned },
-                      {
-                        onSuccess: () => toast({ title: 'Payment links saved!' }),
-                        onError: (error: any) =>
-                          toast({
-                            title: 'Error',
-                            description: error.message || 'Failed to save payment links',
-                            variant: 'destructive',
-                          }),
-                      },
-                    );
-                  }}
-                >
-                  {updateOrganization.isPending ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    'Save Payment Links'
-                  )}
-                </Button>
-              </div>
-            </MotionCardContent>
-          </MotionCard>
-        </FadeIn>
-      )}
-
-      {/* Email Reminders — admin/owner only */}
-      {isAdminRole && (
-        <FadeIn delay={0.55}>
-          <MotionCard hover={false}>
-            <MotionCardHeader>
-              <MotionCardTitle className="flex items-center gap-2">
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <Bell className="h-4 w-4 text-primary" />
-                </div>
-                Email Reminders
-              </MotionCardTitle>
-            </MotionCardHeader>
-            <MotionCardContent>
-              <div className="space-y-4">
-                {/* Active rules list */}
-                {(reminderRules as any)?.length > 0 ? (
-                  <div className="space-y-2">
-                    {(reminderRules as any).map((rule: { id: string; triggerType: string; daysOffset: number; isActive: boolean }) => (
-                      <div
-                        key={rule.id}
-                        className="flex items-center justify-between p-3 rounded-xl bg-secondary/30"
-                      >
-                        <span className="text-sm">
-                          <span className="font-medium">{rule.daysOffset} day{rule.daysOffset !== 1 ? 's' : ''}</span>{' '}
-                          {rule.triggerType === 'BEFORE_DUE' ? 'before due date' : 'after due date'}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
-                          onClick={() => {
-                            if (!currentOrgId) return;
-                            deleteReminderRule.mutate(
-                              { orgId: currentOrgId, id: rule.id },
-                              {
-                                onSuccess: () => toast({ title: 'Reminder rule deleted' }),
-                                onError: (error: any) =>
-                                  toast({
-                                    title: 'Error',
-                                    description: error.message || 'Failed to delete rule',
-                                    variant: 'destructive',
-                                  }),
-                              },
-                            );
-                          }}
-                          disabled={deleteReminderRule.isPending}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    No reminder rules configured. Add one below to automatically email members about upcoming or overdue charges.
-                  </p>
-                )}
-
-                <Separator className="opacity-50" />
-
-                {/* Add rule form */}
-                <div className="space-y-3">
-                  <Label className="text-sm font-medium">Add Rule</Label>
-                  <div className="flex items-center gap-3">
-                    <Input
-                      type="number"
-                      min="1"
-                      max="90"
-                      value={newRuleDays}
-                      onChange={(e) => setNewRuleDays(e.target.value)}
-                      className="w-20 h-10 bg-secondary/30 border-border/50"
-                    />
-                    <span className="text-sm text-muted-foreground whitespace-nowrap">days</span>
-                    <Select value={newRuleTrigger} onValueChange={setNewRuleTrigger}>
-                      <SelectTrigger className="h-10 bg-secondary/30 border-border/50">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="BEFORE_DUE">Before due date</SelectItem>
-                        <SelectItem value="AFTER_DUE">After due date</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      size="sm"
-                      disabled={createReminderRule.isPending || !newRuleDays || parseInt(newRuleDays) < 1}
-                      onClick={() => {
-                        if (!currentOrgId) return;
-                        createReminderRule.mutate(
-                          {
-                            orgId: currentOrgId,
-                            data: {
-                              triggerType: newRuleTrigger,
-                              daysOffset: parseInt(newRuleDays),
-                            },
-                          },
-                          {
-                            onSuccess: () => {
-                              toast({ title: 'Reminder rule added!' });
-                              setNewRuleDays('3');
-                              setNewRuleTrigger('BEFORE_DUE');
-                            },
-                            onError: (error: any) =>
-                              toast({
-                                title: 'Error',
-                                description: error.message || 'Failed to create rule',
-                                variant: 'destructive',
-                              }),
-                          },
-                        );
-                      }}
-                    >
-                      {createReminderRule.isPending ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Plus className="w-4 h-4" />
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </MotionCardContent>
-          </MotionCard>
-        </FadeIn>
-      )}
-
-      {/* Transfer Ownership — owner only */}
-      {isOwner && (
-        <FadeIn delay={0.5}>
-          <MotionCard hover={false}>
-            <MotionCardHeader>
-              <MotionCardTitle className="flex items-center gap-2">
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <ArrowRightLeft className="h-4 w-4 text-primary" />
-                </div>
-                Transfer Ownership
-              </MotionCardTitle>
-            </MotionCardHeader>
-            <MotionCardContent>
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <p className="text-sm font-medium">Transfer to another member</p>
-                  <p className="text-xs text-muted-foreground">
-                    The new owner will have full control. You will become an Admin.
-                  </p>
-                </div>
-                <Button variant="outline" size="sm" onClick={() => setShowTransferDialog(true)}>
-                  Transfer
-                </Button>
-              </div>
-            </MotionCardContent>
-          </MotionCard>
-        </FadeIn>
-      )}
-
-      {/* Danger Zone — owner only */}
-      {isOwner && (
-        <FadeIn delay={0.5}>
-          <MotionCard hover={false} className="border-destructive/30">
-            <MotionCardHeader>
-              <MotionCardTitle className="flex items-center gap-2 text-destructive">
-                <div className="p-2 rounded-lg bg-destructive/10">
-                  <Shield className="h-4 w-4 text-destructive" />
-                </div>
-                Danger Zone
-              </MotionCardTitle>
-            </MotionCardHeader>
-            <MotionCardContent>
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <p className="text-sm font-medium">Delete Organization</p>
-                  <p className="text-xs text-muted-foreground">
-                    Permanently delete {currentOrg?.orgName} and all its data
-                  </p>
-                </div>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => setShowDeleteOrgDialog(true)}
-                >
-                  Delete
-                </Button>
-              </div>
-            </MotionCardContent>
+              </MotionCardContent>
+            )}
           </MotionCard>
         </FadeIn>
       )}
