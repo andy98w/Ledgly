@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   Users,
   Settings,
+  LogIn,
   LogOut,
   Building2,
   ChevronDown,
@@ -28,7 +29,7 @@ import { MEMBERSHIP_ROLE_LABELS } from '@ledgly/shared';
 import { useAuthStore } from '@/lib/stores/auth';
 import { useSidebarStore } from '@/lib/stores/sidebar';
 import { useLogout } from '@/lib/queries/auth';
-import { useCreateOrganization } from '@/lib/queries/organizations';
+import { useCreateOrganization, useResolveJoinCode, useJoinOrganization } from '@/lib/queries/organizations';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -85,8 +86,13 @@ export function Sidebar() {
 
   const { toast } = useToast();
   const createOrganization = useCreateOrganization();
+  const joinOrg = useJoinOrganization();
   const [showCreateOrgDialog, setShowCreateOrgDialog] = useState(false);
+  const [dialogMode, setDialogMode] = useState<'create' | 'join'>('create');
   const [newOrgName, setNewOrgName] = useState('');
+  const [joinCode, setJoinCode] = useState('');
+  const [submittedJoinCode, setSubmittedJoinCode] = useState('');
+  const { data: resolvedOrg, isLoading: resolving, error: resolveError } = useResolveJoinCode(submittedJoinCode || null);
 
   const currentOrg = user?.memberships.find((m) => m.orgId === currentOrgId);
   const allOrgs = user?.memberships || [];
@@ -111,6 +117,20 @@ export function Sidebar() {
         },
       },
     );
+  };
+
+  const handleJoinOrg = async () => {
+    if (!submittedJoinCode || !resolvedOrg) return;
+    try {
+      const result = await joinOrg.mutateAsync(submittedJoinCode);
+      setCurrentOrgId(result.orgId);
+      toast({ title: result.status === 'PENDING' ? 'Join request sent!' : `Joined ${result.orgName}!` });
+      setShowCreateOrgDialog(false);
+      setJoinCode('');
+      setSubmittedJoinCode('');
+    } catch (error: any) {
+      toast({ title: 'Could not join', description: error.message, variant: 'destructive' });
+    }
   };
 
   return (
@@ -213,11 +233,18 @@ export function Sidebar() {
                 ))}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onClick={() => setShowCreateOrgDialog(true)}
+                  onClick={() => { setDialogMode('create'); setShowCreateOrgDialog(true); }}
                   className="flex items-center gap-2 cursor-pointer"
                 >
                   <Plus className="h-4 w-4" />
                   <span>Create Organization</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => { setDialogMode('join'); setShowCreateOrgDialog(true); }}
+                  className="flex items-center gap-2 cursor-pointer"
+                >
+                  <LogIn className="h-4 w-4" />
+                  <span>Join Organization</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -371,48 +398,104 @@ export function Sidebar() {
 
       </div>
 
-      {/* Create Organization Dialog */}
-      <Dialog open={showCreateOrgDialog} onOpenChange={setShowCreateOrgDialog}>
+      <Dialog open={showCreateOrgDialog} onOpenChange={(open) => {
+        setShowCreateOrgDialog(open);
+        if (!open) { setNewOrgName(''); setJoinCode(''); setSubmittedJoinCode(''); }
+      }}>
         <DialogContent className="border-border/50 bg-card/95 backdrop-blur-xl">
-          <form onSubmit={(e) => { e.preventDefault(); handleCreateOrg(); }}>
-            <DialogHeader>
-              <DialogTitle>Create Organization</DialogTitle>
-              <DialogDescription>
-                Set up a new organization to manage separately
-              </DialogDescription>
-            </DialogHeader>
-            <div className="py-4">
-              <div className="space-y-2">
-                <Label htmlFor="new-org-name">Organization Name</Label>
-                <Input
-                  id="new-org-name"
-                  placeholder="e.g., Alpha Beta Gamma"
-                  value={newOrgName}
-                  onChange={(e) => setNewOrgName(e.target.value)}
-                  className="h-11 bg-secondary/50 border-border/50 focus:border-primary"
-                  autoFocus
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setShowCreateOrgDialog(false)}>
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={!newOrgName.trim() || createOrganization.isPending}
+          <DialogHeader>
+            <div className="flex gap-2 mb-2">
+              <button
+                onClick={() => setDialogMode('create')}
+                className={cn('px-3 py-1.5 rounded-lg text-sm font-medium transition-colors', dialogMode === 'create' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground hover:text-foreground')}
               >
-                {createOrganization.isPending ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  'Create'
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
+                Create
+              </button>
+              <button
+                onClick={() => setDialogMode('join')}
+                className={cn('px-3 py-1.5 rounded-lg text-sm font-medium transition-colors', dialogMode === 'join' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground hover:text-foreground')}
+              >
+                Join
+              </button>
+            </div>
+            <DialogTitle>{dialogMode === 'create' ? 'Create Organization' : 'Join Organization'}</DialogTitle>
+            <DialogDescription>
+              {dialogMode === 'create' ? 'Set up a new organization to manage separately' : 'Enter the join code shared by your admin'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {dialogMode === 'create' ? (
+            <form onSubmit={(e) => { e.preventDefault(); handleCreateOrg(); }}>
+              <div className="py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="new-org-name">Organization Name</Label>
+                  <Input
+                    id="new-org-name"
+                    placeholder="e.g., Alpha Beta Gamma"
+                    value={newOrgName}
+                    onChange={(e) => setNewOrgName(e.target.value)}
+                    className="h-11 bg-secondary/50 border-border/50 focus:border-primary"
+                    autoFocus
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setShowCreateOrgDialog(false)}>Cancel</Button>
+                <Button type="submit" disabled={!newOrgName.trim() || createOrganization.isPending}>
+                  {createOrganization.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Creating...</> : 'Create'}
+                </Button>
+              </DialogFooter>
+            </form>
+          ) : (
+            <div className="py-4 space-y-4">
+              {resolvedOrg && !resolveError ? (
+                <div className="space-y-4">
+                  <div className="text-center py-2">
+                    <p className="font-medium text-lg">{resolvedOrg.orgName}</p>
+                    <p className="text-sm text-muted-foreground mt-1">You&apos;ll be added as a member</p>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => { setSubmittedJoinCode(''); setJoinCode(''); }}>Back</Button>
+                    <Button onClick={handleJoinOrg} disabled={joinOrg.isPending}>
+                      {joinOrg.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Joining...</> : `Join ${resolvedOrg.orgName}`}
+                    </Button>
+                  </DialogFooter>
+                </div>
+              ) : (
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  const trimmed = joinCode.trim().toUpperCase();
+                  if (trimmed.length === 6) setSubmittedJoinCode(trimmed);
+                }}>
+                  {resolveError && (
+                    <p className="text-sm text-destructive mb-3">Invalid or disabled code. Check with your admin.</p>
+                  )}
+                  <div className="space-y-2">
+                    <Label htmlFor="join-code">Join Code</Label>
+                    <Input
+                      id="join-code"
+                      placeholder="ABC123"
+                      value={joinCode}
+                      onChange={(e) => {
+                        const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+                        setJoinCode(val);
+                        if (resolveError && val !== submittedJoinCode) setSubmittedJoinCode('');
+                      }}
+                      className="h-14 text-center text-2xl font-mono tracking-[0.3em] bg-secondary/50 border-border/50 focus:border-primary"
+                      maxLength={6}
+                      autoFocus
+                    />
+                  </div>
+                  <DialogFooter className="mt-4">
+                    <Button type="button" variant="outline" onClick={() => setShowCreateOrgDialog(false)}>Cancel</Button>
+                    <Button type="submit" disabled={joinCode.length !== 6 || resolving}>
+                      {resolving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Looking up...</> : 'Look Up'}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </aside>
