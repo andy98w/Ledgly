@@ -26,7 +26,7 @@ export class PlaidController {
   @Post('link-token')
   @Roles('ADMIN', 'TREASURER')
   async createLinkToken(@Param('orgId') orgId: string, @Req() req: any) {
-    const token = await this.plaidService.createLinkToken(orgId, req.user.sub);
+    const token = await this.plaidService.createLinkToken(orgId, req.membership?.id || req.user?.sub || orgId);
     return { linkToken: token };
   }
 
@@ -54,7 +54,7 @@ export class PlaidController {
   @Post('connections/:connectionId/update-link-token')
   @Roles('ADMIN', 'TREASURER')
   async createUpdateLinkToken(@Param('connectionId') connectionId: string, @Req() req: any) {
-    const token = await this.plaidService.createUpdateLinkToken(connectionId, req.user.sub);
+    const token = await this.plaidService.createUpdateLinkToken(connectionId, req.membership?.id || req.user?.sub || connectionId);
     return { linkToken: token };
   }
 
