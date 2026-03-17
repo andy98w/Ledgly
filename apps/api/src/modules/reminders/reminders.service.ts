@@ -1,8 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
+const MAX_RULES_PER_ORG = 3;
+
 interface CreateReminderRuleDto {
-  triggerType: string; // BEFORE_DUE or AFTER_DUE
+  triggerType: string;
   daysOffset: number;
 }
 
@@ -18,6 +20,17 @@ export class RemindersService {
   }
 
   async createRule(orgId: string, dto: CreateReminderRuleDto) {
+    const existing = await this.prisma.reminderRule.findMany({ where: { orgId } });
+
+    if (existing.length >= MAX_RULES_PER_ORG) {
+      throw new BadRequestException(`Maximum of ${MAX_RULES_PER_ORG} reminder rules per organization`);
+    }
+
+    const duplicate = existing.find(r => r.triggerType === dto.triggerType && r.daysOffset === dto.daysOffset);
+    if (duplicate) {
+      throw new BadRequestException('A rule with the same trigger and days already exists');
+    }
+
     return this.prisma.reminderRule.create({
       data: {
         orgId,
