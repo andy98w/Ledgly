@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { IsString, IsOptional, IsArray, ValidateNested, IsInt, Min, Max, ArrayMinSize, ArrayMaxSize, MaxLength } from 'class-validator';
+import { IsString, IsOptional, IsArray, ValidateNested, IsInt, IsNumber, Min, Max, ArrayMinSize, ArrayMaxSize, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PaymentsService } from './payments.service';
 import { Roles } from '../../common/decorators';
@@ -122,6 +122,30 @@ class BulkAllocationIdsDto {
   allocationIds: string[];
 }
 
+class BankCsvRowDto {
+  @IsString()
+  date: string;
+
+  @IsString()
+  @MaxLength(500)
+  description: string;
+
+  @IsNumber()
+  amount: number;
+}
+
+class ImportBankCsvDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(5000)
+  @ValidateNested({ each: true })
+  @Type(() => BankCsvRowDto)
+  rows: BankCsvRowDto[];
+
+  @IsString()
+  source: string;
+}
+
 class PaymentFiltersDto {
   @IsOptional()
   membershipId?: string;
@@ -196,6 +220,17 @@ export class PaymentsController {
   async delete(@Param('orgId') orgId: string, @Param('id') id: string, @Req() req: any) {
     const actorId = req.membership.id;
     return this.paymentsService.delete(orgId, id, actorId);
+  }
+
+  @Post('import-bank-csv')
+  @Roles('ADMIN', 'TREASURER')
+  async importBankCsv(
+    @Param('orgId') orgId: string,
+    @Body() dto: ImportBankCsvDto,
+    @Req() req: any,
+  ) {
+    const actorId = req.membership.id;
+    return this.paymentsService.importBankCsv(orgId, actorId, dto.rows, dto.source);
   }
 
   @Post('bulk')

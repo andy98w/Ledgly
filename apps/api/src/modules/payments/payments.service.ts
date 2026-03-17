@@ -950,4 +950,99 @@ export class PaymentsService {
 
     return { allocatedCents: result.allocatedCents, message: result.message };
   }
+
+  private detectP2PSource(description: string): string | null {
+    const lower = description.toLowerCase();
+    if (lower.includes('venmo')) return 'venmo';
+    if (lower.includes('zelle')) return 'zelle';
+    if (lower.includes('cash app') || lower.includes('cashapp')) return 'cashapp';
+    if (lower.includes('paypal')) return 'paypal';
+    return null;
+  }
+
+  async importBankCsv(
+    orgId: string,
+    createdById: string,
+    rows: Array<{ date: string; description: string; amount: number }>,
+    source: string,
+  ) {
+    let imported = 0;
+    let skipped = 0;
+    let duplicates = 0;
+
+    for (const row of rows) {
+      const p2pSource = this.detectP2PSource(row.description);
+      if (!p2pSource) {
+        skipped++;
+        continue;
+      }
+
+      const amountCents = Math.round(Math.abs(row.amount) * 100);
+      if (amountCents <= 0) {
+        skipped++;
+        continue;
+      }
+
+      const isOutgoing = row.amount < 0;
+      const paidAtDate = new Date(row.date + 'T12:00:00');
+
+      // Dedup: check for existing payment/expense within +-1 day with same amount
+      const dayBefore = new Date(paidAtDate);
+      dayBefore.setDate(dayBefore.getDate() - 1);
+      dayBefore.setHours(0, 0, 0, 0);
+      const dayAfter = new Date(paidAtDate);
+      dayAfter.setDate(dayAfter.getDate() + 1);
+      dayAfter.setHours(23, 59, 59, 999);
+
+      if (isOutgoing) {
+        const existingExpense = await this.prisma.expense.findFirst({
+          where: {
+            orgId,
+            amountCents,
+            date: { gte: dayBefore, lte: dayAfter },
+            deletedAt: null,
+          },
+        });
+
+        if (existingExpense) {
+          duplicates++;
+          continue;
+        }
+
+        await this.expensesService.create(orgId, createdById, {
+          category: 'OTHER',
+          title: `${p2pSource.charAt(0).toUpperCase() + p2pSource.slice(1)} payment`,
+          description: row.description,
+          amountCents,
+          date: row.date,
+          vendor: p2pSource,
+        });
+      } else {
+        const existingPayment = await this.prisma.payment.findFirst({
+          where: {
+            orgId,
+            amountCents,
+            paidAt: { gte: dayBefore, lte: dayAfter },
+            deletedAt: null,
+          },
+        });
+
+        if (existingPayment) {
+          duplicates++;
+          continue;
+        }
+
+        await this.create(orgId, createdById, {
+          amountCents,
+          paidAt: row.date,
+          memo: row.description,
+          rawPayerName: row.description,
+        });
+      }
+
+      imported++;
+    }
+
+    return { imported, skipped, duplicates };
+  }
 }

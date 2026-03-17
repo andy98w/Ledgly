@@ -107,6 +107,8 @@ export function useUpdateCharge() {
         amountCents?: number;
         dueDate?: string | null;
         status?: string;
+        category?: string;
+        membershipId?: string;
       };
     }) => api.patch(`/organizations/${orgId}/charges/${chargeId}`, data),
     onSuccess: (_, variables) => {

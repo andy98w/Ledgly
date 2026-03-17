@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/tooltip';
 import { Money } from '@/components/ui/money';
 import { cn } from '@/lib/utils';
+import { parseNaturalAmount, parseNaturalDate } from '@/lib/utils/natural-language';
 import {
   CHARGE_CATEGORIES,
   CHARGE_CATEGORY_LABELS,
@@ -125,14 +126,24 @@ export function EditableCell({
 
   const handleSave = () => {
     if (type === 'money') {
-      const cents = Math.round(parseFloat(editValue || '0') * 100);
-      onSave(cents);
+      const parsed = parseFloat(editValue || '0');
+      if (!isNaN(parsed)) {
+        onSave(Math.round(parsed * 100));
+      } else {
+        const nlCents = parseNaturalAmount(editValue);
+        onSave(nlCents ?? 0);
+      }
     } else if (type === 'date') {
       const iso = parseDateInput(editValue);
       if (iso) {
         onSave(iso);
       } else {
-        onCancel();
+        const nlDate = parseNaturalDate(editValue);
+        if (nlDate) {
+          onSave(new Date(nlDate).toISOString());
+        } else {
+          onCancel();
+        }
       }
     } else {
       onSave(editValue);
@@ -303,15 +314,18 @@ export function EditableCell({
           ref={inputRef}
           value={editValue}
           onChange={(e) => {
-            const masked = applyDateMask(e.target.value);
-            setEditValue(masked);
+            const raw = e.target.value;
+            if (/^\d*[\/\d]*$/.test(raw)) {
+              setEditValue(applyDateMask(raw));
+            } else {
+              setEditValue(raw);
+            }
           }}
           onKeyDown={handleKeyDown}
           onBlur={handleSave}
-          placeholder="mm/dd/yy"
+          placeholder="mm/dd/yy or 'yesterday'"
           className="h-5 text-xs bg-transparent shadow-none !ring-0 !outline-none !border-none rounded px-0 w-full"
           type="text"
-          inputMode="numeric"
         />
       );
     }
@@ -327,10 +341,8 @@ export function EditableCell({
             onKeyDown={handleKeyDown}
             onBlur={handleSave}
             className="w-16 text-right tabular-nums text-sm font-semibold bg-transparent shadow-none !ring-0 !outline-none !border-none p-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-            type="number"
-            step="0.01"
+            type="text"
             inputMode="decimal"
-            style={{ MozAppearance: 'textfield' }}
           />
         </div>
       );

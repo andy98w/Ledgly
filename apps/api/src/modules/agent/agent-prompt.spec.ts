@@ -1,5 +1,3 @@
-import { describe, it, expect } from '@jest/globals';
-
 /**
  * AI Agent Prompt Accuracy Test Suite
  *

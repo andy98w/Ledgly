@@ -2,11 +2,12 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { ReportsController } from './reports.controller';
 import { ReportsService } from './reports.service';
+import { DigestSchedulerService } from './digest-scheduler.service';
 
 @Module({
   imports: [AuthModule],
   controllers: [ReportsController],
-  providers: [ReportsService],
+  providers: [ReportsService, DigestSchedulerService],
   exports: [ReportsService],
 })
 export class ReportsModule {}

@@ -301,6 +301,8 @@ Return ONLY the JSON object, no markdown or explanation.`;
             details: result,
             skipped,
           });
+
+          await this.storeAgentMemory(orgId, action.toolName, action.args).catch(() => {});
         } catch (err: any) {
           results.push({
             toolName: action.toolName,
@@ -1523,7 +1525,7 @@ Users speak casually. Fuzzy-match member names, parse relative dates against tod
 ## Multi-charge rule
 Same charge for all members → one multi-charge. Different charges per member → separate tool calls. "Respectively" maps items 1:1.
 
-${orgContext}${csvInstruction}${this.buildSpreadsheetContextSection(spreadsheetContext)}`;
+${orgContext}${csvInstruction}${this.buildSpreadsheetContextSection(spreadsheetContext)}${await this.buildMemorySection(orgId)}`;
   }
 
   private buildSpreadsheetContextSection(ctx?: { selectedRows: Array<Record<string, any>> }): string {
@@ -1541,5 +1543,66 @@ ${orgContext}${csvInstruction}${this.buildSpreadsheetContextSection(spreadsheetC
 
     return `\n\n## Spreadsheet selection context
 The user has ${rows.length} row${rows.length !== 1 ? 's' : ''} selected in the spreadsheet:\n${summary}\n\nUse the IDs above when calling tools for these specific items. Reference rows by their description and member name, never by ID.`;
+  }
+
+  private async buildMemorySection(orgId: string): Promise<string> {
+    try {
+      const memories = await this.prisma.agentMemory.findMany({
+        where: { orgId },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+        select: { pattern: true },
+      });
+      if (memories.length === 0) return '';
+      const lines = memories.map((m) => `- ${m.pattern}`).join('\n');
+      return `\n\n## This org's common patterns\n${lines}`;
+    } catch {
+      return '';
+    }
+  }
+
+  private async storeAgentMemory(orgId: string, toolName: string, args: Record<string, any>): Promise<void> {
+    const pattern = this.buildMemoryPattern(toolName, args);
+    if (!pattern) return;
+
+    await this.prisma.agentMemory.create({
+      data: { orgId, pattern },
+    });
+
+    const count = await this.prisma.agentMemory.count({ where: { orgId } });
+    if (count > 20) {
+      const oldest = await this.prisma.agentMemory.findMany({
+        where: { orgId },
+        orderBy: { createdAt: 'asc' },
+        take: count - 20,
+        select: { id: true },
+      });
+      await this.prisma.agentMemory.deleteMany({
+        where: { id: { in: oldest.map((m) => m.id) } },
+      });
+    }
+  }
+
+  private buildMemoryPattern(toolName: string, args: Record<string, any>): string | null {
+    const fmt = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+    switch (toolName) {
+      case 'create_charges':
+      case 'create_multi_charge':
+        return `charge ${fmt(args.amountCents)} ${args.category || ''} "${args.title}" to ${args.membershipIds?.length || 0} member(s)`.trim();
+      case 'create_expense':
+        return `expense ${fmt(args.amountCents)} ${args.category || ''} "${args.title}"${args.vendor ? ` from "${args.vendor}"` : ''}`.trim();
+      case 'create_multi_expense':
+        return `multi-expense "${args.title}" with ${args.children?.length || 0} line items${args.vendor ? ` from "${args.vendor}"` : ''}`.trim();
+      case 'record_payments':
+        if (args.payments?.length === 1) {
+          const p = args.payments[0];
+          return `record payment ${fmt(p.amountCents)}${p.source ? ` via ${p.source}` : ''}`.trim();
+        }
+        return `record ${args.payments?.length || 0} payments`;
+      case 'add_members':
+        return `add ${args.members?.length || 0} member(s)`;
+      default:
+        return null;
+    }
   }
 }

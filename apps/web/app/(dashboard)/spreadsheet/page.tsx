@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
-import { ArrowUpRight, ArrowDownRight, Download, Upload, Filter, Plus, DollarSign, AlertCircle, Search, Minus, ArrowUp, ArrowDown, Trash2, Check, Link2, Loader2, CreditCard, MoreVertical, FileSpreadsheet, ChevronDown, ChevronRight, Layers, Sparkles, Ban, Zap, Columns3 } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Download, Upload, Filter, Plus, DollarSign, AlertCircle, Search, Minus, ArrowUp, ArrowDown, Trash2, Check, Link2, Loader2, CreditCard, MoreVertical, FileSpreadsheet, ChevronDown, ChevronRight, Layers, Sparkles, Ban, Zap, Columns3, Copy, Calendar, Tag } from 'lucide-react';
 import { useCharges, useUpdateCharge, useCreateCharge, useCreateMultiCharge, useVoidCharge, useRestoreCharge, useBulkCreateCharges } from '@/lib/queries/charges';
 import { useExpenses, useUpdateExpense, useCreateExpense, useCreateMultiExpense, useDeleteExpense, useRestoreExpense } from '@/lib/queries/expenses';
 import { usePayments, useUpdatePayment, useCreatePayment, useDeletePayment, useRestorePayment, useAllocatePayment, useAutoAllocateToCharge, useBulkAutoAllocate, useBulkCreatePayments } from '@/lib/queries/payments';
@@ -12,6 +12,8 @@ import { useColumnConfig, COLUMN_DEFS } from '@/hooks/use-column-config';
 import { useColumnResize } from '@/hooks/use-column-resize';
 import { useColumnReorder } from '@/hooks/use-column-reorder';
 import { useSpreadsheetKeyboard } from '@/hooks/use-spreadsheet-keyboard';
+import { useSpreadsheetSort } from '@/hooks/use-spreadsheet-sort';
+import { useColumnFilters, type ColumnFilter } from '@/hooks/use-column-filters';
 import {
   CHARGE_CATEGORIES,
   CHARGE_CATEGORY_LABELS,
@@ -75,6 +77,7 @@ import { InsightsBanner } from '@/components/spreadsheet/insights-banner';
 import { FormulaBar } from '@/components/spreadsheet/formula-bar';
 import { AllocatePaymentsDialog } from '@/components/spreadsheet/allocate-dialog';
 import { EditableCell, formatShortDate } from '@/components/spreadsheet/editable-cell';
+import { parseNaturalAmount } from '@/lib/utils/natural-language';
 import type { SpreadsheetQueryResult } from '@/lib/queries/agent';
 
 /** Strip "VENMO payment to " etc. prefixes from Gmail-imported expense titles */
@@ -110,11 +113,128 @@ type EditingCell = {
   column: 'description' | 'category' | 'amount' | 'date' | 'member';
 } | null;
 
+function ColumnFilterPopover({ columnId, filter, onSetFilter, rows }: {
+  columnId: string;
+  filter: ColumnFilter | null;
+  onSetFilter: (f: ColumnFilter | null) => void;
+  rows: SpreadsheetRow[];
+}) {
+  const hasFilter = filter !== null;
+  const uniqueCategories = useMemo(() => {
+    if (columnId !== 'category') return [];
+    const cats = new Set<string>();
+    for (const r of rows) if (r.category) cats.add(r.category);
+    return Array.from(cats).sort();
+  }, [columnId, rows]);
+
+  const renderFilterUI = () => {
+    switch (columnId) {
+      case 'date': {
+        const current = filter?.type === 'text' ? filter.value : '';
+        const [from, to] = current.includes('|') ? current.split('|') : ['', ''];
+        return (
+          <div className="space-y-2">
+            <label className="text-[11px] font-medium text-muted-foreground">From</label>
+            <input type="date" value={from} onChange={(e) => {
+              const nf = e.target.value;
+              const val = [nf, to].filter(Boolean).join('|');
+              onSetFilter(val ? { type: 'text', value: val } : null);
+            }} className="w-full h-7 text-xs bg-secondary/30 border border-border/50 rounded px-2" />
+            <label className="text-[11px] font-medium text-muted-foreground">To</label>
+            <input type="date" value={to} onChange={(e) => {
+              const nt = e.target.value;
+              const val = [from, nt].filter(Boolean).join('|');
+              onSetFilter(val ? { type: 'text', value: val } : null);
+            }} className="w-full h-7 text-xs bg-secondary/30 border border-border/50 rounded px-2" />
+          </div>
+        );
+      }
+      case 'member':
+      case 'description':
+        return (
+          <Input placeholder={`Filter ${columnId}...`} value={filter?.type === 'text' ? filter.value : ''} onChange={(e) => {
+            const v = e.target.value;
+            onSetFilter(v ? { type: 'text', value: v } : null);
+          }} className="h-7 text-xs" autoFocus />
+        );
+      case 'category': {
+        const selected = filter?.type === 'select' ? filter.values : [];
+        return (
+          <div className="space-y-1 max-h-48 overflow-y-auto">
+            {uniqueCategories.map((cat) => {
+              const isChecked = selected.includes(cat);
+              const label = CHARGE_CATEGORY_LABELS[cat as ChargeCategory] || EXPENSE_CATEGORY_LABELS[cat as ExpenseCategory] || cat;
+              return (
+                <label key={cat} className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-secondary/50 cursor-pointer text-xs">
+                  <input type="checkbox" checked={isChecked} onChange={() => {
+                    const next = isChecked ? selected.filter((s) => s !== cat) : [...selected, cat];
+                    onSetFilter(next.length > 0 ? { type: 'select', values: next } : null);
+                  }} className="rounded border-border" />
+                  {label}
+                </label>
+              );
+            })}
+          </div>
+        );
+      }
+      case 'income':
+      case 'expense': {
+        const min = filter?.type === 'range' ? filter.min : undefined;
+        const max = filter?.type === 'range' ? filter.max : undefined;
+        return (
+          <div className="space-y-2">
+            <label className="text-[11px] font-medium text-muted-foreground">Min ($)</label>
+            <input type="number" step="0.01" placeholder="0.00" value={min !== undefined ? min / 100 : ''} onChange={(e) => {
+              const v = e.target.value ? Math.round(parseFloat(e.target.value) * 100) : undefined;
+              if (v === undefined && max === undefined) { onSetFilter(null); return; }
+              onSetFilter({ type: 'range', min: v, max });
+            }} className="w-full h-7 text-xs bg-secondary/30 border border-border/50 rounded px-2" />
+            <label className="text-[11px] font-medium text-muted-foreground">Max ($)</label>
+            <input type="number" step="0.01" placeholder="0.00" value={max !== undefined ? max / 100 : ''} onChange={(e) => {
+              const v = e.target.value ? Math.round(parseFloat(e.target.value) * 100) : undefined;
+              if (v === undefined && min === undefined) { onSetFilter(null); return; }
+              onSetFilter({ type: 'range', min, max: v });
+            }} className="w-full h-7 text-xs bg-secondary/30 border border-border/50 rounded px-2" />
+          </div>
+        );
+      }
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button onClick={(e) => e.stopPropagation()} className={cn(
+          'p-0.5 rounded transition-colors',
+          hasFilter ? 'text-primary' : 'text-muted-foreground/0 group-hover/header:text-muted-foreground/50 hover:text-muted-foreground',
+        )}>
+          <Filter className="h-3 w-3" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-48 p-2" align="start" onClick={(e) => e.stopPropagation()}>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium">Filter</span>
+            {hasFilter && (
+              <button onClick={() => onSetFilter(null)} className="text-[11px] text-muted-foreground hover:text-foreground transition-colors">
+                Clear
+              </button>
+            )}
+          </div>
+          {renderFilterUI()}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export default function SpreadsheetPage() {
   const [typeFilters, setTypeFilters] = useState<Set<string>>(new Set(['charge', 'expense']));
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<'date' | 'amount' | 'type' | 'category' | 'member' | 'status' | 'income' | 'expense'>('date');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const { sortSpecs, toggleSort, getSortIndex, getSortDirection } = useSpreadsheetSort();
+  const { filters: columnFilters, setFilter: setColumnFilter, clearAll: clearAllFilters, activeFilterCount, matchesFilters } = useColumnFilters();
   const [formulaCategories, setFormulaCategories] = useState<string[] | null>(null);
   const [formulaStatuses, setFormulaStatuses] = useState<string[] | null>(null);
   const [formulaAmountMin, setFormulaAmountMin] = useState<number | null>(null);
@@ -137,6 +257,9 @@ export default function SpreadsheetPage() {
   const [showMultiChargeDialog, setShowMultiChargeDialog] = useState(false);
   const [showMultiExpenseDialog, setShowMultiExpenseDialog] = useState(false);
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [contextCategorySubmenu, setContextCategorySubmenu] = useState(false);
+  const [contextDatePicker, setContextDatePicker] = useState(false);
   const [insightFilter, setInsightFilter] = useState<'overdue' | 'unmatched' | 'duplicate' | null>(null);
   const [newRowData, setNewRowData] = useState({
     date: new Date().toISOString().split('T')[0],
@@ -380,56 +503,50 @@ export default function SpreadsheetPage() {
       filteredRows = filteredRows.filter((row) => new Date(row.date).getTime() <= to);
     }
 
-    // Sort
-    filteredRows.sort((a, b) => {
-      let comparison = 0;
-      switch (sortBy) {
-        case 'date':
-          comparison = new Date(a.date).getTime() - new Date(b.date).getTime();
-          break;
-        case 'amount':
-          comparison = (a.incomeCents || a.expenseCents) - (b.incomeCents || b.expenseCents);
-          break;
-        case 'income':
-          // Sort by income first (rows with income come before rows without)
-          // Then by amount within each group
-          const aHasIncome = a.incomeCents > 0 ? 1 : 0;
-          const bHasIncome = b.incomeCents > 0 ? 1 : 0;
-          comparison = bHasIncome - aHasIncome; // Income rows first
-          if (comparison === 0) {
-            comparison = a.incomeCents - b.incomeCents;
-          }
-          break;
-        case 'expense':
-          // Sort by expense first (rows with expense come before rows without)
-          // Then by amount within each group
-          const aHasExpense = a.expenseCents > 0 ? 1 : 0;
-          const bHasExpense = b.expenseCents > 0 ? 1 : 0;
-          comparison = bHasExpense - aHasExpense; // Expense rows first
-          if (comparison === 0) {
-            comparison = a.expenseCents - b.expenseCents;
-          }
-          break;
-        case 'type':
-          comparison = a.type.localeCompare(b.type);
-          break;
-        case 'category':
-          comparison = (a.category || '').localeCompare(b.category || '');
-          break;
-        case 'member':
-          comparison = (a.member || '').localeCompare(b.member || '');
-          break;
-        case 'status':
-          comparison = (a.status || '').localeCompare(b.status || '');
-          break;
-        default:
-          comparison = 0;
+    // Column filters (date handled as range, rest via matchesFilters)
+    const dateFilter = columnFilters['date'];
+    if (dateFilter && dateFilter.type === 'text' && dateFilter.value) {
+      const parts = dateFilter.value.split('|');
+      const fromStr = parts[0] || '';
+      const toStr = parts[1] || '';
+      if (fromStr) {
+        const fromTime = new Date(fromStr).getTime();
+        filteredRows = filteredRows.filter((row) => new Date(row.date).getTime() >= fromTime);
       }
-      return sortOrder === 'asc' ? comparison : -comparison;
+      if (toStr) {
+        const toTime = new Date(toStr).getTime();
+        filteredRows = filteredRows.filter((row) => new Date(row.date).getTime() <= toTime);
+      }
+    }
+    filteredRows = filteredRows.filter((row) => matchesFilters({
+      member: row.member || '', category: row.category,
+      description: row.description, income: row.incomeCents, expense: row.expenseCents,
+    }));
+
+    // Multi-column sort
+    const compareByKey = (a: SpreadsheetRow, b: SpreadsheetRow, key: string): number => {
+      switch (key) {
+        case 'date': return new Date(a.date).getTime() - new Date(b.date).getTime();
+        case 'amount': return (a.incomeCents || a.expenseCents) - (b.incomeCents || b.expenseCents);
+        case 'income': { const c = (b.incomeCents > 0 ? 1 : 0) - (a.incomeCents > 0 ? 1 : 0); return c !== 0 ? c : a.incomeCents - b.incomeCents; }
+        case 'expense': { const c = (b.expenseCents > 0 ? 1 : 0) - (a.expenseCents > 0 ? 1 : 0); return c !== 0 ? c : a.expenseCents - b.expenseCents; }
+        case 'type': return a.type.localeCompare(b.type);
+        case 'category': return (a.category || '').localeCompare(b.category || '');
+        case 'member': return (a.member || '').localeCompare(b.member || '');
+        case 'status': return (a.status || '').localeCompare(b.status || '');
+        default: return 0;
+      }
+    };
+    filteredRows.sort((a, b) => {
+      for (const spec of sortSpecs) {
+        const cmp = compareByKey(a, b, spec.key);
+        if (cmp !== 0) return spec.direction === 'asc' ? cmp : -cmp;
+      }
+      return 0;
     });
 
     return filteredRows;
-  }, [chargesData, expensesData, paymentsData, members, typeFilters, searchQuery, sortBy, sortOrder, formulaCategories, formulaStatuses, formulaAmountMin, formulaAmountMax, formulaDateFrom, formulaDateTo]);
+  }, [chargesData, expensesData, paymentsData, members, typeFilters, searchQuery, sortSpecs, formulaCategories, formulaStatuses, formulaAmountMin, formulaAmountMax, formulaDateFrom, formulaDateTo, matchesFilters]);
 
   // Phase 2: Anomaly detection (computed from rows before insight filtering)
   const insights = useMemo(() => computeInsights(rows), [rows]);
@@ -478,7 +595,7 @@ export default function SpreadsheetPage() {
   useEffect(() => {
     setPage(1);
     setSelectedRows(new Set());
-  }, [typeFilters, searchQuery, sortBy, sortOrder, pageSize, insightFilter]);
+  }, [typeFilters, searchQuery, sortSpecs, pageSize, insightFilter, columnFilters]);
 
   const toggleParentExpand = (parentId: string) => {
     setExpandedParents((prev) => {
@@ -1083,6 +1200,32 @@ export default function SpreadsheetPage() {
     }
   }, [isDragging, handleMouseUp]);
 
+  const contextMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const dismiss = () => {
+      setContextMenu(null);
+      setContextCategorySubmenu(false);
+      setContextDatePicker(false);
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') dismiss();
+    };
+    const handleClick = (e: MouseEvent) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) dismiss();
+    };
+    const handleScroll = () => dismiss();
+    window.addEventListener('keydown', handleKey);
+    window.addEventListener('mousedown', handleClick);
+    window.addEventListener('scroll', handleScroll, true);
+    return () => {
+      window.removeEventListener('keydown', handleKey);
+      window.removeEventListener('mousedown', handleClick);
+      window.removeEventListener('scroll', handleScroll, true);
+    };
+  }, [contextMenu]);
+
   // Clear selection when clicking outside the table
   const tableRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -1136,6 +1279,54 @@ export default function SpreadsheetPage() {
   const handleAskAI = useCallback(() => {
     openAISidebar();
   }, [openAISidebar]);
+
+  const handleBulkSetCategory = useCallback(async (category: string) => {
+    if (!currentOrgId) return;
+    const updates = paginatedRows
+      .filter(r => selectedRows.has(r.id) && r.type !== 'payment')
+      .map(r => {
+        if (r.type === 'charge') return updateCharge.mutateAsync({ orgId: currentOrgId!, chargeId: r.id, data: { category } });
+        if (r.type === 'expense') return updateExpense.mutateAsync({ orgId: currentOrgId!, expenseId: r.id, data: { category } });
+        return null;
+      }).filter(Boolean);
+    await Promise.all(updates);
+    toast({ title: `Updated ${updates.length} row${updates.length !== 1 ? 's' : ''}` });
+    setContextMenu(null);
+    setContextCategorySubmenu(false);
+  }, [currentOrgId, paginatedRows, selectedRows, updateCharge, updateExpense, toast]);
+
+  const handleBulkSetDate = useCallback(async (date: string) => {
+    if (!currentOrgId) return;
+    const updates = paginatedRows
+      .filter(r => selectedRows.has(r.id))
+      .map(r => {
+        if (r.type === 'charge') return updateCharge.mutateAsync({ orgId: currentOrgId!, chargeId: r.id, data: { dueDate: date } });
+        if (r.type === 'expense') return updateExpense.mutateAsync({ orgId: currentOrgId!, expenseId: r.id, data: { date } });
+        if (r.type === 'payment') return updatePayment.mutateAsync({ orgId: currentOrgId!, paymentId: r.id, data: { paidAt: date } });
+        return null;
+      }).filter(Boolean);
+    await Promise.all(updates);
+    toast({ title: `Updated ${updates.length} row${updates.length !== 1 ? 's' : ''}` });
+    setContextMenu(null);
+    setContextDatePicker(false);
+  }, [currentOrgId, paginatedRows, selectedRows, updateCharge, updateExpense, updatePayment, toast]);
+
+  const handleCopyRows = useCallback(async () => {
+    const rowsToCopy = paginatedRows.filter(r => selectedRows.has(r.id));
+    const headers = ['Date', 'Type', 'Member/Vendor', 'Category', 'Description', 'Income', 'Expense'];
+    const lines = rowsToCopy.map(r => [
+      formatShortDate(r.date),
+      r.type,
+      r.member || '',
+      r.category,
+      r.description,
+      r.incomeCents ? (r.incomeCents / 100).toFixed(2) : '',
+      r.expenseCents ? (r.expenseCents / 100).toFixed(2) : '',
+    ].join('\t'));
+    await navigator.clipboard.writeText([headers.join('\t'), ...lines].join('\n'));
+    toast({ title: `Copied ${rowsToCopy.length} row${rowsToCopy.length !== 1 ? 's' : ''}` });
+    setContextMenu(null);
+  }, [paginatedRows, selectedRows, toast]);
 
   // Phase 4: Row action handlers
   const handleRowAction = useCallback(async (row: SpreadsheetRow, action: RowAction) => {
@@ -1222,12 +1413,12 @@ export default function SpreadsheetPage() {
 
   const handleFormulaSort = useCallback((result: SpreadsheetQueryResult & { type: 'sort' }) => {
     if (result.sortBy) {
-      setSortBy(result.sortBy as any);
+      toggleSort(result.sortBy, false);
+      if (result.sortOrder && getSortDirection(result.sortBy) !== result.sortOrder) {
+        toggleSort(result.sortBy, false);
+      }
     }
-    if (result.sortOrder) {
-      setSortOrder(result.sortOrder);
-    }
-  }, []);
+  }, [toggleSort, getSortDirection]);
 
   const handleExportCSV = () => {
     const headers = ['Date', 'Type', 'Member/Vendor', 'Category', 'Title', 'Income', 'Unpaid', 'Expense'];
@@ -1618,6 +1809,16 @@ export default function SpreadsheetPage() {
                   {t === 'charge' ? 'Charges' : t === 'expense' ? 'Expenses' : 'Payments'}
                 </button>
               ))}
+              {activeFilterCount > 0 && (
+                <button
+                  onClick={clearAllFilters}
+                  className="px-2.5 py-1 rounded-md text-xs font-medium transition-colors bg-primary/15 text-primary hover:bg-primary/25 flex items-center gap-1"
+                >
+                  <Filter className="h-3 w-3" />
+                  {activeFilterCount} filter{activeFilterCount !== 1 ? 's' : ''}
+                  <span className="text-primary/60 ml-0.5">&times;</span>
+                </button>
+              )}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
@@ -1719,22 +1920,32 @@ export default function SpreadsheetPage() {
                         onDragLeave={onDragLeave}
                         onDrop={(e) => onDrop(colId, e)}
                         onDragEnd={onDragEnd}
-                        onClick={() => {
+                        onClick={(e) => {
                           if (def.sortKey) {
-                            if (sortBy === def.sortKey) {
-                              setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-                            } else {
-                              setSortBy(def.sortKey as any);
-                              setSortOrder('asc');
-                            }
+                            toggleSort(def.sortKey, e.shiftKey);
                           }
                         }}
                       >
-                        <span className="flex items-center gap-1" style={{ justifyContent: def.align === 'right' ? 'flex-end' : 'flex-start' }}>
+                        <span className="group/header flex items-center gap-1" style={{ justifyContent: def.align === 'right' ? 'flex-end' : 'flex-start' }}>
                           {(colId === 'income' || colId === 'expense') && <DollarSign className="h-3 w-3" />}
                           {def.label}
-                          {sortBy === def.sortKey && (
-                            sortOrder === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                          {def.sortKey && getSortDirection(def.sortKey) && (
+                            <span className="flex items-center gap-0.5">
+                              {getSortDirection(def.sortKey) === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+                              {sortSpecs.length > 1 && getSortIndex(def.sortKey) !== null && (
+                                <span className="text-[10px] bg-primary/20 text-primary rounded-full w-3.5 h-3.5 flex items-center justify-center">
+                                  {(getSortIndex(def.sortKey)! + 1)}
+                                </span>
+                              )}
+                            </span>
+                          )}
+                          {def.filterable && (
+                            <ColumnFilterPopover
+                              columnId={colId}
+                              filter={columnFilters[colId] || null}
+                              onSetFilter={(f) => setColumnFilter(colId, f)}
+                              rows={rows}
+                            />
                           )}
                         </span>
                         <div
@@ -1927,13 +2138,22 @@ export default function SpreadsheetPage() {
                               const cents = Math.round(parseFloat(e.target.value || '0') * 100);
                               setNewRowData(d => ({ ...d, amountCents: isNaN(cents) ? 0 : cents }));
                             }}
+                            onBlur={(e) => {
+                              const raw = e.target.value;
+                              if (raw && isNaN(parseFloat(raw))) {
+                                const cents = parseNaturalAmount(raw);
+                                if (cents !== null) {
+                                  setNewRowData(d => ({ ...d, amountCents: cents }));
+                                }
+                              }
+                            }}
                             onKeyDown={(e) => {
                               if (e.key === 'Escape') handleCancelInlineRow();
                               if (e.key === 'Enter') handleSaveInlineRow();
                             }}
                             autoFocus={inlineNewRowField === 'amount'}
-                            type="number"
-                            step="0.01"
+                            type="text"
+                            inputMode="decimal"
                             className="h-7 w-20 text-xs bg-transparent border border-border/50 rounded px-2 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
                           />
                         </div>
@@ -1968,6 +2188,14 @@ export default function SpreadsheetPage() {
                     <tr
                       key={row.id}
                       onMouseEnter={() => handleRowMouseEnter(row.id)}
+                      onContextMenu={(e) => {
+                        if (selectedRows.size > 0 && isAdmin) {
+                          e.preventDefault();
+                          setContextCategorySubmenu(false);
+                          setContextDatePicker(false);
+                          setContextMenu({ x: e.clientX, y: e.clientY });
+                        }
+                      }}
                       className={cn(
                         'animate-in-up group/row',
                         'border-b border-border/50 transition-colors',
@@ -2293,8 +2521,8 @@ export default function SpreadsheetPage() {
             <div className="grid gap-2">
               <Label>Amount</Label>
               <Input
-                type="number"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={(newRowData.amountCents / 100).toFixed(2)}
                 onChange={(e) =>
                   setNewRowData({
@@ -2302,7 +2530,16 @@ export default function SpreadsheetPage() {
                     amountCents: Math.round(parseFloat(e.target.value || '0') * 100),
                   })
                 }
-                placeholder="0.00"
+                onBlur={(e) => {
+                  const raw = e.target.value;
+                  if (raw && isNaN(parseFloat(raw))) {
+                    const cents = parseNaturalAmount(raw);
+                    if (cents !== null) {
+                      setNewRowData({ ...newRowData, amountCents: cents });
+                    }
+                  }
+                }}
+                placeholder="0.00 or 'fifty dollars'"
               />
             </div>
           </div>
@@ -2417,6 +2654,120 @@ export default function SpreadsheetPage() {
         }}
         isPending={createMultiExpense.isPending}
       />
+
+      {contextMenu && (
+        <div
+          ref={contextMenuRef}
+          className="fixed z-50 min-w-[200px] rounded-xl border bg-card shadow-lg py-1 animate-in fade-in zoom-in-95"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <button
+            className="w-full text-left px-3 py-2 text-sm hover:bg-secondary transition-colors flex items-center gap-2"
+            onClick={() => {
+              setShowBulkDeleteConfirm(true);
+              setContextMenu(null);
+            }}
+          >
+            <Trash2 className="w-3.5 h-3.5 text-destructive" />
+            <span className="text-destructive">Delete {selectedRows.size} selected</span>
+          </button>
+          <div className="h-px bg-border my-1" />
+          <div className="relative">
+            <button
+              className="w-full text-left px-3 py-2 text-sm hover:bg-secondary transition-colors flex items-center gap-2 justify-between"
+              onClick={() => {
+                setContextCategorySubmenu(!contextCategorySubmenu);
+                setContextDatePicker(false);
+              }}
+            >
+              <span className="flex items-center gap-2">
+                <Tag className="w-3.5 h-3.5 text-muted-foreground" />
+                Set Category...
+              </span>
+              <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+            </button>
+            {contextCategorySubmenu && (
+              <div className="absolute left-full top-0 ml-1 min-w-[160px] rounded-xl border bg-card shadow-lg py-1 animate-in fade-in zoom-in-95 max-h-[300px] overflow-y-auto">
+                {(() => {
+                  const selectedTypes = new Set(
+                    paginatedRows.filter(r => selectedRows.has(r.id)).map(r => r.type)
+                  );
+                  const hasCharges = selectedTypes.has('charge');
+                  const hasExpenses = selectedTypes.has('expense');
+                  const categories: Array<{ value: string; label: string }> = [];
+                  if (hasCharges) {
+                    CHARGE_CATEGORIES.forEach(cat => {
+                      if (!categories.find(c => c.value === cat)) {
+                        categories.push({ value: cat, label: CHARGE_CATEGORY_LABELS[cat] });
+                      }
+                    });
+                  }
+                  if (hasExpenses) {
+                    EXPENSE_CATEGORIES.forEach(cat => {
+                      if (!categories.find(c => c.value === cat)) {
+                        categories.push({ value: cat, label: EXPENSE_CATEGORY_LABELS[cat] });
+                      }
+                    });
+                  }
+                  return categories.map(cat => (
+                    <button
+                      key={cat.value}
+                      className="w-full text-left px-3 py-1.5 text-sm hover:bg-secondary transition-colors"
+                      onClick={() => handleBulkSetCategory(cat.value)}
+                    >
+                      {cat.label}
+                    </button>
+                  ));
+                })()}
+              </div>
+            )}
+          </div>
+          <div className="relative">
+            <button
+              className="w-full text-left px-3 py-2 text-sm hover:bg-secondary transition-colors flex items-center gap-2 justify-between"
+              onClick={() => {
+                setContextDatePicker(!contextDatePicker);
+                setContextCategorySubmenu(false);
+              }}
+            >
+              <span className="flex items-center gap-2">
+                <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
+                Set Date...
+              </span>
+              <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+            </button>
+            {contextDatePicker && (
+              <div className="absolute left-full top-0 ml-1 rounded-xl border bg-card shadow-lg p-2 animate-in fade-in zoom-in-95">
+                <DatePicker
+                  value=""
+                  onChange={(date) => {
+                    if (date) handleBulkSetDate(new Date(date).toISOString());
+                  }}
+                />
+              </div>
+            )}
+          </div>
+          <div className="h-px bg-border my-1" />
+          <button
+            className="w-full text-left px-3 py-2 text-sm hover:bg-secondary transition-colors flex items-center gap-2"
+            onClick={handleCopyRows}
+          >
+            <Copy className="w-3.5 h-3.5 text-muted-foreground" />
+            Copy {selectedRows.size} row{selectedRows.size !== 1 ? 's' : ''}
+          </button>
+          <button
+            className="w-full text-left px-3 py-2 text-sm hover:bg-secondary transition-colors flex items-center gap-2"
+            onClick={() => {
+              handleAskAI();
+              setContextMenu(null);
+            }}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-muted-foreground" />
+            Ask AI about {selectedRows.size} row{selectedRows.size !== 1 ? 's' : ''}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

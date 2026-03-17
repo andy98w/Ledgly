@@ -3,12 +3,12 @@
 import { useState, useMemo, useEffect, useCallback, memo } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Plus, CreditCard, AlertCircle, TrendingUp, Wallet, Search, MoreHorizontal, Pencil, Trash2, Loader2, ChevronDown, Link2, Check, Users, X, UserPlus, Receipt, MoreVertical, FileSpreadsheet, FileText, Mail, RefreshCw, ArrowDownLeft, ArrowUpRight, EyeOff, RotateCcw } from 'lucide-react';
+import { Plus, CreditCard, AlertCircle, TrendingUp, Wallet, Search, MoreHorizontal, Pencil, Trash2, Loader2, ChevronDown, Link2, Check, Users, X, UserPlus, Receipt, MoreVertical, FileSpreadsheet, FileText, Mail, RefreshCw, ArrowDownLeft, ArrowUpRight, EyeOff, RotateCcw, Upload } from 'lucide-react';
 import { useAutoAllocateToCharge, useRemoveAllocation, useBulkAutoAllocate } from '@/lib/queries/payments';
 import { cn } from '@/lib/utils';
 import { groupCharges } from '@/lib/utils/charge-grouping';
 import { calculateNameSimilarity } from '@/lib/utils/name-similarity';
-import { usePayments, useUpdatePayment, useDeletePayment, useRestorePayment, useAllocatePayment, useBulkDeletePayments } from '@/lib/queries/payments';
+import { usePayments, useUpdatePayment, useDeletePayment, useRestorePayment, useAllocatePayment, useBulkDeletePayments, useImportBankCsv } from '@/lib/queries/payments';
 import { useCharges, useBulkCreateCharges } from '@/lib/queries/charges';
 import { useMembers, useCreateMembers, useDeleteMember } from '@/lib/queries/members';
 import { useAuthStore, useIsAdminOrTreasurer } from '@/lib/stores/auth';
@@ -69,6 +69,7 @@ import {
 } from '@/components/ui/tooltip';
 import { BatchActionsBar } from '@/components/ui/batch-actions-bar';
 import { ExportDropdown } from '@/components/export-dropdown';
+import { BankCsvImportDialog } from '@/components/import/bank-csv-import-dialog';
 import { exportCSV, exportPDF } from '@/lib/export';
 
 interface EditPaymentData {
@@ -278,6 +279,8 @@ export default function PaymentsPage() {
   const restoreImportAction = useRestoreImport();
   const disconnectGmail = useDisconnectGmail();
   const [importsExpanded, setImportsExpanded] = useState(false);
+  const [bankCsvOpen, setBankCsvOpen] = useState(false);
+  const importBankCsv = useImportBankCsv();
 
   const gmailConnected = gmailStatus?.connected;
   const gmailImports = gmailImportsData?.data || [];
@@ -890,6 +893,13 @@ export default function PaymentsPage() {
     else exportPDF('Payments', headers, rows, filename);
   };
 
+  const handleBankCsvImport = async (rows: Array<{ date: string; description: string; amount: number }>, source: string) => {
+    if (!currentOrgId) throw new Error('No org selected');
+    return importBankCsv.mutateAsync(
+      { orgId: currentOrgId, rows, source },
+    );
+  };
+
   const handleGmailSync = () => {
     if (!currentOrgId) return;
     syncGmail.mutate(
@@ -944,6 +954,12 @@ export default function PaymentsPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  {isAdmin && (
+                    <DropdownMenuItem onClick={() => setBankCsvOpen(true)} className="cursor-pointer">
+                      <Upload className="w-4 h-4 mr-2" />
+                      Import Bank Statement
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem onClick={() => handleExportPayments('csv')} className="cursor-pointer">
                     <FileSpreadsheet className="w-4 h-4 mr-2" />
                     Export CSV
@@ -1689,6 +1705,12 @@ export default function PaymentsPage() {
           Delete
         </Button>
       </BatchActionsBar>
+
+      <BankCsvImportDialog
+        open={bankCsvOpen}
+        onOpenChange={setBankCsvOpen}
+        onImport={handleBankCsvImport}
+      />
     </div>
   );
 }

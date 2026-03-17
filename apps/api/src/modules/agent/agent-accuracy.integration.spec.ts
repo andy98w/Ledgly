@@ -1,4 +1,3 @@
-import { describe, it, expect, beforeAll } from '@jest/globals';
 import { TEST_CASES } from './agent-prompt.spec';
 
 /**
@@ -34,8 +33,8 @@ Return ONLY the JSON array, no markdown.`,
   });
 
   const text = response.content
-    .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
-    .map(b => b.text)
+    .filter((b: any) => b.type === 'text')
+    .map((b: any) => b.text)
     .join('');
 
   try {

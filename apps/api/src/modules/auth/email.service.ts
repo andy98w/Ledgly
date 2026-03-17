@@ -285,6 +285,80 @@ export class EmailService {
     }
   }
 
+  async sendWeeklyDigest(
+    email: string,
+    orgName: string,
+    stats: {
+      paymentsCount: number;
+      paymentsTotalCents: number;
+      chargesCreated: number;
+      expensesRecorded: number;
+      newMembers: number;
+      outstandingCents: number;
+      overdueCount: number;
+    },
+    dashboardUrl: string,
+  ): Promise<void> {
+    const from = this.configService.get<string>('EMAIL_FROM', 'Ledgly <noreply@ledgly.app>');
+
+    if (!this.resend) {
+      this.logger.warn(`Resend not configured — skipping weekly digest to ${email}`);
+      return;
+    }
+
+    const fmt = (cents: number) => `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+
+    const weekSummaryParts: string[] = [];
+    if (stats.paymentsCount > 0)
+      weekSummaryParts.push(`${stats.paymentsCount} payment${stats.paymentsCount !== 1 ? 's' : ''} (${fmt(stats.paymentsTotalCents)})`);
+    if (stats.chargesCreated > 0)
+      weekSummaryParts.push(`${stats.chargesCreated} new charge${stats.chargesCreated !== 1 ? 's' : ''}`);
+    if (stats.expensesRecorded > 0)
+      weekSummaryParts.push(`${stats.expensesRecorded} expense${stats.expensesRecorded !== 1 ? 's' : ''}`);
+    if (stats.newMembers > 0)
+      weekSummaryParts.push(`${stats.newMembers} new member${stats.newMembers !== 1 ? 's' : ''}`);
+
+    const weekLine = weekSummaryParts.length > 0
+      ? `This week: ${weekSummaryParts.join(', ')}`
+      : 'No activity this week';
+
+    const highlights: string[] = [];
+    if (stats.overdueCount > 0)
+      highlights.push(`${stats.overdueCount} charge${stats.overdueCount !== 1 ? 's' : ''} overdue`);
+    if (stats.outstandingCents > 0)
+      highlights.push(`${fmt(stats.outstandingCents)} outstanding`);
+
+    const highlightsHtml = highlights.length > 0
+      ? `<div style="background: #FEF9EE; border-left: 4px solid #F59E0B; border-radius: 8px; padding: 12px 16px; margin: 0 0 24px;">
+            ${highlights.map((h) => `<p style="margin: 0; color: #92400E; font-size: 14px; line-height: 1.6;">${h}</p>`).join('')}
+          </div>`
+      : '';
+
+    try {
+      await this.resend.emails.send({
+        from,
+        to: email,
+        subject: `Weekly Summary — ${orgName}`,
+        html: this.wrapTemplate(`
+          <h1 style="margin: 0 0 8px; font-size: 22px; color: #111;">Weekly Summary</h1>
+          <p style="margin: 0 0 24px; color: #999; font-size: 14px;">${orgName}</p>
+          <div style="background: #F9FAFB; border-radius: 8px; padding: 16px 20px; margin: 0 0 20px;">
+            <p style="margin: 0; color: #333; font-size: 15px; line-height: 1.6;">${weekLine}</p>
+          </div>
+          ${highlightsHtml}
+          <a href="${dashboardUrl}" style="display: inline-block; background: #111; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500;">
+            View Dashboard
+          </a>
+          <p style="margin: 24px 0 0; color: #bbb; font-size: 12px;">
+            Sent every Monday by Ledgly
+          </p>
+        `),
+      });
+    } catch (error) {
+      this.logger.error(`Failed to send weekly digest to ${email}`, error);
+    }
+  }
+
   private wrapTemplate(content: string): string {
     return `<!DOCTYPE html>
       <html>

@@ -272,6 +272,31 @@ export function useBulkAutoAllocate() {
   });
 }
 
+export function useImportBankCsv() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      orgId,
+      rows,
+      source,
+    }: {
+      orgId: string;
+      rows: Array<{ date: string; description: string; amount: number }>;
+      source: string;
+    }) => api.post<{ imported: number; skipped: number; duplicates: number }>(
+      `/organizations/${orgId}/payments/import-bank-csv`,
+      { rows, source },
+    ),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.payments.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.expenses.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all(variables.orgId) });
+    },
+  });
+}
+
 export function useAutoAllocateToCharge() {
   const queryClient = useQueryClient();
 

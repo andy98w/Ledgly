@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/dialog';
 import { AvatarGradient } from '@/components/ui/avatar-gradient';
 import { ChargeTemplates, type ChargeTemplate } from '@/components/charges/charge-templates';
+import { parseNaturalAmount } from '@/lib/utils/natural-language';
 
 interface ChargeCreateDialogProps {
   open: boolean;
@@ -213,12 +214,19 @@ export function ChargeCreateDialog({
                     <Label htmlFor="charge-amount">Amount ($)</Label>
                     <Input
                       id="charge-amount"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      placeholder="0.00"
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="0.00 or 'fifty dollars'"
                       value={formData.amount}
                       onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                      onBlur={() => {
+                        if (formData.amount && isNaN(parseFloat(formData.amount))) {
+                          const cents = parseNaturalAmount(formData.amount);
+                          if (cents !== null) {
+                            setFormData({ ...formData, amount: (cents / 100).toFixed(2) });
+                          }
+                        }
+                      }}
                     />
                   </div>
                   <div className="space-y-2">
