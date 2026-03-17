@@ -19,8 +19,22 @@ export class NotificationChannelsService {
     return `${webUrl}/join?code=${joinCode}`;
   }
 
+  private async appendFooter(orgId: string, message: string): Promise<string> {
+    try {
+      const org = await this.prisma.organization.findUnique({ where: { id: orgId }, select: { joinCode: true } });
+      const joinLink = this.getJoinLink(org?.joinCode ?? null);
+      const footer = joinLink
+        ? `\n—\nLedgly · ${joinLink}`
+        : '\n—\nLedgly';
+      return message + footer;
+    } catch {
+      return message + '\n—\nLedgly';
+    }
+  }
+
   async broadcastToOrg(orgId: string, message: string): Promise<void> {
-    await this.groupmeService.postMessage(orgId, message).catch(() => {});
+    const fullMessage = await this.appendFooter(orgId, message);
+    await this.groupmeService.postMessage(orgId, fullMessage).catch(() => {});
 
     const discordConns = await this.prisma.discordConnection.findMany({
       where: { orgId, isActive: true },
@@ -30,7 +44,7 @@ export class NotificationChannelsService {
         await fetch(conn.webhookUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: message }),
+          body: JSON.stringify({ content: fullMessage }),
         });
       } catch {}
     }
@@ -43,7 +57,7 @@ export class NotificationChannelsService {
         await fetch(conn.webhookUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: message }),
+          body: JSON.stringify({ text: fullMessage }),
         });
       } catch {}
     }
@@ -61,8 +75,6 @@ export class NotificationChannelsService {
   }
 
   async notifyWeeklySummary(orgId: string, stats: { paymentsCount: number; collectedDollars: string; outstandingDollars: string; overdueCount: number }): Promise<void> {
-    const org = await this.prisma.organization.findUnique({ where: { id: orgId }, select: { joinCode: true } });
-    const joinLink = this.getJoinLink(org?.joinCode ?? null);
     const lines = [
       `\uD83D\uDCCA Weekly Summary`,
       `\u2022 ${stats.paymentsCount} payments received ($${stats.collectedDollars})`,
@@ -70,9 +82,6 @@ export class NotificationChannelsService {
     ];
     if (stats.overdueCount > 0) {
       lines.push(`\u2022 ${stats.overdueCount} overdue charge${stats.overdueCount !== 1 ? 's' : ''}`);
-    }
-    if (joinLink) {
-      lines.push(`\nJoin: ${joinLink}`);
     }
     await this.broadcastToOrg(orgId, lines.join('\n'));
   }
