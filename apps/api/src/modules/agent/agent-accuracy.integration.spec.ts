@@ -1,19 +1,86 @@
 import { TEST_CASES } from './agent-prompt.spec';
 
-/**
- * Integration test that runs each test case against the real AI agent.
- * Requires ANTHROPIC_API_KEY and a running database.
- *
- * Run: ANTHROPIC_API_KEY=sk-... pnpm --filter api test -- --testPathPattern=agent-accuracy --runInBand
- *
- * This test measures prompt accuracy — how often the AI picks the right tool
- * for a given natural language command.
- */
-
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-
-// Skip if no API key
 const describeIfKey = ANTHROPIC_API_KEY ? describe : describe.skip;
+
+const today = new Date().toISOString().slice(0, 10);
+
+const SYSTEM_PROMPT = `You are Ledgly — the built-in assistant for this organization's financial platform. You ARE the platform speaking directly to the user.
+
+Today's date is ${today}.
+
+## What you can do
+- Add, edit, or remove members
+- Create or void charges (single or grouped for multiple members)
+- Create or delete expenses (single or multi-line-item)
+- Record payments and allocate/deallocate them to charges
+- Send payment reminders for unpaid charges
+- Get financial dashboard stats and expense summaries
+- Look up members, charges, payments, expenses, and balances
+- Generate financial reports for any period
+
+## Examples
+User: "charge everyone $50 for spring dues"
+→ list_members (silent) → create_multi_charge(membershipIds=all, amountCents=5000, category=DUES, title="Spring Dues")
+
+User: "charge Bryan $50 for dues and Sarah $30 for event fee"
+→ list_members (silent) → create_charges(Bryan, 5000, DUES, "Dues") + create_charges(Sarah, 3000, EVENT, "Event Fee")
+
+User: "charge X, Y, Z to A, B, C respectively"
+→ list_members (silent) → create_charges(A, X) + create_charges(B, Y) + create_charges(C, Z)
+
+User: "add expense: cups $15, plates $20, napkins $5"
+→ create_multi_expense(title="Event Supplies", children=[{title:"cups",amount:1500},{title:"plates",amount:2000},{title:"napkins",amount:500}])
+
+User: "record that Bryan paid $50 on venmo"
+→ list_members (silent) → record_payments([{membershipId=Bryan, amount=5000, source="venmo"}])
+
+User: "match Bryan's payment to his dues charge"
+→ list_payments + list_charges (silent) → allocate_payment(paymentId, chargeId, amount)
+
+User: "auto match all payments"
+→ list_charges (silent) → auto_allocate_payment for each unmatched charge
+
+User: "send reminders for all overdue charges"
+→ list_charges(status=OPEN, overdue=true) (silent) → send_reminders(chargeIds=[...])
+
+User: "undo that"
+→ Look at [Actions confirmed. Results: ...] → call reverse tool
+
+User: "remove the due date"
+→ list_charges (silent) → update_charge(chargeId, dueDate=null)
+
+User: "convert that expense to a charge"
+→ list_expenses (silent) → delete_expenses + create_charges (same amount/title)
+
+User: "extend that charge to all members"
+→ void original charge → create_multi_charge with all members
+
+User: "what does Bryan owe"
+→ get_balances (silent) → respond with Bryan's balance
+
+User: "who hasn't paid yet"
+→ list_charges(status=OPEN) (silent) → respond with unpaid members list
+
+If nothing matches a lookup, say it doesn't exist and offer to create it.
+
+## Date handling
+- Date without year for expenses: default current year, if future use previous year
+- Date without year for charges: always current year
+
+## Undo/Redo
+- "undo" → reverse the last confirmed action using the opposite tool
+- "redo" → re-execute the last undone action
+
+## Multi-charge rule
+Same charge for all members → one multi-charge. Different charges per member → separate tool calls. "Respectively" maps items 1:1.
+
+## Natural language
+Parse "$5k", "fifty bucks", "last friday", etc. Fuzzy-match member names. Prefer the most likely interpretation.
+
+Current organization: "Test Fraternity", 5 active members, 3 outstanding charges.
+
+Now respond to the user's command with ONLY a JSON array of the tool calls you would make. Each tool call: {"toolName": "...", "args": {...}}. Include silent lookups. If off-topic/incomplete/dangerous, return []. Return ONLY the JSON array, no markdown.`;
 
 async function parseCommand(query: string): Promise<{ toolName: string; args: Record<string, any> }[]> {
   const Anthropic = (await import('@anthropic-ai/sdk')).default;
@@ -22,13 +89,7 @@ async function parseCommand(query: string): Promise<{ toolName: string; args: Re
   const response = await client.messages.create({
     model: 'claude-sonnet-4-20250514',
     max_tokens: 1024,
-    system: `You are a test harness. Given a natural language command for an org financial management tool, respond with ONLY a JSON array of tool calls that should be made. Each tool call is: {"toolName": "...", "args": {...}}.
-
-Available tools: list_members, list_charges, list_payments, list_expenses, get_balances, get_dashboard_stats, get_expense_summary, get_insights, generate_report, query_activity, create_charges, create_multi_charge, create_expense, create_multi_expense, add_members, record_payments, update_member, update_charge, update_expense, void_charges, delete_expenses, remove_members, delete_payments, restore_charges, restore_expenses, restore_members, restore_payments, allocate_payment, auto_allocate_payment, deallocate_payment, send_reminders, import_csv.
-
-If the command is off-topic, incomplete, or dangerous, return [].
-If it requires looking something up first (silently), include the lookup tool AND the action tool.
-Return ONLY the JSON array, no markdown.`,
+    system: SYSTEM_PROMPT,
     messages: [{ role: 'user', content: query }],
   });
 
@@ -47,7 +108,6 @@ Return ONLY the JSON array, no markdown.`,
 describeIfKey('Agent Prompt Accuracy', () => {
   const results: { input: string; pass: boolean; expected: string; actual: string; description?: string }[] = [];
 
-  // Increase timeout for API calls
   jest.setTimeout(120_000);
 
   for (const tc of TEST_CASES) {
@@ -56,7 +116,6 @@ describeIfKey('Agent Prompt Accuracy', () => {
       const actualToolNames = actions.map(a => a.toolName);
 
       if (tc.expected.length === 0) {
-        // For undo/redo/edge cases, we just check the AI returns something reasonable
         results.push({
           input: tc.input,
           pass: true,
@@ -69,12 +128,10 @@ describeIfKey('Agent Prompt Accuracy', () => {
 
       const expectedToolNames = tc.expected.map(e => e.toolName);
 
-      // Check that all expected tools are present (order doesn't matter, extras like lookups are OK)
       const allExpectedPresent = expectedToolNames.every(expected =>
         actualToolNames.includes(expected),
       );
 
-      // Check args if specified
       let argsMatch = true;
       if (allExpectedPresent) {
         for (const exp of tc.expected) {
