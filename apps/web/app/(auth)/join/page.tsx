@@ -189,12 +189,16 @@ function JoinForm() {
           </div>
         ) : (
           <div className="space-y-3">
-            <Link href={`/login?joinCode=${submittedCode}`}>
+            <Link href={`/login?joinCode=${submittedCode}`} onClick={() => {
+              try { localStorage.setItem('ledgly_pending_join', submittedCode); } catch {}
+            }}>
               <Button className="w-full h-12 hover:opacity-90 transition-opacity font-medium">
                 Sign in to join
               </Button>
             </Link>
-            <Link href={`/register?joinCode=${submittedCode}`}>
+            <Link href={`/register?joinCode=${submittedCode}`} onClick={() => {
+              try { localStorage.setItem('ledgly_pending_join', submittedCode); } catch {}
+            }}>
               <Button variant="outline" className="w-full h-12 font-medium">
                 Create account to join
               </Button>

@@ -20,7 +20,7 @@ function RegisterForm() {
 
   const inviteToken = searchParams.get('invite');
   const legacyEmail = searchParams.get('email') || '';
-  const joinCode = searchParams.get('joinCode');
+  const joinCode = searchParams.get('joinCode') || (typeof window !== 'undefined' ? localStorage.getItem('ledgly_pending_join') : null);
 
   const { data: inviteData, isLoading: inviteLoading, error: inviteError } = useResolveInvite(inviteToken);
   const { data: joinCodeData } = useResolveJoinCode(joinCode);

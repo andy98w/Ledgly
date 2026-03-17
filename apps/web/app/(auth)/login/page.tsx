@@ -25,7 +25,7 @@ function LoginForm() {
   const joinOrg = useJoinOrganization();
   const setCurrentOrgId = useAuthStore((s) => s.setCurrentOrgId);
   const searchParams = useSearchParams();
-  const joinCode = searchParams.get('joinCode');
+  const joinCode = searchParams.get('joinCode') || (typeof window !== 'undefined' ? localStorage.getItem('ledgly_pending_join') : null);
 
   const [view, setView] = useState<LoginView>('login');
   const [email, setEmail] = useState('');
@@ -45,11 +45,12 @@ function LoginForm() {
         try {
           const result = await joinOrg.mutateAsync(joinCode);
           setCurrentOrgId(result.orgId);
+          try { localStorage.removeItem('ledgly_pending_join'); } catch {}
           toast({ title: result.status === 'PENDING' ? 'Join request sent!' : `Joined ${result.orgName}!` });
           window.location.href = '/portal';
           return;
         } catch {
-          // Join failed (e.g., already a member) — continue with normal redirect
+          try { localStorage.removeItem('ledgly_pending_join'); } catch {}
         }
       }
 
