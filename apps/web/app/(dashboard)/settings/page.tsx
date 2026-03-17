@@ -1588,9 +1588,9 @@ export default function SettingsPage() {
             <MotionCardContent>
               <div className="space-y-4">
                 {/* Active rules list */}
-                {(reminderRules as any)?.data?.length > 0 ? (
+                {(reminderRules as any)?.length > 0 ? (
                   <div className="space-y-2">
-                    {(reminderRules as any).data.map((rule: { id: string; triggerType: string; daysOffset: number; isActive: boolean }) => (
+                    {(reminderRules as any).map((rule: { id: string; triggerType: string; daysOffset: number; isActive: boolean }) => (
                       <div
                         key={rule.id}
                         className="flex items-center justify-between p-3 rounded-xl bg-secondary/30"
