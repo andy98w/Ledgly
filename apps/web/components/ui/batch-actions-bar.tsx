@@ -13,8 +13,8 @@ export function BatchActionsBar({ selectedCount, onClear, children }: BatchActio
   if (selectedCount === 0) return null;
 
   return (
-    <div className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-40 animate-in slide-in-from-bottom-4 fade-in-0 duration-200" role="toolbar" aria-label={`${selectedCount} items selected`}>
-      <div className="flex items-center gap-3 rounded-xl border border-border/50 bg-card/90 backdrop-blur-xl px-4 py-2.5 shadow-lg max-w-[calc(100vw-2rem)]">
+    <div className="sticky bottom-4 z-40 flex justify-center pointer-events-none animate-in slide-in-from-bottom-4 fade-in-0 duration-200" role="toolbar" aria-label={`${selectedCount} items selected`}>
+      <div className="pointer-events-auto flex items-center gap-3 rounded-xl border border-border/50 bg-card/95 backdrop-blur-xl px-4 py-2.5 shadow-lg">
         <span className="text-sm font-medium whitespace-nowrap">
           {selectedCount} selected
         </span>
