@@ -111,6 +111,9 @@ const MemberCard = memo(function MemberCard({
                   {member.displayName}
                   {isSelf && <span className="text-muted-foreground font-normal"> (You)</span>}
                 </p>
+                {(member.user?.email || member.invitedEmail) && (
+                  <p className="text-xs text-muted-foreground truncate">{member.user?.email || member.invitedEmail}</p>
+                )}
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
                   <Badge
                     variant={member.role === 'OWNER' ? 'default' : member.role === 'ADMIN' ? 'default' : member.role === 'TREASURER' ? 'secondary' : 'outline'}
