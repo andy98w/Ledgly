@@ -342,10 +342,19 @@ function EditMemberDialog({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="John Doe"
+                maxLength={100}
                 className="h-11 bg-secondary/50 border-border/50 focus:border-primary"
                 required
               />
             </div>
+            {(member?.user?.email || member?.invitedEmail) && (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Email</Label>
+                <p className="text-sm text-muted-foreground bg-secondary/30 px-3 py-2.5 rounded-lg">
+                  {member.user?.email || member.invitedEmail}
+                </p>
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="edit-role" className="text-sm font-medium">Role</Label>
               <Select value={role} onValueChange={(v) => setRole(v as 'ADMIN' | 'TREASURER' | 'MEMBER')} disabled={!canEditRole}>
