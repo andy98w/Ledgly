@@ -138,6 +138,7 @@ Return ONLY the JSON object, no markdown or explanation.`;
 
       const complexity = this.detectComplexity(messages);
       const model = complexity === 'complex' ? 'claude-opus-4-20250514' : 'claude-sonnet-4-20250514';
+      const useThinking = complexity === 'complex';
 
       const MAX_TOOL_ROUNDS = 10;
       let toolRounds = 0;
@@ -147,13 +148,17 @@ Return ONLY the JSON object, no markdown or explanation.`;
           yield { type: 'text', content: '\n\nI\'ve reached the maximum number of lookups for this request. Please try a more specific question.' };
           break;
         }
-        const stream = this.anthropic.messages.stream({
+        const streamOptions: any = {
           model,
           max_tokens: 4096,
           system: systemPrompt,
           messages: anthropicMessages,
           tools: toolDefinitions,
-        });
+        };
+        if (useThinking && toolRounds === 1) {
+          streamOptions.thinking = { type: 'enabled', budget_tokens: 2000 };
+        }
+        const stream = this.anthropic.messages.stream(streamOptions);
 
         let currentText = '';
         const toolUseBlocks: Array<{ id: string; name: string; input: any }> = [];
@@ -259,7 +264,7 @@ Return ONLY the JSON object, no markdown or explanation.`;
               toolResults.push({
                 type: 'tool_result',
                 tool_use_id: block.id,
-                content: `Error: ${err.message}`,
+                content: `Error: ${err.message}. Try a different approach or ask the user for clarification.`,
                 is_error: true,
               });
             }
@@ -1585,15 +1590,39 @@ The user has ${rows.length} row${rows.length !== 1 ? 's' : ''} selected in the s
 
   private async buildMemorySection(orgId: string): Promise<string> {
     try {
+      const sections: string[] = [];
+
       const memories = await this.prisma.agentMemory.findMany({
         where: { orgId },
         orderBy: { createdAt: 'desc' },
         take: 10,
         select: { pattern: true },
       });
-      if (memories.length === 0) return '';
-      const lines = memories.map((m) => `- ${m.pattern}`).join('\n');
-      return `\n\n## This org's common patterns\n${lines}`;
+      if (memories.length > 0) {
+        sections.push(`## This org's common patterns\n${memories.map((m) => `- ${m.pattern}`).join('\n')}`);
+      }
+
+      const recentSessions = await this.prisma.agentSession.findMany({
+        where: { orgId },
+        orderBy: { updatedAt: 'desc' },
+        take: 3,
+        select: { title: true, messages: true },
+      });
+      if (recentSessions.length > 0) {
+        const summaries = recentSessions
+          .map((s) => {
+            const msgs = Array.isArray(s.messages) ? s.messages as any[] : [];
+            const userMsgs = msgs.filter((m: any) => m.role === 'user').slice(0, 3);
+            if (userMsgs.length === 0) return null;
+            return `- ${s.title || userMsgs[0]?.content?.slice(0, 80) || 'session'}`;
+          })
+          .filter(Boolean);
+        if (summaries.length > 0) {
+          sections.push(`## Recent conversations\n${summaries.join('\n')}`);
+        }
+      }
+
+      return sections.length > 0 ? '\n\n' + sections.join('\n\n') : '';
     } catch {
       return '';
     }
