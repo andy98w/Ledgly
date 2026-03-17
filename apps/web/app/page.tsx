@@ -5,18 +5,18 @@ import Link from 'next/link';
 import Image from 'next/image';
 import {
   ArrowRight,
-  Receipt,
-  RefreshCw,
-  Mail,
   Sparkles,
-  TrendingDown,
-  History,
   Check,
   DollarSign,
   Clock,
   CreditCard,
   Smartphone,
   Bot,
+  Table2,
+  Users,
+  MessageSquare,
+  Shield,
+  Download,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScrollReveal } from '@/components/ui/scroll-reveal';
@@ -26,114 +26,126 @@ import { ScrollReveal } from '@/components/ui/scroll-reveal';
 const howItWorks = [
   {
     step: 1,
-    title: 'Create Your Org',
+    title: 'Create Your Org & Invite Members',
     description:
-      'Sign up free, name your org, and invite members with a join code.',
+      'Sign up free, name your org, and share a join code. Members set up their profile in seconds.',
   },
   {
     step: 2,
-    title: 'Connect Gmail',
+    title: 'Connect Gmail and/or Your Bank',
     description:
-      'Link your Gmail — we auto-detect payment notifications from Venmo, Zelle, CashApp & PayPal.',
+      'Link Gmail to detect Venmo, Zelle, CashApp & PayPal notifications — or connect your bank directly via Plaid.',
   },
   {
     step: 3,
-    title: 'Track Everything',
+    title: 'Ledgly Does the Rest',
     description:
-      'Payments auto-match to dues. See who\u2019s paid, who hasn\u2019t, and let AI handle follow-ups.',
+      'Payments are auto-imported, matched to charges, and reminders are sent. You just review.',
   },
 ];
 
 const featureCards = [
   {
-    icon: Receipt,
-    title: 'Know Who Owes What — Instantly',
-    description:
-      'Create charges for dues, events, or fines. One glance shows every balance across your whole org.',
-  },
-  {
-    icon: RefreshCw,
-    title: 'Payments Match Themselves',
-    description:
-      'Incoming payments auto-match against unpaid charges. No manual bookkeeping ever again.',
-  },
-  {
-    icon: Mail,
-    title: 'Keep Using Venmo & Zelle',
-    description:
-      'Members pay how they already pay. We read the receipts from your Gmail — no new app for anyone.',
-  },
-  {
     icon: Sparkles,
-    title: 'Just Tell AI What You Need',
+    title: 'AI-Powered Management',
     description:
-      'Add members, create charges, record payments — type what you want in plain English and it\u2019s done.',
+      'Just tell Ledgly what you need in plain English. Create charges, record payments, send reminders — all from a conversation.',
   },
   {
-    icon: TrendingDown,
-    title: 'Track Where Money Goes',
+    icon: Download,
+    title: 'Auto-Import Payments',
     description:
-      'Categorize expenses by vendor and type. Gmail auto-detects outgoing payments too.',
+      'Connect Gmail or your bank account via Plaid. Venmo, Zelle, CashApp, and PayPal payments are imported and matched automatically.',
   },
   {
-    icon: History,
-    title: 'Every Action Logged & Undoable',
+    icon: Table2,
+    title: 'Smart Spreadsheet',
     description:
-      'Full audit trail of who did what and when. Undo or redo any change with one click.',
+      'A full ledger with column resizing, multi-sort, filters, keyboard navigation, and right-click bulk editing. Feels like Google Sheets, built for finances.',
+  },
+  {
+    icon: Users,
+    title: 'Member Portal',
+    description:
+      'Members see what they owe and pay with one tap via Venmo, CashApp, or PayPal deep links. No app download needed.',
+  },
+  {
+    icon: MessageSquare,
+    title: 'Group Chat Notifications',
+    description:
+      'Connect GroupMe, Discord, or Slack. Get payment confirmations, overdue reminders, and weekly summaries in your group chat.',
+  },
+  {
+    icon: Shield,
+    title: 'Bank-Grade Security',
+    description:
+      'Plaid for secure bank connections, encrypted data, role-based access, full audit trail with undo/redo on every action.',
   },
 ];
 
 const showcaseTabs = [
   {
-    label: 'Dashboard',
+    label: 'Home',
     slug: 'dashboard',
     description:
-      'Your full financial picture at a glance — unpaid dues, collected payments, overdue balances, and quick actions to manage everything.',
+      'Key metrics, activity feed, and AI suggestions at a glance.',
   },
   {
-    label: 'Members & Charges',
+    label: 'Spreadsheet',
     slug: 'members',
     description:
-      'See every member\u2019s payment history and balance. Create charges for dues, events, or fines and assign them instantly.',
+      'Full financial ledger with sort, filter, resize, and bulk editing.',
   },
   {
-    label: 'Gmail Inbox',
+    label: 'Members',
     slug: 'inbox',
     description:
-      'Venmo, Zelle, CashApp, and PayPal notifications auto-imported. Payments parsed and matched — just review and confirm.',
+      'Manage your team, see who owes what, send reminders.',
   },
   {
     label: 'AI Agent',
     slug: null,
     description:
-      'Manage your org in plain English. Add members, create charges, run reports — all from a single conversation.',
+      'Manage everything in plain English.',
   },
   {
-    label: 'Audit Log',
+    label: 'Member Portal',
     slug: 'audit-log',
     description:
-      'Every action tracked with full context. Undo and redo any change with one click for complete transparency.',
+      'Simple view for members to check balances and pay.',
   },
 ];
 
 const whyLedgly = [
   {
     icon: DollarSign,
-    title: 'No fees — ever',
-    description: 'Crowded charges 2.99% per transaction. Ledgly is 100% free.',
+    title: 'No fees',
+    description: 'Other tools charge 2\u20133% per transaction. Ledgly is free.',
   },
   {
     icon: Smartphone,
     title: 'Works with your existing apps',
     description:
-      'Members keep paying through Venmo, Zelle, or CashApp. No one downloads anything new.',
+      'Venmo, Zelle, CashApp, PayPal, Gmail, GroupMe, Discord, Slack \u2014 no new apps to download.',
   },
   {
     icon: Bot,
-    title: 'AI-powered',
+    title: 'AI that actually works',
     description:
-      'Natural language commands to manage your entire treasury. No competitor offers this.',
+      'Natural language commands, smart matching, proactive suggestions. Not a chatbot \u2014 a real financial assistant.',
   },
+];
+
+const integrations = [
+  { label: 'Venmo', category: 'payment' },
+  { label: 'Zelle', category: 'payment' },
+  { label: 'CashApp', category: 'payment' },
+  { label: 'PayPal', category: 'payment' },
+  { label: 'Gmail', category: 'sync' },
+  { label: 'Plaid', category: 'sync' },
+  { label: 'GroupMe', category: 'notification' },
+  { label: 'Discord', category: 'notification' },
+  { label: 'Slack', category: 'notification' },
 ];
 
 /* ─── Component ──────────────────────────────────────────────── */
@@ -354,6 +366,30 @@ export default function LandingPage() {
               </ScrollReveal>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* ── Integrations ──────────────────────────────────────── */}
+      <section className="relative py-16 px-6">
+        <div className="max-w-4xl mx-auto">
+          <ScrollReveal>
+            <h2 className="text-center text-2xl md:text-3xl font-bold tracking-tight mb-4">
+              Integrations
+            </h2>
+            <p className="text-center text-muted-foreground mb-10 max-w-md mx-auto leading-7">
+              Ledgly connects to the tools your org already uses.
+            </p>
+            <div className="flex flex-wrap justify-center gap-3">
+              {integrations.map((item) => (
+                <span
+                  key={item.label}
+                  className="inline-flex items-center rounded-full px-4 py-2 text-sm font-medium border border-border/50 bg-card/50 text-foreground"
+                >
+                  {item.label}
+                </span>
+              ))}
+            </div>
+          </ScrollReveal>
         </div>
       </section>
 
