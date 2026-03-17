@@ -1,20 +1,42 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
+import Link from 'next/link';
 import Image from 'next/image';
-import { Building2, ChevronDown, Check, LogOut } from 'lucide-react';
+import {
+  LayoutDashboard,
+  Users,
+  FileSpreadsheet,
+  Settings,
+  LogOut,
+  Building2,
+  ChevronDown,
+  Check,
+  PanelLeftClose,
+  PanelLeft,
+} from 'lucide-react';
 import { useMe, useLogout } from '@/lib/queries/auth';
 import { useAuthStore } from '@/lib/stores/auth';
+import { useSidebarStore } from '@/lib/stores/sidebar';
+import { MEMBERSHIP_ROLE_LABELS } from '@ledgly/shared';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AvatarGradient } from '@/components/ui/avatar-gradient';
+import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+
+const navItems = [
+  { href: '/portal', label: 'Home', icon: LayoutDashboard },
+  { href: '/portal/members', label: 'Members', icon: Users },
+  { href: '/portal/ledger', label: 'Ledger', icon: FileSpreadsheet },
+];
 
 export default function PortalLayout({
   children,
@@ -22,10 +44,13 @@ export default function PortalLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { data: user, isLoading, error } = useMe();
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
   const setCurrentOrgId = useAuthStore((s) => s.setCurrentOrgId);
   const logout = useLogout();
+  const isCollapsed = useSidebarStore((s) => s.isCollapsed);
+  const toggle = useSidebarStore((s) => s.toggle);
 
   useEffect(() => {
     if (error) {
@@ -73,87 +98,262 @@ export default function PortalLayout({
     return null;
   }
 
-  const hasMultipleOrgs = user.memberships.length > 1;
+  const currentOrg = currentMembership;
+  const allOrgs = user.memberships;
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-40 border-b border-border bg-card/80 backdrop-blur-xl">
-        <div className="mx-auto max-w-lg flex items-center justify-between h-14 px-4">
-          <div className="flex items-center gap-2.5">
-            <Image
-              src="/logo.png"
-              alt="Ledgly"
-              width={28}
-              height={28}
-              className="shrink-0"
-            />
-            <span className="font-bold text-base tracking-tight">Ledgly</span>
+    <div className="min-h-screen">
+      {/* Desktop Sidebar */}
+      <aside className={cn(
+        'hidden md:flex md:flex-col md:fixed md:inset-y-0 border-r border-border bg-card transition-all duration-300',
+        isCollapsed ? 'md:w-[68px]' : 'md:w-64',
+      )}>
+        <div className="flex flex-col flex-1 min-h-0">
+          <div className={cn('flex items-center justify-between h-16 border-b border-border', isCollapsed ? 'justify-center px-2' : 'px-5')}>
+            {isCollapsed ? (
+              <TooltipProvider delayDuration={0}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={toggle}
+                      className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+                    >
+                      <PanelLeft className="h-5 w-5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">Expand sidebar</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : (
+              <>
+                <Link href="/portal" className="flex items-center gap-3">
+                  <Image src="/logo.png" alt="Ledgly" width={36} height={36} className="shrink-0" />
+                  <span className="font-bold text-xl tracking-tight">Ledgly</span>
+                </Link>
+                <button
+                  onClick={toggle}
+                  className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+                >
+                  <PanelLeftClose className="h-5 w-5" />
+                </button>
+              </>
+            )}
           </div>
 
-          <div className="flex items-center gap-2">
-            {hasMultipleOrgs && (
+          {currentOrg && (
+            <div className={cn('py-4', isCollapsed ? 'px-2' : 'px-3')}>
               <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-secondary/50 hover:bg-secondary active:bg-secondary/80 transition-colors text-sm">
-                    <Building2 className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium max-w-[100px] truncate">
-                      {currentMembership?.orgName}
-                    </span>
-                    <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  {user.memberships.map((m) => (
+                {isCollapsed ? (
+                  <TooltipProvider delayDuration={0}>
+                    <Tooltip>
+                      <DropdownMenuTrigger asChild>
+                        <TooltipTrigger asChild>
+                          <button className="w-full flex items-center justify-center p-2.5 rounded-xl bg-secondary/50 hover:bg-secondary transition-colors">
+                            <div className="p-2 rounded-lg bg-primary/10">
+                              <Building2 className="h-4 w-4 text-primary" />
+                            </div>
+                          </button>
+                        </TooltipTrigger>
+                      </DropdownMenuTrigger>
+                      <TooltipContent side="right">{currentOrg.orgName}</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                ) : (
+                  <DropdownMenuTrigger asChild>
+                    <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-secondary/50 hover:bg-secondary transition-colors text-left">
+                      <div className="p-2 rounded-lg bg-primary/10">
+                        <Building2 className="h-4 w-4 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{currentOrg.orgName}</p>
+                        <p className="text-xs text-muted-foreground">{MEMBERSHIP_ROLE_LABELS[currentOrg.role as keyof typeof MEMBERSHIP_ROLE_LABELS] || currentOrg.role}</p>
+                      </div>
+                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                    </button>
+                  </DropdownMenuTrigger>
+                )}
+                <DropdownMenuContent align="start" className="w-56">
+                  {allOrgs.map((org) => (
                     <DropdownMenuItem
-                      key={m.orgId}
-                      onClick={() => setCurrentOrgId(m.orgId)}
+                      key={org.orgId}
+                      onClick={() => setCurrentOrgId(org.orgId)}
                       className="flex items-center gap-3 cursor-pointer"
                     >
                       <div className="p-1.5 rounded-lg bg-primary/10">
                         <Building2 className="h-3 w-3 text-primary" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{m.orgName}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {m.role === 'OWNER' ? 'Owner' : m.role === 'ADMIN' ? 'Admin' : m.role === 'TREASURER' ? 'Treasurer' : 'Member'}
-                        </p>
+                        <p className="text-sm font-medium truncate">{org.orgName}</p>
+                        <p className="text-xs text-muted-foreground">{MEMBERSHIP_ROLE_LABELS[org.role as keyof typeof MEMBERSHIP_ROLE_LABELS] || org.role}</p>
                       </div>
-                      {m.orgId === currentOrgId && (
+                      {org.orgId === currentOrgId && (
                         <Check className="h-4 w-4 text-primary" />
                       )}
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
-            )}
+            </div>
+          )}
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="rounded-full hover:ring-2 hover:ring-primary/20 active:ring-2 active:ring-primary/30 transition-all">
-                  <AvatarGradient name={user.name || user.email} size="md" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <div className="px-3 py-2">
-                  <p className="text-sm font-medium truncate">{user.name || 'User'}</p>
-                  <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-                </div>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={() => { logout(); window.location.href = '/login'; }}
-                  className="cursor-pointer text-destructive focus:text-destructive"
-                >
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Sign out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+          <Separator className="opacity-50" />
+
+          <nav className={cn('flex-1 py-4 space-y-1', isCollapsed ? 'px-2' : 'px-3')}>
+            <TooltipProvider delayDuration={0}>
+              {navItems.map((item) => {
+                const isActive = item.href === '/portal'
+                  ? pathname === '/portal'
+                  : pathname.startsWith(item.href);
+                const link = (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      'relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
+                      isCollapsed && 'justify-center px-0',
+                      isActive
+                        ? 'text-primary'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50',
+                    )}
+                  >
+                    {isActive && (
+                      <>
+                        <div className="absolute inset-0 bg-primary/8 rounded-xl transition-all" />
+                        <div className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-primary" />
+                      </>
+                    )}
+                    <item.icon className={cn('h-5 w-5 relative z-10 shrink-0', isActive && 'text-primary')} />
+                    {!isCollapsed && <span className="relative z-10">{item.label}</span>}
+                  </Link>
+                );
+
+                return isCollapsed ? (
+                  <Tooltip key={item.href}>
+                    <TooltipTrigger asChild>{link}</TooltipTrigger>
+                    <TooltipContent side="right">{item.label}</TooltipContent>
+                  </Tooltip>
+                ) : link;
+              })}
+            </TooltipProvider>
+          </nav>
+
+          <Separator className="opacity-50" />
+
+          <div className={cn('space-y-1', isCollapsed ? 'p-2' : 'p-3')}>
+            <TooltipProvider delayDuration={0}>
+              {isCollapsed ? (
+                <>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Link
+                        href="/portal/settings"
+                        className={cn(
+                          'flex w-full items-center justify-center py-2.5 rounded-xl text-sm font-medium transition-colors',
+                          pathname.startsWith('/portal/settings') ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50',
+                        )}
+                      >
+                        <Settings className="h-5 w-5" />
+                      </Link>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">Settings</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={() => { logout(); window.location.href = '/login'; }}
+                        className="flex w-full items-center justify-center py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+                      >
+                        <LogOut className="h-5 w-5" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">Sign out</TooltipContent>
+                  </Tooltip>
+                </>
+              ) : (
+                <>
+                  <Link
+                    href="/portal/settings"
+                    className={cn(
+                      'flex w-full items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors',
+                      pathname.startsWith('/portal/settings') ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50',
+                    )}
+                  >
+                    <Settings className="h-5 w-5" />
+                    Settings
+                  </Link>
+                  <button
+                    onClick={() => { logout(); window.location.href = '/login'; }}
+                    className="flex w-full items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+                  >
+                    <LogOut className="h-5 w-5" />
+                    Sign out
+                  </button>
+                </>
+              )}
+            </TooltipProvider>
           </div>
-        </div>
-      </header>
 
-      <main className="mx-auto max-w-lg py-6 px-4 pb-12">
-        {children}
+          {user && (
+            <div className={cn('border-t border-border', isCollapsed ? 'p-2' : 'p-3')}>
+              {isCollapsed ? (
+                <TooltipProvider delayDuration={0}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex items-center justify-center py-2">
+                        <AvatarGradient name={user.name || user.email} size="md" />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">
+                      <p className="font-medium">{user.name || 'User'}</p>
+                      <p className="text-xs text-muted-foreground">{user.email}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : (
+                <div className="flex items-center gap-3 px-3 py-2">
+                  <AvatarGradient name={user.name || user.email} size="md" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{user.name || 'User'}</p>
+                    <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </aside>
+
+      {/* Mobile Bottom Nav */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-background border-t safe-bottom">
+        <div className="flex items-center justify-around h-16">
+          {[...navItems, { href: '/portal/settings', label: 'Settings', icon: Settings }].map((item) => {
+            const isActive = item.href === '/portal'
+              ? pathname === '/portal'
+              : pathname.startsWith(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  'relative flex flex-col items-center justify-center flex-1 h-full touch-target transition-colors',
+                  isActive ? 'text-primary' : 'text-muted-foreground',
+                )}
+              >
+                <item.icon className={cn('h-5 w-5 transition-transform duration-150', isActive && 'scale-110')} />
+                <span className="text-xs mt-1">{item.label}</span>
+                {isActive && (
+                  <span className="absolute bottom-1.5 w-1 h-1 rounded-full bg-primary" />
+                )}
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
+
+      <main className={`pb-20 md:pb-0 transition-all duration-300 ${isCollapsed ? 'md:pl-[68px]' : 'md:pl-64'}`}>
+        <div className="container max-w-4xl py-8 px-4 md:px-8">
+          {children}
+        </div>
       </main>
     </div>
   );
