@@ -812,7 +812,13 @@ Return ONLY the JSON object, no markdown or explanation.`;
           throw new Error('chargeId is required');
         if (args.title) this.validateStringLength(args.title, 'title');
         if (args.amountCents !== undefined) this.validateAmount(args.amountCents);
-        if (args.dueDate && args.dueDate !== null) this.validateDate(args.dueDate, 'dueDate');
+        if (args.dueDate !== undefined) {
+          if (args.dueDate === null || args.dueDate === '' || args.dueDate === 'none' || args.dueDate === 'null') {
+            args.dueDate = null;
+          } else {
+            this.validateDate(args.dueDate, 'dueDate');
+          }
+        }
         break;
 
       case 'update_expense':

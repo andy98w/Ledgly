@@ -521,7 +521,11 @@ function UpdateFieldsEditor({
   const formatDisplay = (field: string, val: any) => {
     if (val == null || val === '') return '—';
     if (field === 'amountCents') return formatCents(val as number);
-    if (field === 'date' || field === 'dueDate') return new Date(val).toLocaleDateString();
+    if (field === 'date' || field === 'dueDate') {
+      if (val === null || val === 'null' || val === 'none') return 'No due date';
+      const d = new Date(val);
+      return isNaN(d.getTime()) ? '—' : d.toLocaleDateString();
+    }
     return String(val);
   };
 
@@ -575,12 +579,18 @@ function UpdateFieldsEditor({
 
           // Date field
           if (field === 'date' || field === 'dueDate') {
+            const dateVal = getFieldValue(field);
+            const isCleared = dateVal === null || dateVal === 'null' || dateVal === 'none' || dateVal === '';
             return (
               <FieldRow key={field} label={label}>
                 {oldVal !== undefined && isChanged && (
                   <><span className="line-through text-muted-foreground/60 text-sm">{formatDisplay(field, oldVal)}</span><span className="text-muted-foreground text-xs">→</span></>
                 )}
-                <DateInput value={String(getFieldValue(field) || '')} onChange={(v) => update(field, v)} />
+                {isCleared ? (
+                  <span className="text-sm text-muted-foreground">No due date</span>
+                ) : (
+                  <DateInput value={String(dateVal || '')} onChange={(v) => update(field, v)} />
+                )}
               </FieldRow>
             );
           }
