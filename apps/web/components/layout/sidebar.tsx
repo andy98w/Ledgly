@@ -434,6 +434,7 @@ export function Sidebar() {
                     placeholder="e.g., Alpha Beta Gamma"
                     value={newOrgName}
                     onChange={(e) => setNewOrgName(e.target.value)}
+                    maxLength={100}
                     className="h-11 bg-secondary/50 border-border/50 focus:border-primary"
                     autoFocus
                   />
@@ -441,7 +442,7 @@ export function Sidebar() {
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setShowCreateOrgDialog(false)}>Cancel</Button>
-                <Button type="submit" disabled={!newOrgName.trim() || createOrganization.isPending}>
+                <Button type="submit" disabled={newOrgName.trim().length < 3 || createOrganization.isPending}>
                   {createOrganization.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Creating...</> : 'Create'}
                 </Button>
               </DialogFooter>

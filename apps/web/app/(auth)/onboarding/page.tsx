@@ -249,6 +249,7 @@ function OnboardingWizard() {
                       placeholder="e.g., Alpha Beta Gamma, Chess Club"
                       value={orgName}
                       onChange={(e) => setOrgName(e.target.value)}
+                      maxLength={100}
                       className="h-11 bg-secondary/50 border-border/50 focus:border-primary"
                       autoFocus
                     />
@@ -256,7 +257,7 @@ function OnboardingWizard() {
                   <Button
                     type="submit"
                     className="w-full"
-                    disabled={!orgName.trim() || createOrganization.isPending}
+                    disabled={orgName.trim().length < 3 || createOrganization.isPending}
                   >
                     {createOrganization.isPending ? (
                       <>
@@ -515,6 +516,7 @@ function OnboardingWizard() {
                       placeholder="Name"
                       value={member.name}
                       onChange={(e) => updateMember(member.key, 'name', e.target.value)}
+                      maxLength={100}
                       className="h-9 bg-secondary/50 border-border/50 focus:border-primary"
                     />
                     <Input
@@ -522,6 +524,7 @@ function OnboardingWizard() {
                       type="email"
                       value={member.email}
                       onChange={(e) => updateMember(member.key, 'email', e.target.value)}
+                      maxLength={255}
                       className="h-9 bg-secondary/50 border-border/50 focus:border-primary"
                     />
                   </div>

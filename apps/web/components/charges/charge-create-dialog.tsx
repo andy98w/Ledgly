@@ -204,6 +204,7 @@ export function ChargeCreateDialog({
                       placeholder="e.g., Spring 2025 Dues"
                       value={formData.title}
                       onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                      maxLength={200}
                     />
                   </div>
                 </div>

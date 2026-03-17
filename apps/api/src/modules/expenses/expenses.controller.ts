@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { IsString, IsOptional, IsInt, Min, Max, IsArray, ArrayMinSize, ArrayMaxSize, ValidateNested } from 'class-validator';
+import { IsString, IsOptional, IsInt, Min, Max, IsArray, ArrayMinSize, ArrayMaxSize, ValidateNested, MinLength, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ExpensesService } from './expenses.service';
 import { Roles } from '../../common/decorators';
@@ -11,10 +11,13 @@ class CreateExpenseDto {
   category: string;
 
   @IsString()
+  @MinLength(1)
+  @MaxLength(200)
   title: string;
 
   @IsString()
   @IsOptional()
+  @MaxLength(500)
   description?: string;
 
   @IsInt()
@@ -27,6 +30,7 @@ class CreateExpenseDto {
 
   @IsString()
   @IsOptional()
+  @MaxLength(200)
   vendor?: string;
 
   @IsString()
@@ -41,10 +45,13 @@ class UpdateExpenseDto {
 
   @IsString()
   @IsOptional()
+  @MinLength(1)
+  @MaxLength(200)
   title?: string;
 
   @IsString()
   @IsOptional()
+  @MaxLength(500)
   description?: string;
 
   @IsInt()
@@ -59,6 +66,7 @@ class UpdateExpenseDto {
 
   @IsString()
   @IsOptional()
+  @MaxLength(200)
   vendor?: string;
 
   @IsString()
@@ -68,6 +76,8 @@ class UpdateExpenseDto {
 
 class MultiExpenseChildDto {
   @IsString()
+  @MinLength(1)
+  @MaxLength(200)
   title: string;
 
   @IsInt()
@@ -77,10 +87,12 @@ class MultiExpenseChildDto {
 
   @IsString()
   @IsOptional()
+  @MaxLength(200)
   vendor?: string;
 
   @IsString()
   @IsOptional()
+  @MaxLength(500)
   description?: string;
 }
 
@@ -89,10 +101,13 @@ class CreateMultiExpenseDto {
   category: string;
 
   @IsString()
+  @MinLength(1)
+  @MaxLength(200)
   title: string;
 
   @IsString()
   @IsOptional()
+  @MaxLength(500)
   description?: string;
 
   @IsString()
@@ -100,6 +115,7 @@ class CreateMultiExpenseDto {
 
   @IsString()
   @IsOptional()
+  @MaxLength(200)
   vendor?: string;
 
   @IsArray()

@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { IsString, IsEmail, IsOptional, IsEnum, IsArray, ValidateNested, ArrayMinSize, ArrayMaxSize } from 'class-validator';
+import { IsString, IsEmail, IsOptional, IsEnum, IsArray, ValidateNested, ArrayMinSize, ArrayMaxSize, MinLength, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 import { MembershipRole, MembershipStatus } from '@prisma/client';
 import { MembersService } from './members.service';
@@ -10,9 +10,12 @@ import { RolesGuard } from '../../common/guards';
 class CreateMemberDto {
   @IsEmail()
   @IsOptional()
+  @MaxLength(255)
   email?: string;
 
   @IsString()
+  @MinLength(1)
+  @MaxLength(100)
   name: string;
 
   @IsEnum(MembershipRole)
@@ -30,6 +33,8 @@ class CreateMembersBulkDto {
 class UpdateMemberDto {
   @IsString()
   @IsOptional()
+  @MinLength(1)
+  @MaxLength(100)
   name?: string;
 
   @IsEnum(MembershipRole)

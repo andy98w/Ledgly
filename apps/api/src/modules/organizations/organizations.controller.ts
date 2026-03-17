@@ -1,12 +1,16 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { IsString, IsOptional, IsArray, IsBoolean, IsObject } from 'class-validator';
+import { IsString, IsOptional, IsArray, IsBoolean, IsObject, MinLength, MaxLength } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { OrganizationsService } from './organizations.service';
 import { CurrentUser, CurrentUserData, Roles, Public } from '../../common/decorators';
 import { RolesGuard } from '../../common/guards';
 
 class CreateOrganizationDto {
   @IsString()
+  @MinLength(3)
+  @MaxLength(100)
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
   name: string;
 
   @IsString()
@@ -17,6 +21,9 @@ class CreateOrganizationDto {
 class UpdateOrganizationDto {
   @IsString()
   @IsOptional()
+  @MinLength(3)
+  @MaxLength(100)
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
   name?: string;
 
   @IsString()
@@ -30,6 +37,7 @@ class UpdateOrganizationDto {
 
   @IsString()
   @IsOptional()
+  @MaxLength(500)
   paymentInstructions?: string;
 
   @IsObject()

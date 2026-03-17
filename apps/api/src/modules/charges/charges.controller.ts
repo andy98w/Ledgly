@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { IsString, IsArray, IsEnum, IsOptional, IsInt, Min, Max, ValidateNested, ArrayMinSize, ArrayMaxSize } from 'class-validator';
+import { IsString, IsArray, IsEnum, IsOptional, IsInt, Min, Max, ValidateNested, ArrayMinSize, ArrayMaxSize, MinLength, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ChargeCategory, ChargeStatus } from '@prisma/client';
 import { ChargesService } from './charges.service';
@@ -16,6 +16,8 @@ class CreateChargeDto {
   category: ChargeCategory;
 
   @IsString()
+  @MinLength(1)
+  @MaxLength(200)
   title: string;
 
   @IsInt()
@@ -31,6 +33,8 @@ class CreateChargeDto {
 class UpdateChargeDto {
   @IsString()
   @IsOptional()
+  @MinLength(1)
+  @MaxLength(200)
   title?: string;
 
   @IsInt()
@@ -56,6 +60,8 @@ class BulkCreateChargeItemDto {
   category: ChargeCategory;
 
   @IsString()
+  @MinLength(1)
+  @MaxLength(200)
   title: string;
 
   @IsInt()
@@ -88,6 +94,8 @@ class CreateMultiChargeDto {
   category: ChargeCategory;
 
   @IsString()
+  @MinLength(1)
+  @MaxLength(200)
   title: string;
 
   @IsInt()

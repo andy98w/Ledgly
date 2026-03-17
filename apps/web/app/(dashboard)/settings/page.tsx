@@ -990,6 +990,7 @@ export default function SettingsPage() {
                   value={paymentInstructions}
                   onChange={(e) => setPaymentInstructions(e.target.value)}
                   placeholder="e.g., Venmo: @ThetaChi, Zelle: treasurer@theta.org"
+                  maxLength={500}
                   className="min-h-[100px] bg-secondary/30 border-border/50 focus:border-primary"
                 />
                 <Button
@@ -1301,6 +1302,7 @@ export default function SettingsPage() {
                 id="orgName"
                 value={newOrgName}
                 onChange={(e) => setNewOrgName(e.target.value)}
+                maxLength={100}
                 placeholder="e.g., Alpha Beta Gamma"
                 className="bg-secondary/30 border-border/50"
               />
@@ -1312,8 +1314,8 @@ export default function SettingsPage() {
             </Button>
             <Button
               onClick={handleCreateOrg}
-              disabled={createOrganization.isPending}
-             
+              disabled={createOrganization.isPending || newOrgName.trim().length < 3}
+
             >
               {createOrganization.isPending ? (
                 <>

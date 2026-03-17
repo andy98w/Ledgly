@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { IsString, IsOptional, IsArray, ValidateNested, IsInt, Min, Max, ArrayMinSize, ArrayMaxSize } from 'class-validator';
+import { IsString, IsOptional, IsArray, ValidateNested, IsInt, Min, Max, ArrayMinSize, ArrayMaxSize, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PaymentsService } from './payments.service';
 import { Roles } from '../../common/decorators';
@@ -21,10 +21,12 @@ class CreatePaymentDto {
 
   @IsString()
   @IsOptional()
+  @MaxLength(200)
   rawPayerName?: string;
 
   @IsString()
   @IsOptional()
+  @MaxLength(500)
   memo?: string;
 }
 
@@ -45,10 +47,12 @@ class UpdatePaymentDto {
 
   @IsString()
   @IsOptional()
+  @MaxLength(200)
   rawPayerName?: string;
 
   @IsString()
   @IsOptional()
+  @MaxLength(500)
   memo?: string;
 }
 
@@ -80,10 +84,12 @@ class BulkCreatePaymentItemDto {
 
   @IsString()
   @IsOptional()
+  @MaxLength(200)
   rawPayerName?: string;
 
   @IsString()
   @IsOptional()
+  @MaxLength(500)
   memo?: string;
 
   @IsString()

@@ -1870,6 +1870,7 @@ export default function SpreadsheetPage() {
                               if (e.key === 'Enter') handleSaveInlineRow();
                             }}
                             autoFocus={inlineNewRowField === 'member'}
+                            maxLength={200}
                             className="h-7 w-28 shrink-0 text-xs bg-transparent border border-border/50 rounded px-2 focus:outline-none focus:ring-1 focus:ring-primary/30"
                           />
                         ) : (
@@ -1914,6 +1915,7 @@ export default function SpreadsheetPage() {
                             if (e.key === 'Enter') handleSaveInlineRow();
                           }}
                           autoFocus={inlineNewRowField === 'description'}
+                          maxLength={newRowType === 'payment' ? 500 : 200}
                           className="h-7 flex-1 min-w-0 text-xs bg-transparent border border-border/50 rounded px-2 focus:outline-none focus:ring-1 focus:ring-primary/30"
                         />
                         <div className="flex items-center gap-1 shrink-0">
@@ -2230,6 +2232,7 @@ export default function SpreadsheetPage() {
                   })
                 }
                 placeholder={newRowType === 'payment' ? 'Payment note' : 'Title'}
+                maxLength={newRowType === 'payment' ? 500 : 200}
               />
             </div>
 
@@ -2282,6 +2285,7 @@ export default function SpreadsheetPage() {
                   value={newRowData.vendor}
                   onChange={(e) => setNewRowData({ ...newRowData, vendor: e.target.value })}
                   placeholder="Vendor name"
+                  maxLength={200}
                 />
               </div>
             )}
