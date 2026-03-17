@@ -973,6 +973,166 @@ export default function SettingsPage() {
         />
       </FadeIn>
 
+      <FadeIn delay={0.2}>
+        <MotionCard hover={false}>
+          <button
+            onClick={() => toggleSection('profile')}
+            className="flex items-center justify-between w-full p-5 text-left"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <User className="h-4 w-4 text-primary" />
+              </div>
+              <span className="font-semibold">Profile & Security</span>
+            </div>
+            <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", openSections.has('profile') && "rotate-180")} />
+          </button>
+          {openSections.has('profile') && (
+            <MotionCardContent className="pt-0 space-y-6">
+              <div className="flex items-center gap-4">
+                <div className="relative group">
+                  {user?.avatarUrl ? (
+                    <img
+                      src={user.avatarUrl}
+                      alt={user.name || 'Profile'}
+                      className="w-16 h-16 rounded-full object-cover"
+                    />
+                  ) : (
+                    <AvatarGradient name={user?.name || user?.email || 'User'} size="lg" />
+                  )}
+                  <button
+                    onClick={handleAvatarClick}
+                    disabled={isUploadingAvatar}
+                    className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                  >
+                    {isUploadingAvatar ? (
+                      <Loader2 className="h-5 w-5 text-white animate-spin" />
+                    ) : (
+                      <Camera className="h-5 w-5 text-white" />
+                    )}
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarChange}
+                    className="hidden"
+                  />
+                </div>
+                <div>
+                  <p className="font-medium">{user?.name || 'No name set'}</p>
+                  <p className="text-sm text-muted-foreground">{user?.email}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Click avatar to change photo
+                  </p>
+                </div>
+              </div>
+
+              <Separator className="opacity-50" />
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name" className="text-sm font-medium">Display Name</Label>
+                  <Input
+                    id="name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Your name"
+                    className="h-11 bg-secondary/30 border-border/50 focus:border-primary"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Email Address</Label>
+                  <Input
+                    value={user?.email || ''}
+                    disabled
+                    className="h-11 bg-secondary/30 border-border/50 opacity-60"
+                  />
+                </div>
+
+                <Button
+                  className="hover:opacity-90"
+                  disabled={!hasChanges || updateProfile.isPending}
+                  onClick={handleSave}
+                >
+                  {updateProfile.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    'Save Changes'
+                  )}
+                </Button>
+              </div>
+
+              <Separator className="opacity-50" />
+
+              <div>
+                <h3 className="text-sm font-medium mb-3">Security</h3>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">Password</p>
+                    <p className="text-xs text-muted-foreground">
+                      {user?.hasPassword
+                        ? 'Change your account password'
+                        : 'Set a password so you can sign in without a magic link'}
+                    </p>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => setShowPasswordDialog(true)}>
+                    {user?.hasPassword ? 'Change password' : 'Set password'}
+                  </Button>
+                </div>
+              </div>
+
+              <Separator className="opacity-50" />
+
+              <div>
+                <h3 className="text-sm font-medium mb-3">Appearance</h3>
+                <div className="space-y-4">
+                  <Label className="text-sm font-medium">Theme</Label>
+                  <div className="grid grid-cols-3 gap-3">
+                    {themeOptions.map((option) => {
+                      const isActive = theme === option.value;
+                      const Icon = option.icon;
+                      return (
+                        <button
+                          key={option.value}
+                          onClick={() => setTheme(option.value)}
+                          className={cn(
+                            'flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all hover:scale-[1.02] active:scale-[0.98] transition-transform',
+                            isActive
+                              ? 'border-primary bg-primary/10'
+                              : 'border-border/50 hover:border-border hover:bg-secondary/50'
+                          )}
+                        >
+                          <div className={cn(
+                            'p-3 rounded-xl',
+                            isActive ? 'bg-primary/20' : 'bg-secondary'
+                          )}>
+                            <Icon className={cn(
+                              'h-5 w-5',
+                              isActive ? 'text-primary' : 'text-muted-foreground'
+                            )} />
+                          </div>
+                          <span className={cn(
+                            'text-sm font-medium',
+                            isActive ? 'text-primary' : 'text-muted-foreground'
+                          )}>
+                            {option.label}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </MotionCardContent>
+          )}
+        </MotionCard>
+      </FadeIn>
+
       <FadeIn delay={0.1}>
         <MotionCard hover={false}>
           <button
@@ -1414,166 +1574,6 @@ export default function SettingsPage() {
                   </div>
                 </>
               )}
-            </MotionCardContent>
-          )}
-        </MotionCard>
-      </FadeIn>
-
-      <FadeIn delay={0.2}>
-        <MotionCard hover={false}>
-          <button
-            onClick={() => toggleSection('profile')}
-            className="flex items-center justify-between w-full p-5 text-left"
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <User className="h-4 w-4 text-primary" />
-              </div>
-              <span className="font-semibold">Profile & Security</span>
-            </div>
-            <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", openSections.has('profile') && "rotate-180")} />
-          </button>
-          {openSections.has('profile') && (
-            <MotionCardContent className="pt-0 space-y-6">
-              <div className="flex items-center gap-4">
-                <div className="relative group">
-                  {user?.avatarUrl ? (
-                    <img
-                      src={user.avatarUrl}
-                      alt={user.name || 'Profile'}
-                      className="w-16 h-16 rounded-full object-cover"
-                    />
-                  ) : (
-                    <AvatarGradient name={user?.name || user?.email || 'User'} size="lg" />
-                  )}
-                  <button
-                    onClick={handleAvatarClick}
-                    disabled={isUploadingAvatar}
-                    className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                  >
-                    {isUploadingAvatar ? (
-                      <Loader2 className="h-5 w-5 text-white animate-spin" />
-                    ) : (
-                      <Camera className="h-5 w-5 text-white" />
-                    )}
-                  </button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleAvatarChange}
-                    className="hidden"
-                  />
-                </div>
-                <div>
-                  <p className="font-medium">{user?.name || 'No name set'}</p>
-                  <p className="text-sm text-muted-foreground">{user?.email}</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Click avatar to change photo
-                  </p>
-                </div>
-              </div>
-
-              <Separator className="opacity-50" />
-
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name" className="text-sm font-medium">Display Name</Label>
-                  <Input
-                    id="name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Your name"
-                    className="h-11 bg-secondary/30 border-border/50 focus:border-primary"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Email Address</Label>
-                  <Input
-                    value={user?.email || ''}
-                    disabled
-                    className="h-11 bg-secondary/30 border-border/50 opacity-60"
-                  />
-                </div>
-
-                <Button
-                  className="hover:opacity-90"
-                  disabled={!hasChanges || updateProfile.isPending}
-                  onClick={handleSave}
-                >
-                  {updateProfile.isPending ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    'Save Changes'
-                  )}
-                </Button>
-              </div>
-
-              <Separator className="opacity-50" />
-
-              <div>
-                <h3 className="text-sm font-medium mb-3">Security</h3>
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">Password</p>
-                    <p className="text-xs text-muted-foreground">
-                      {user?.hasPassword
-                        ? 'Change your account password'
-                        : 'Set a password so you can sign in without a magic link'}
-                    </p>
-                  </div>
-                  <Button variant="outline" size="sm" onClick={() => setShowPasswordDialog(true)}>
-                    {user?.hasPassword ? 'Change password' : 'Set password'}
-                  </Button>
-                </div>
-              </div>
-
-              <Separator className="opacity-50" />
-
-              <div>
-                <h3 className="text-sm font-medium mb-3">Appearance</h3>
-                <div className="space-y-4">
-                  <Label className="text-sm font-medium">Theme</Label>
-                  <div className="grid grid-cols-3 gap-3">
-                    {themeOptions.map((option) => {
-                      const isActive = theme === option.value;
-                      const Icon = option.icon;
-                      return (
-                        <button
-                          key={option.value}
-                          onClick={() => setTheme(option.value)}
-                          className={cn(
-                            'flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all hover:scale-[1.02] active:scale-[0.98] transition-transform',
-                            isActive
-                              ? 'border-primary bg-primary/10'
-                              : 'border-border/50 hover:border-border hover:bg-secondary/50'
-                          )}
-                        >
-                          <div className={cn(
-                            'p-3 rounded-xl',
-                            isActive ? 'bg-primary/20' : 'bg-secondary'
-                          )}>
-                            <Icon className={cn(
-                              'h-5 w-5',
-                              isActive ? 'text-primary' : 'text-muted-foreground'
-                            )} />
-                          </div>
-                          <span className={cn(
-                            'text-sm font-medium',
-                            isActive ? 'text-primary' : 'text-muted-foreground'
-                          )}>
-                            {option.label}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
             </MotionCardContent>
           )}
         </MotionCard>
