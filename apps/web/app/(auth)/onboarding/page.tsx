@@ -3,11 +3,15 @@
 import { Suspense, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { Sun, Moon, Monitor, Mail, Check, Plus, Trash2, Loader2, ChevronLeft, Users, LogIn } from 'lucide-react';
+import { Sun, Moon, Monitor, Mail, Check, Plus, Trash2, Loader2, ChevronLeft, Users, LogIn, Landmark, MessageCircle } from 'lucide-react';
 import Image from 'next/image';
 import { useCreateOrganization, useUpdateOrganization, useResolveJoinCode, useJoinOrganization } from '@/lib/queries/organizations';
 import { useCreateMembers } from '@/lib/queries/members';
 import { getGmailConnectUrl } from '@/lib/queries/gmail';
+import { useCreatePlaidLinkToken, useExchangePlaidToken } from '@/lib/queries/plaid';
+import { useConnectGroupMe } from '@/lib/queries/groupme';
+import { useConnectDiscord } from '@/lib/queries/discord';
+import { useConnectSlack } from '@/lib/queries/slack';
 import { useAuthStore } from '@/lib/stores/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,7 +33,7 @@ const themeOptions = [
   { value: 'system', label: 'System', icon: Monitor },
 ];
 
-const STEP_LABELS = ['Organization', 'Setup', 'Team'];
+const STEP_LABELS = ['Organization', 'Setup', 'Bank', 'Integrations', 'Team'];
 
 let nextMemberKey = 1;
 
@@ -67,10 +71,27 @@ function OnboardingWizard() {
   const [joinCode, setJoinCode] = useState('');
   const [submittedJoinCode, setSubmittedJoinCode] = useState('');
 
+  const [plaidConnecting, setPlaidConnecting] = useState(false);
+  const [bankConnected, setBankConnected] = useState(false);
+  const [plaidReady, setPlaidReady] = useState(false);
+  const [linkToken, setLinkToken] = useState<string | null>(null);
+
+  const [groupmeBotId, setGroupmeBotId] = useState('');
+  const [groupmeConnected, setGroupmeConnected] = useState(false);
+  const [discordUrl, setDiscordUrl] = useState('');
+  const [discordConnected, setDiscordConnected] = useState(false);
+  const [slackUrl, setSlackUrl] = useState('');
+  const [slackConnected, setSlackConnected] = useState(false);
+
   const updateOrganization = useUpdateOrganization(orgId);
   const createMembers = useCreateMembers();
   const { data: resolved, isLoading: resolving, error: resolveError } = useResolveJoinCode(submittedJoinCode || null);
   const joinOrg = useJoinOrganization();
+  const createLinkToken = useCreatePlaidLinkToken();
+  const exchangeToken = useExchangePlaidToken();
+  const connectGroupMe = useConnectGroupMe();
+  const connectDiscord = useConnectDiscord();
+  const connectSlack = useConnectSlack();
 
   useEffect(() => {
     if (urlStep && urlOrgId) {
@@ -81,6 +102,48 @@ function OnboardingWizard() {
       }
     }
   }, [urlStep, urlOrgId, connected]);
+
+  useEffect(() => {
+    if (!linkToken) return;
+
+    const script = document.createElement('script');
+    script.src = 'https://cdn.plaid.com/link/v2/stable/link-initialize.js';
+    script.onload = () => setPlaidReady(true);
+    if (document.querySelector('script[src*="plaid.com/link"]')) {
+      setPlaidReady(true);
+      return;
+    }
+    document.head.appendChild(script);
+  }, [linkToken]);
+
+  useEffect(() => {
+    if (!linkToken || !plaidReady || !(window as any).Plaid) return;
+
+    const handler = (window as any).Plaid.create({
+      token: linkToken,
+      onSuccess: async (publicToken: string) => {
+        if (orgId) {
+          try {
+            await exchangeToken.mutateAsync({ orgId, publicToken });
+            setBankConnected(true);
+            toast({ title: 'Bank account connected' });
+          } catch {
+            toast({ title: 'Failed to connect bank', variant: 'destructive' });
+          }
+        }
+        setLinkToken(null);
+        setPlaidConnecting(false);
+      },
+      onExit: () => {
+        setLinkToken(null);
+        setPlaidConnecting(false);
+      },
+    });
+
+    handler.open();
+
+    return () => handler.destroy();
+  }, [linkToken, plaidReady]);
 
   const handleBack = () => {
     if (step > 0) setStep(step - 1);
@@ -162,6 +225,51 @@ function OnboardingWizard() {
     }
   };
 
+  const handleConnectBank = async () => {
+    if (!orgId) return;
+    setPlaidConnecting(true);
+    try {
+      const result = await createLinkToken.mutateAsync({ orgId });
+      setLinkToken(result.linkToken);
+    } catch {
+      toast({ title: 'Failed to initialize bank connection', variant: 'destructive' });
+      setPlaidConnecting(false);
+    }
+  };
+
+  const handleConnectGroupme = async () => {
+    if (!orgId || !groupmeBotId.trim()) return;
+    try {
+      await connectGroupMe.mutateAsync({ orgId, botId: groupmeBotId.trim() });
+      setGroupmeConnected(true);
+      toast({ title: 'GroupMe connected' });
+    } catch {
+      toast({ title: 'Failed to connect GroupMe', variant: 'destructive' });
+    }
+  };
+
+  const handleConnectDiscord = async () => {
+    if (!orgId || !discordUrl.trim()) return;
+    try {
+      await connectDiscord.mutateAsync({ orgId, webhookUrl: discordUrl.trim() });
+      setDiscordConnected(true);
+      toast({ title: 'Discord connected' });
+    } catch {
+      toast({ title: 'Failed to connect Discord', variant: 'destructive' });
+    }
+  };
+
+  const handleConnectSlack = async () => {
+    if (!orgId || !slackUrl.trim()) return;
+    try {
+      await connectSlack.mutateAsync({ orgId, webhookUrl: slackUrl.trim() });
+      setSlackConnected(true);
+      toast({ title: 'Slack connected' });
+    } catch {
+      toast({ title: 'Failed to connect Slack', variant: 'destructive' });
+    }
+  };
+
   const addMemberRow = () => {
     setMembers((prev) => [...prev, { key: nextMemberKey++, name: '', email: '' }]);
   };
@@ -206,7 +314,7 @@ function OnboardingWizard() {
     <>
       <div className="mb-4">
         <div className="flex items-center justify-center gap-2">
-          {[0, 1, 2].map((s) => (
+          {STEP_LABELS.map((_, s) => (
             <div
               key={s}
               className={cn(
@@ -497,6 +605,93 @@ function OnboardingWizard() {
       )}
 
       {step === 2 && (
+        <>
+          <CardHeader className="text-center px-0 pt-0">
+            <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-primary/10 flex items-center justify-center">
+              <Landmark className="h-6 w-6 text-primary" />
+            </div>
+            <CardTitle>Connect Your Bank</CardTitle>
+            <CardDescription>
+              Optional — automatically detect all Venmo, Zelle, and CashApp transactions, even ones without email notifications
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="px-0 pb-0 space-y-4">
+            <div className="rounded-xl border-2 border-dashed border-border/50 p-6 text-center">
+              <p className="text-sm text-muted-foreground mb-4">
+                Bank connection uses Plaid to securely read your transactions. We never move money or access your credentials.
+              </p>
+              <Button onClick={handleConnectBank} disabled={plaidConnecting}>
+                {plaidConnecting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Connecting...</> : 'Connect Bank Account'}
+              </Button>
+            </div>
+            {bankConnected && (
+              <div className="flex items-center gap-2 text-sm text-emerald-600">
+                <Check className="w-4 h-4" />
+                Bank connected
+              </div>
+            )}
+            <div className="flex gap-2">
+              <Button className="flex-1" onClick={() => setStep(3)}>
+                {bankConnected ? 'Continue' : 'Skip for now'}
+              </Button>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setStep(1)} className="w-full text-muted-foreground">
+              <ChevronLeft className="w-4 h-4 mr-1" />
+              Back
+            </Button>
+          </CardContent>
+        </>
+      )}
+
+      {step === 3 && (
+        <>
+          <CardHeader className="text-center px-0 pt-0">
+            <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-primary/10 flex items-center justify-center">
+              <MessageCircle className="h-6 w-6 text-primary" />
+            </div>
+            <CardTitle>Connect Group Chat</CardTitle>
+            <CardDescription>
+              Optional — get payment notifications and weekly summaries in your group chat
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="px-0 pb-0 space-y-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">GroupMe Bot ID</Label>
+              <div className="flex gap-2">
+                <Input placeholder="Paste bot ID" value={groupmeBotId} onChange={e => setGroupmeBotId(e.target.value)} className="flex-1 h-9" />
+                <Button size="sm" variant="outline" disabled={!groupmeBotId.trim()} onClick={handleConnectGroupme}>Connect</Button>
+              </div>
+              <p className="text-xs text-muted-foreground">Create at dev.groupme.com/bots</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Discord Webhook URL</Label>
+              <div className="flex gap-2">
+                <Input placeholder="https://discord.com/api/webhooks/..." value={discordUrl} onChange={e => setDiscordUrl(e.target.value)} className="flex-1 h-9" />
+                <Button size="sm" variant="outline" disabled={!discordUrl.trim()} onClick={handleConnectDiscord}>Connect</Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Slack Webhook URL</Label>
+              <div className="flex gap-2">
+                <Input placeholder="https://hooks.slack.com/services/..." value={slackUrl} onChange={e => setSlackUrl(e.target.value)} className="flex-1 h-9" />
+                <Button size="sm" variant="outline" disabled={!slackUrl.trim()} onClick={handleConnectSlack}>Connect</Button>
+              </div>
+            </div>
+
+            <Button className="w-full" onClick={() => setStep(4)}>
+              {(groupmeConnected || discordConnected || slackConnected) ? 'Continue' : 'Skip for now'}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setStep(2)} className="w-full text-muted-foreground">
+              <ChevronLeft className="w-4 h-4 mr-1" />
+              Back
+            </Button>
+          </CardContent>
+        </>
+      )}
+
+      {step === 4 && (
         <>
           <CardHeader className="text-center px-0 pt-0 pb-4">
             <div className="w-10 h-10 mx-auto mb-3 rounded-xl bg-primary/10 flex items-center justify-center">
