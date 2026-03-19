@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Megaphone, Plus, Trash2, Radio } from 'lucide-react';
-import { useAnnouncements, useCreateAnnouncement, useDeleteAnnouncement, type Announcement } from '@/lib/queries/announcements';
+import { Megaphone, Plus, Trash2, Radio, Send } from 'lucide-react';
+import { useAnnouncements, useCreateAnnouncement, useDeleteAnnouncement, useBroadcastAnnouncement, type Announcement } from '@/lib/queries/announcements';
 import { useAuthStore } from '@/lib/stores/auth';
 import { formatRelativeDate } from '@/lib/utils';
 import { useToast } from '@/components/ui/use-toast';
@@ -32,6 +32,7 @@ export default function AnnouncementsPage() {
   const { data: announcements, isLoading } = useAnnouncements(orgId);
   const createAnnouncement = useCreateAnnouncement();
   const deleteAnnouncement = useDeleteAnnouncement();
+  const broadcastAnnouncement = useBroadcastAnnouncement();
   const { toast } = useToast();
 
   const [showDialog, setShowDialog] = useState(false);
@@ -125,14 +126,35 @@ export default function AnnouncementsPage() {
                     </p>
                   </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive shrink-0"
-                  onClick={() => handleDelete(a.id)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 text-muted-foreground hover:text-primary"
+                    title="Send to channels"
+                    onClick={() => {
+                      if (!orgId) return;
+                      broadcastAnnouncement.mutate(
+                        { orgId, id: a.id },
+                        {
+                          onSuccess: () => toast({ title: 'Sent to channels' }),
+                          onError: () => toast({ title: 'Failed to send', variant: 'destructive' }),
+                        },
+                      );
+                    }}
+                    disabled={broadcastAnnouncement.isPending}
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                    onClick={() => handleDelete(a.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
               <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
                 {a.body}

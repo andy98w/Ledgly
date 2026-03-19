@@ -832,7 +832,7 @@ Return ONLY the JSON object, no markdown or explanation.`;
           actorId,
           args.title,
           args.body,
-          args.broadcast ?? false,
+          args.broadcast !== false,
         );
 
       case 'broadcast_message':

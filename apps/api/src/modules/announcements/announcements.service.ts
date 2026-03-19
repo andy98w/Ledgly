@@ -45,6 +45,14 @@ export class AnnouncementsService {
     return announcement;
   }
 
+  async broadcast(orgId: string, id: string) {
+    const announcement = await this.prisma.announcement.findFirst({ where: { id, orgId } });
+    if (!announcement) return { success: false };
+    const message = `\uD83D\uDCE2 ${announcement.title}\n\n${announcement.body}`;
+    await this.channels.broadcastToOrg(orgId, message);
+    return { success: true };
+  }
+
   async delete(orgId: string, id: string) {
     await this.prisma.announcement.deleteMany({
       where: { id, orgId },

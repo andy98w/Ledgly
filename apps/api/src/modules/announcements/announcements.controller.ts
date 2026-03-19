@@ -48,6 +48,12 @@ export class AnnouncementsController {
     );
   }
 
+  @Post(':id/broadcast')
+  @Roles('ADMIN', 'TREASURER')
+  async broadcast(@Param('orgId') orgId: string, @Param('id') id: string) {
+    return this.announcementsService.broadcast(orgId, id);
+  }
+
   @Delete(':id')
   @Roles('ADMIN', 'TREASURER')
   async delete(@Param('orgId') orgId: string, @Param('id') id: string) {

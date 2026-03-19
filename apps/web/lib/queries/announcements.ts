@@ -40,6 +40,13 @@ export function useCreateAnnouncement() {
   });
 }
 
+export function useBroadcastAnnouncement() {
+  return useMutation({
+    mutationFn: ({ orgId, id }: { orgId: string; id: string }) =>
+      api.post(`/organizations/${orgId}/announcements/${id}/broadcast`),
+  });
+}
+
 export function useDeleteAnnouncement() {
   const queryClient = useQueryClient();
 
