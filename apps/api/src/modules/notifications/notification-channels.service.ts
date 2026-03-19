@@ -123,7 +123,23 @@ export class NotificationChannelsService {
       amount,
       chargeTitle,
     });
-    await this.broadcastToOrg(orgId, text);
+
+    const org = await this.prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { paymentHandles: true, enabledPaymentSources: true },
+    });
+    const handles = (org?.paymentHandles as Record<string, string>) || {};
+    const sources = org?.enabledPaymentSources || [];
+    const payLinks: string[] = [];
+    if (sources.includes('venmo') && handles.venmo) payLinks.push(`Venmo: ${handles.venmo}`);
+    if (sources.includes('zelle') && handles.zelle) payLinks.push(`Zelle: ${handles.zelle}`);
+    if (sources.includes('cashapp') && handles.cashapp) payLinks.push(`Cash App: ${handles.cashapp}`);
+    if (sources.includes('paypal') && handles.paypal) payLinks.push(`PayPal: ${handles.paypal}`);
+
+    const fullText = payLinks.length > 0
+      ? `${text}\n💳 ${payLinks.join(' | ')}`
+      : text;
+    await this.broadcastToOrg(orgId, fullText);
   }
 
   async notifyWeeklySummary(orgId: string, stats: { paymentsCount: number; collectedDollars: string; outstandingDollars: string; overdueCount: number }): Promise<void> {
