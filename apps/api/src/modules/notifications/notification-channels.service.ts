@@ -21,14 +21,15 @@ export class NotificationChannelsService {
 
   private async appendFooter(orgId: string, message: string): Promise<string> {
     try {
-      const org = await this.prisma.organization.findUnique({ where: { id: orgId }, select: { joinCode: true } });
+      const org = await this.prisma.organization.findUnique({ where: { id: orgId }, select: { joinCode: true, name: true } });
       const joinLink = this.getJoinLink(org?.joinCode ?? null);
+      const divider = '\n━━━━━━━━━━━━━━━━━━━━';
       const footer = joinLink
-        ? `\n—\nLedgly · ${joinLink}`
-        : '\n—\nLedgly';
+        ? `${divider}\n📋 *${org?.name || 'Ledgly'}* · Powered by Ledgly\n🔗 Join: ${joinLink}`
+        : `${divider}\n📋 Powered by Ledgly`;
       return message + footer;
     } catch {
-      return message + '\n—\nLedgly';
+      return message + '\n━━━━━━━━━━━━━━━━━━━━\n📋 Powered by Ledgly';
     }
   }
 
