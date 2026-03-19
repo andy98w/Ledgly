@@ -7,6 +7,7 @@ import { Send, X, Loader2, Sparkles, RotateCcw, Wand2, Paperclip } from 'lucide-
 import { useAuthStore, useIsAdminOrTreasurer } from '@/lib/stores/auth';
 import { useAISidebarStore, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH } from '@/lib/stores/ai-sidebar';
 import { cn } from '@/lib/utils';
+import { isProbablyTabularData, detectAndParsePaste, formatParsedDataForAI } from '@/lib/utils/paste-parser';
 import { Button } from '@/components/ui/button';
 import {
   MessageContent,
@@ -239,6 +240,14 @@ export function AISidebar() {
     if ((!messageText && !csvFile) || isStreaming || !currentOrgId) return;
     isMutatingRef.current = true;
 
+    let aiContent = messageText;
+    if (!csvFile && isProbablyTabularData(messageText)) {
+      const parsed = detectAndParsePaste(messageText);
+      if (parsed && parsed.rows.length >= 2) {
+        aiContent = `${messageText}\n\n${formatParsedDataForAI(parsed)}`;
+      }
+    }
+
     const userContent = csvFile
       ? `${messageText || 'Please import this CSV data.'}\n\n[Attached: ${csvFile.name}]`
       : messageText;
@@ -352,7 +361,7 @@ export function AISidebar() {
           }
           return { role: m.role, content: m.content };
         }),
-      { role: 'user' as const, content: stripWizardHints(messageText) || 'Please import this CSV data.' },
+      { role: 'user' as const, content: stripWizardHints(csvFile ? messageText : aiContent) || 'Please import this CSV data.' },
     ];
 
     const csvContent = csvFile?.content;
