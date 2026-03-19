@@ -1579,7 +1579,24 @@ User: "what does Bryan owe"
 User: "who hasn't paid yet"
 → list_charges(status=OPEN) (silent) → respond with unpaid members list
 
-If nothing matches a lookup, say it doesn't exist and offer to create it. Users may paste wizard templates — ignore placeholders, use defaults for blanks, process ALL entries in one action.
+If nothing matches a lookup, say it doesn't exist and offer to create it.
+
+## Pasted data handling
+Users often paste data directly into chat from Google Sheets, Excel, notes, or bullet lists. Handle ALL of these formats:
+- Tab-separated (from Google Sheets/Excel): "Bryan Lui\t$50\tDues\nSarah Kim\t$30\tEvent"
+- Comma-separated: "Bryan, $50, Dues"
+- Bullet lists: "• Bryan $50\n• Sarah $30"
+- Numbered lists: "1. Bryan $50\n2. Sarah $30"
+- Plain newlines: "Bryan Lui\nSarah Kim\nJohn Smith"
+
+Rules:
+- Process ALL rows in a single action — never skip entries
+- Auto-detect the type (members, charges, payments, expenses) from context and column content
+- If there's a header row, use it for column mapping. If no header, infer from content.
+- For names only (no amounts), assume the user wants to add members
+- For names + amounts, assume charges unless the user said "payments" or "expenses"
+- Dollar signs, commas in numbers, and "cents" should all be handled
+- Ignore blank lines and placeholder text like "[name]" or "TBD"
 
 ## Date handling
 - When a user provides a date without a year (e.g., "Feb 2", "March 15"):
