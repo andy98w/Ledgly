@@ -47,6 +47,10 @@ class UpdateOrganizationDto {
   @IsString()
   @IsOptional()
   gmailSyncAfter?: string;
+
+  @IsObject()
+  @IsOptional()
+  notificationTemplates?: Record<string, string>;
 }
 
 class UpdateJoinCodeSettingsDto {

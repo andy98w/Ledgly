@@ -15,6 +15,7 @@ interface UpdateOrganizationDto {
   paymentInstructions?: string | null;
   paymentHandles?: Record<string, string> | null;
   gmailSyncAfter?: string;
+  notificationTemplates?: Record<string, string>;
 }
 
 // Safe alphabet: no ambiguous chars (0/O, 1/I/L)
@@ -119,6 +120,7 @@ export class OrganizationsService {
       enabledPaymentSources: org.enabledPaymentSources,
       paymentInstructions: org.paymentInstructions,
       paymentHandles: org.paymentHandles ?? {},
+      notificationTemplates: org.notificationTemplates ?? {},
       gmailSyncAfter: org.gmailSyncAfter,
       joinCode: org.joinCode,
       joinCodeEnabled: org.joinCodeEnabled,
@@ -140,6 +142,7 @@ export class OrganizationsService {
         ...(dto.paymentInstructions !== undefined && { paymentInstructions: dto.paymentInstructions }),
         ...(dto.paymentHandles !== undefined && { paymentHandles: dto.paymentHandles as any }),
         ...(dto.gmailSyncAfter !== undefined && { gmailSyncAfter: new Date(dto.gmailSyncAfter) }),
+        ...(dto.notificationTemplates !== undefined && { notificationTemplates: dto.notificationTemplates as any }),
       },
     });
 

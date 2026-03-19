@@ -631,6 +631,103 @@ function DiscordSection({ orgId }: { orgId: string | null }) {
   );
 }
 
+const TEMPLATE_TYPES = [
+  {
+    key: 'payment_received',
+    label: 'Payment received',
+    defaultTemplate: '\u2705 {{payerName}} paid ${{amount}} for {{chargeTitle}}',
+    variables: ['payerName', 'amount', 'chargeTitle'],
+  },
+  {
+    key: 'overdue_reminder',
+    label: 'Overdue reminder',
+    defaultTemplate: '\u23F0 Reminder: {{memberName}} owes ${{amount}} for {{chargeTitle}}',
+    variables: ['memberName', 'amount', 'chargeTitle'],
+  },
+  {
+    key: 'weekly_summary',
+    label: 'Weekly summary',
+    defaultTemplate: '\uD83D\uDCCA Weekly Summary\n\u2022 {{paymentsCount}} payments received (${{collected}})\n\u2022 ${{outstanding}} outstanding',
+    variables: ['paymentsCount', 'collected', 'outstanding', 'overdueCount'],
+  },
+];
+
+function MessageTemplatesSection({ orgId }: { orgId: string | null }) {
+  const { data: org } = useOrganization(orgId);
+  const updateOrg = useUpdateOrganization(orgId);
+  const { toast } = useToast();
+  const saved = (org?.notificationTemplates ?? {}) as Record<string, string>;
+  const [templates, setTemplates] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (org) setTemplates((org.notificationTemplates ?? {}) as Record<string, string>);
+  }, [org]);
+
+  const hasChanges = JSON.stringify(templates) !== JSON.stringify(saved);
+
+  const handleSave = async () => {
+    if (!orgId) return;
+    try {
+      await updateOrg.mutateAsync({ notificationTemplates: templates });
+      toast({ title: 'Message templates saved' });
+    } catch {
+      toast({ title: 'Failed to save templates', variant: 'destructive' });
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {TEMPLATE_TYPES.map((t) => (
+        <div key={t.key} className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <Label className="text-sm">{t.label}</Label>
+            {templates[t.key] && (
+              <button
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                onClick={() => setTemplates((prev) => {
+                  const next = { ...prev };
+                  delete next[t.key];
+                  return next;
+                })}
+              >
+                Reset to default
+              </button>
+            )}
+          </div>
+          <Textarea
+            rows={2}
+            value={templates[t.key] ?? ''}
+            onChange={(e) => setTemplates((prev) => ({ ...prev, [t.key]: e.target.value }))}
+            placeholder={t.defaultTemplate}
+            className="resize-none bg-secondary/30 border-border/50 focus:border-primary text-sm"
+          />
+          <div className="flex flex-wrap gap-1">
+            {t.variables.map((v) => (
+              <Badge key={v} variant="secondary" className="text-[10px] font-mono px-1.5 py-0">
+                {'{{' + v + '}}'}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      ))}
+      <Button
+        size="sm"
+        disabled={updateOrg.isPending || !hasChanges}
+        onClick={handleSave}
+      >
+        {updateOrg.isPending ? (
+          <>
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            Saving...
+          </>
+        ) : (
+          'Save Templates'
+        )}
+      </Button>
+    </div>
+  );
+}
+
 function SlackSection({ orgId }: { orgId: string | null }) {
   const { data: slackData } = useSlackConnections(orgId);
   const connectSlack = useConnectSlack();
@@ -1649,6 +1746,14 @@ export default function SettingsPage() {
                   <div>
                     <h3 className="text-sm font-medium mb-3">Slack</h3>
                     <SlackSection orgId={currentOrgId} />
+                  </div>
+                  <Separator />
+                  <div>
+                    <h3 className="text-sm font-medium mb-3">Message Templates</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Customize the messages sent to your chat integrations. Leave blank to use the default.
+                    </p>
+                    <MessageTemplatesSection orgId={currentOrgId} />
                   </div>
                 </div>
               </MotionCardContent>

@@ -63,27 +63,63 @@ export class NotificationChannelsService {
     }
   }
 
+  private async getTemplate(orgId: string, type: string, vars: Record<string, string>): Promise<string> {
+    try {
+      const org = await this.prisma.organization.findUnique({
+        where: { id: orgId },
+        select: { notificationTemplates: true },
+      });
+      const templates = (org?.notificationTemplates as Record<string, string>) || {};
+      const template = templates[type];
+      if (!template) return this.applyDefaults(type, vars);
+      return Object.entries(vars).reduce(
+        (text, [key, value]) => text.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value),
+        template,
+      );
+    } catch {
+      return this.applyDefaults(type, vars);
+    }
+  }
+
+  private applyDefaults(type: string, vars: Record<string, string>): string {
+    const defaults: Record<string, string> = {
+      payment_received: '\u2705 {{payerName}} paid ${{amount}} for {{chargeTitle}}',
+      overdue_reminder: '\u23F0 Reminder: {{memberName}} owes ${{amount}} for {{chargeTitle}}',
+      weekly_summary: '\uD83D\uDCCA Weekly Summary\n\u2022 {{paymentsCount}} payments received (${{collected}})\n\u2022 ${{outstanding}} outstanding',
+    };
+    const template = defaults[type] || '';
+    return Object.entries(vars).reduce(
+      (text, [key, value]) => text.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value),
+      template,
+    );
+  }
+
   async notifyPaymentReceived(orgId: string, payerName: string, amount: string, chargeTitle?: string): Promise<void> {
-    const text = chargeTitle
-      ? `\u2705 ${payerName} paid $${amount} for ${chargeTitle}`
-      : `\u2705 ${payerName} paid $${amount}`;
+    const text = await this.getTemplate(orgId, 'payment_received', {
+      payerName,
+      amount,
+      chargeTitle: chargeTitle || 'payment',
+    });
     await this.broadcastToOrg(orgId, text);
   }
 
   async notifyOverdue(orgId: string, memberName: string, amount: string, chargeTitle: string): Promise<void> {
-    await this.broadcastToOrg(orgId, `\u23F0 Reminder: ${memberName} owes $${amount} for ${chargeTitle}`);
+    const text = await this.getTemplate(orgId, 'overdue_reminder', {
+      memberName,
+      amount,
+      chargeTitle,
+    });
+    await this.broadcastToOrg(orgId, text);
   }
 
   async notifyWeeklySummary(orgId: string, stats: { paymentsCount: number; collectedDollars: string; outstandingDollars: string; overdueCount: number }): Promise<void> {
-    const lines = [
-      `\uD83D\uDCCA Weekly Summary`,
-      `\u2022 ${stats.paymentsCount} payments received ($${stats.collectedDollars})`,
-      `\u2022 $${stats.outstandingDollars} outstanding`,
-    ];
-    if (stats.overdueCount > 0) {
-      lines.push(`\u2022 ${stats.overdueCount} overdue charge${stats.overdueCount !== 1 ? 's' : ''}`);
-    }
-    await this.broadcastToOrg(orgId, lines.join('\n'));
+    const text = await this.getTemplate(orgId, 'weekly_summary', {
+      paymentsCount: String(stats.paymentsCount),
+      collected: stats.collectedDollars,
+      outstanding: stats.outstandingDollars,
+      overdueCount: String(stats.overdueCount),
+    });
+    await this.broadcastToOrg(orgId, text);
   }
 
   async getDiscordConnections(orgId: string) {

@@ -7,6 +7,7 @@ import { PaymentsService } from '../payments/payments.service';
 import { ExpensesService } from '../expenses/expenses.service';
 import { AuditService } from '../audit/audit.service';
 import { AnnouncementsService } from '../announcements/announcements.service';
+import { NotificationChannelsService } from '../notifications/notification-channels.service';
 import { GmailService } from '../gmail/gmail.service';
 import { PlaidService } from '../plaid/plaid.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -43,6 +44,7 @@ export class AgentService {
     private expensesService: ExpensesService,
     private auditService: AuditService,
     private announcementsService: AnnouncementsService,
+    private notificationChannels: NotificationChannelsService,
     private gmailService: GmailService,
     private plaidService: PlaidService,
     private prisma: PrismaService,
@@ -822,6 +824,47 @@ Return ONLY the JSON object, no markdown or explanation.`;
           args.broadcast ?? false,
         );
 
+      case 'broadcast_message':
+        await this.notificationChannels.broadcastToOrg(orgId, args.message);
+        return { success: true, message: args.message };
+
+      case 'connect_integration': {
+        if (args.platform === 'groupme') {
+          return this.prisma.groupMeConnection.create({ data: { orgId, botId: args.value, groupName: args.name || null } });
+        } else if (args.platform === 'discord') {
+          return this.notificationChannels.connectDiscord(orgId, args.value, args.name);
+        } else if (args.platform === 'slack') {
+          return this.notificationChannels.connectSlack(orgId, args.value, args.name);
+        }
+        throw new Error(`Unknown platform: ${args.platform}`);
+      }
+
+      case 'disconnect_integration': {
+        if (args.platform === 'groupme') {
+          const conns = await this.prisma.groupMeConnection.findMany({ where: { orgId } });
+          for (const c of conns) await this.prisma.groupMeConnection.delete({ where: { id: c.id } });
+        } else if (args.platform === 'discord') {
+          const conns = await this.notificationChannels.getDiscordConnections(orgId);
+          for (const c of conns) await this.notificationChannels.disconnectDiscord(c.id);
+        } else if (args.platform === 'slack') {
+          const conns = await this.notificationChannels.getSlackConnections(orgId);
+          for (const c of conns) await this.notificationChannels.disconnectSlack(c.id);
+        }
+        return { success: true };
+      }
+
+      case 'update_notification_template': {
+        const org = await this.prisma.organization.findUnique({ where: { id: orgId }, select: { notificationTemplates: true } });
+        const templates = (org?.notificationTemplates as Record<string, string>) || {};
+        if (args.template) {
+          templates[args.templateType] = args.template;
+        } else {
+          delete templates[args.templateType];
+        }
+        await this.prisma.organization.update({ where: { id: orgId }, data: { notificationTemplates: templates as any } });
+        return { success: true, templateType: args.templateType };
+      }
+
       default:
         throw new Error(`Unknown write tool: ${toolName}`);
     }
@@ -1034,6 +1077,26 @@ Return ONLY the JSON object, no markdown or explanation.`;
       case 'create_announcement':
         this.validateRequiredString(args.title, 'title');
         this.validateRequiredString(args.body, 'body');
+        break;
+
+      case 'broadcast_message':
+        this.validateRequiredString(args.message, 'message');
+        break;
+
+      case 'connect_integration':
+        if (!['groupme', 'discord', 'slack'].includes(args.platform))
+          throw new Error('platform must be groupme, discord, or slack');
+        this.validateRequiredString(args.value, 'value');
+        break;
+
+      case 'disconnect_integration':
+        if (!['groupme', 'discord', 'slack'].includes(args.platform))
+          throw new Error('platform must be groupme, discord, or slack');
+        break;
+
+      case 'update_notification_template':
+        if (!['payment_received', 'overdue_reminder', 'weekly_summary'].includes(args.templateType))
+          throw new Error('templateType must be payment_received, overdue_reminder, or weekly_summary');
         break;
     }
   }
@@ -1284,6 +1347,14 @@ Return ONLY the JSON object, no markdown or explanation.`;
           : 'Send reminders for all unpaid charges';
       case 'create_announcement':
         return `Post announcement "${args.title}"${args.broadcast ? ' (broadcast to chat)' : ''}`;
+      case 'broadcast_message':
+        return `Send message to chat channels: "${args.message?.slice(0, 60)}${(args.message?.length || 0) > 60 ? '...' : ''}"`;
+      case 'connect_integration':
+        return `Connect ${args.platform}${args.name ? ` (${args.name})` : ''}`;
+      case 'disconnect_integration':
+        return `Disconnect all ${args.platform} connections`;
+      case 'update_notification_template':
+        return `Update ${args.templateType?.replace(/_/g, ' ')} template`;
       default:
         return toolName;
     }

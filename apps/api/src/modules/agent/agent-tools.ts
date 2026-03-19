@@ -755,6 +755,65 @@ export const agentTools: AgentTool[] = [
       input_schema: { type: 'object' as const, properties: {}, required: [] },
     },
   },
+  {
+    requiresConfirmation: true,
+    definition: {
+      name: 'broadcast_message',
+      description: 'Send a custom message to all connected chat channels (GroupMe, Discord, Slack).',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          message: { type: 'string', description: 'The message text to broadcast' },
+        },
+        required: ['message'],
+      },
+    },
+  },
+  {
+    requiresConfirmation: true,
+    definition: {
+      name: 'connect_integration',
+      description: 'Connect a chat integration (GroupMe bot, Discord webhook, or Slack webhook).',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          platform: { type: 'string', enum: ['groupme', 'discord', 'slack'], description: 'The platform to connect' },
+          value: { type: 'string', description: 'Bot ID (GroupMe) or webhook URL (Discord/Slack)' },
+          name: { type: 'string', description: 'Optional display name (e.g., channel name)' },
+        },
+        required: ['platform', 'value'],
+      },
+    },
+  },
+  {
+    requiresConfirmation: true,
+    definition: {
+      name: 'disconnect_integration',
+      description: 'Disconnect a chat integration by platform name. Disconnects all connections for that platform.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          platform: { type: 'string', enum: ['groupme', 'discord', 'slack'], description: 'The platform to disconnect' },
+        },
+        required: ['platform'],
+      },
+    },
+  },
+  {
+    requiresConfirmation: true,
+    definition: {
+      name: 'update_notification_template',
+      description: 'Update a notification message template for chat integrations. Use {{variable}} placeholders.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          templateType: { type: 'string', enum: ['payment_received', 'overdue_reminder', 'weekly_summary'], description: 'Which template to update' },
+          template: { type: 'string', description: 'The new template text with {{variable}} placeholders. Set to empty string to reset to default.' },
+        },
+        required: ['templateType', 'template'],
+      },
+    },
+  },
 ];
 
 export const toolDefinitions = agentTools.map((t) => t.definition);

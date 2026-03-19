@@ -37,6 +37,7 @@ model Organization {
   discordConnections    DiscordConnection[]
   slackConnections      SlackConnection[]
   announcements         Announcement[]
+  notificationTemplates Json?               @default("{}") @map("notification_templates")
 
   @@map("organizations")
 }
