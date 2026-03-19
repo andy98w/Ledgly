@@ -42,12 +42,19 @@ export class NotificationChannelsService {
     });
     for (const conn of discordConns) {
       try {
-        await fetch(conn.webhookUrl, {
+        const discordMsg = fullMessage.length > 2000 ? fullMessage.slice(0, 1997) + '...' : fullMessage;
+        const res = await fetch(conn.webhookUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: fullMessage }),
+          body: JSON.stringify({ content: discordMsg }),
         });
-      } catch {}
+        if (!res.ok) {
+          const body = await res.text().catch(() => '');
+          this.logger.error(`Discord webhook failed (${res.status}): ${body}`);
+        }
+      } catch (err: any) {
+        this.logger.error(`Discord webhook error: ${err.message}`);
+      }
     }
 
     const slackConns = await this.prisma.slackConnection.findMany({
@@ -55,12 +62,18 @@ export class NotificationChannelsService {
     });
     for (const conn of slackConns) {
       try {
-        await fetch(conn.webhookUrl, {
+        const res = await fetch(conn.webhookUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: fullMessage }),
         });
-      } catch {}
+        if (!res.ok) {
+          const body = await res.text().catch(() => '');
+          this.logger.error(`Slack webhook failed (${res.status}): ${body}`);
+        }
+      } catch (err: any) {
+        this.logger.error(`Slack webhook error: ${err.message}`);
+      }
     }
   }
 
@@ -144,14 +157,26 @@ export class NotificationChannelsService {
     const conns = await this.prisma.discordConnection.findMany({
       where: { orgId, isActive: true },
     });
+    if (conns.length === 0) {
+      this.logger.warn(`No active Discord connections for org ${orgId}`);
+      return;
+    }
     for (const conn of conns) {
       try {
-        await fetch(conn.webhookUrl, {
+        const res = await fetch(conn.webhookUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ content: '\uD83C\uDF89 Ledgly is connected! Financial updates will appear here.' }),
         });
-      } catch {}
+        if (!res.ok) {
+          const body = await res.text().catch(() => '');
+          this.logger.error(`Discord test failed (${res.status}): ${body}`);
+          throw new Error(`Discord returned ${res.status}: ${body}`);
+        }
+      } catch (err: any) {
+        this.logger.error(`Discord test error: ${err.message}`);
+        throw err;
+      }
     }
   }
 
