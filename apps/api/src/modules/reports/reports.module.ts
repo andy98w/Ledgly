@@ -9,6 +9,6 @@ import { DigestSchedulerService } from './digest-scheduler.service';
   imports: [AuthModule, NotificationsModule],
   controllers: [ReportsController],
   providers: [ReportsService, DigestSchedulerService],
-  exports: [ReportsService],
+  exports: [ReportsService, DigestSchedulerService],
 })
 export class ReportsModule {}

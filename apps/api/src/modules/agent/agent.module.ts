@@ -6,11 +6,12 @@ import { ExpensesModule } from '../expenses/expenses.module';
 import { AnnouncementsModule } from '../announcements/announcements.module';
 import { GmailModule } from '../gmail/gmail.module';
 import { PlaidModule } from '../plaid/plaid.module';
+import { ReportsModule } from '../reports/reports.module';
 import { AgentController } from './agent.controller';
 import { AgentService } from './agent.service';
 
 @Module({
-  imports: [MembersModule, ChargesModule, PaymentsModule, ExpensesModule, AnnouncementsModule, GmailModule, PlaidModule],
+  imports: [MembersModule, ChargesModule, PaymentsModule, ExpensesModule, AnnouncementsModule, GmailModule, PlaidModule, ReportsModule],
   controllers: [AgentController],
   providers: [AgentService],
 })

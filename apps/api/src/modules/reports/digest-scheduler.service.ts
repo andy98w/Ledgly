@@ -37,6 +37,16 @@ export class DigestSchedulerService {
     }
   }
 
+  async sendDigestForOrg(orgId: string): Promise<{ sent: boolean }> {
+    const org = await this.prisma.organization.findUnique({ where: { id: orgId }, select: { name: true } });
+    if (!org) return { sent: false };
+    const webUrl = this.configService.get<string>('WEB_URL', 'https://app.ledgly.app');
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    await this.processOrg(orgId, org.name, sevenDaysAgo, webUrl);
+    return { sent: true };
+  }
+
   private async processOrg(orgId: string, orgName: string, since: Date, webUrl: string) {
     const [payments, chargesCreated, expensesRecorded, newMembers, outstandingAgg, paidAgainstOutstanding, overdueCount] =
       await Promise.all([

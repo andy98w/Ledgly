@@ -9,6 +9,7 @@ import { AuditService } from '../audit/audit.service';
 import { AnnouncementsService } from '../announcements/announcements.service';
 import { NotificationChannelsService } from '../notifications/notification-channels.service';
 import { GmailService } from '../gmail/gmail.service';
+import { DigestSchedulerService } from '../reports/digest-scheduler.service';
 import { PlaidService } from '../plaid/plaid.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { toolDefinitions, toolMap } from './agent-tools';
@@ -45,6 +46,7 @@ export class AgentService {
     private auditService: AuditService,
     private announcementsService: AnnouncementsService,
     private notificationChannels: NotificationChannelsService,
+    private digestService: DigestSchedulerService,
     private gmailService: GmailService,
     private plaidService: PlaidService,
     private prisma: PrismaService,
@@ -535,6 +537,15 @@ Return ONLY the JSON object, no markdown or explanation.`;
       case 'sync_bank': {
         try {
           const result = await this.plaidService.syncTransactions(orgId);
+          return { success: true, ...result };
+        } catch (err: any) {
+          return { success: false, error: err.message };
+        }
+      }
+
+      case 'send_digest': {
+        try {
+          const result = await this.digestService.sendDigestForOrg(orgId);
           return { success: true, ...result };
         } catch (err: any) {
           return { success: false, error: err.message };

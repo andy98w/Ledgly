@@ -756,6 +756,14 @@ export const agentTools: AgentTool[] = [
     },
   },
   {
+    requiresConfirmation: false,
+    definition: {
+      name: 'send_digest',
+      description: 'Send the weekly digest email to all admins and post summary to chat channels now.',
+      input_schema: { type: 'object' as const, properties: {}, required: [] },
+    },
+  },
+  {
     requiresConfirmation: true,
     definition: {
       name: 'broadcast_message',
