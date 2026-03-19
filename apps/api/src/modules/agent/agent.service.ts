@@ -1576,6 +1576,15 @@ User: "extend that charge to all members"
 User: "what does Bryan owe"
 → get_balances (silent) → respond with Bryan's balance
 
+User: "send announcement dues are due next friday"
+→ create_announcement(title="Dues Reminder", body="Dues are due next Friday.", broadcast=true)
+
+User: "announce to discord that we have a meeting at 7pm"
+→ broadcast_message(message="Meeting tonight at 7pm")
+
+User: "send message to group chat: don't forget about the event tomorrow"
+→ broadcast_message(message="Don't forget about the event tomorrow!")
+
 User: "who hasn't paid yet"
 → list_charges(status=OPEN) (silent) → respond with unpaid members list
 
