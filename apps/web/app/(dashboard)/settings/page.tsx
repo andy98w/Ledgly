@@ -720,6 +720,153 @@ const TEMPLATE_TYPES = [
   },
 ];
 
+function ReminderRulesSection({ rules, orgId, newRuleDays, newRuleTrigger, onDaysChange, onTriggerChange, onDelete, onCreate, deleteIsPending, createIsPending }: {
+  rules: any; orgId: string | null; newRuleDays: string; newRuleTrigger: string;
+  onDaysChange: (v: string) => void; onTriggerChange: (v: string) => void;
+  onDelete: (id: string) => void; onCreate: () => void; deleteIsPending: boolean; createIsPending: boolean;
+}) {
+  const [showForm, setShowForm] = useState(false);
+  const hasRules = rules?.length > 0;
+
+  if (!hasRules && !showForm) {
+    return (
+      <div>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-medium">Email Reminders</h3>
+          <Button variant="outline" size="sm" onClick={() => setShowForm(true)}>
+            <Plus className="w-3.5 h-3.5 mr-1.5" />Add
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">Auto-email members about upcoming or overdue charges</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h3 className="text-sm font-medium mb-3">Email Reminders</h3>
+      <div className="space-y-3">
+        {hasRules && (
+          <div className="space-y-2">
+            {rules.map((rule: any) => (
+              <div key={rule.id} className="flex items-center justify-between p-3 rounded-xl bg-secondary/30">
+                <span className="text-sm">
+                  <span className="font-medium">{rule.daysOffset} day{rule.daysOffset !== 1 ? 's' : ''}</span>{' '}
+                  {rule.triggerType === 'BEFORE_DUE' ? 'before due date' : 'after due date'}
+                </span>
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive" onClick={() => onDelete(rule.id)} disabled={deleteIsPending}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex items-center gap-3">
+          <Input type="number" min="1" max="90" value={newRuleDays} onChange={(e) => onDaysChange(e.target.value)} className="w-20 h-9 bg-secondary/30 border-border/50" />
+          <span className="text-sm text-muted-foreground">days</span>
+          <Select value={newRuleTrigger} onValueChange={onTriggerChange}>
+            <SelectTrigger className="h-9 bg-secondary/30 border-border/50"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="BEFORE_DUE">Before due</SelectItem>
+              <SelectItem value="AFTER_DUE">After due</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button size="sm" disabled={createIsPending || !newRuleDays || parseInt(newRuleDays) < 1} onClick={onCreate}>
+            {createIsPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PaymentInstructionsSection({ value, onChange, saved, onSave, isPending }: {
+  value: string; onChange: (v: string) => void; saved: string; onSave: () => void; isPending: boolean;
+}) {
+  const [showForm, setShowForm] = useState(false);
+  const hasValue = saved.trim().length > 0;
+
+  if (!showForm && !hasValue) {
+    return (
+      <div>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-medium">Payment Instructions</h3>
+          <Button variant="outline" size="sm" onClick={() => setShowForm(true)}>
+            <Plus className="w-3.5 h-3.5 mr-1.5" />Add
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">Instructions shown to members on how to pay</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-medium">Payment Instructions</h3>
+        {!hasValue && <Button variant="ghost" size="sm" className="text-xs" onClick={() => setShowForm(false)}>Cancel</Button>}
+      </div>
+      <div className="space-y-3">
+        <Textarea value={value} onChange={(e) => onChange(e.target.value)} placeholder="e.g., Venmo: @ThetaChi, Zelle: treasurer@theta.org" maxLength={500} className="min-h-[80px] bg-secondary/30 border-border/50 focus:border-primary" />
+        <Button size="sm" disabled={isPending || value === saved} onClick={onSave}>
+          {isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving...</> : 'Save'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function PaymentLinksSection({ handles, onChange, saved, onSave, isPending }: {
+  handles: Record<string, string>; onChange: (h: Record<string, string>) => void;
+  saved: Record<string, string>; onSave: (cleaned: Record<string, string>) => void; isPending: boolean;
+}) {
+  const [showForm, setShowForm] = useState(false);
+  const hasAny = Object.values(saved).some(v => v.trim());
+  const fields = [
+    { key: 'venmo', label: 'Venmo', placeholder: '@username' },
+    { key: 'zelle', label: 'Zelle', placeholder: 'email or phone' },
+    { key: 'cashapp', label: 'Cash App', placeholder: '$cashtag' },
+    { key: 'paypal', label: 'PayPal', placeholder: 'username' },
+  ];
+
+  if (!showForm && !hasAny) {
+    return (
+      <div>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-medium">Payment Links</h3>
+          <Button variant="outline" size="sm" onClick={() => setShowForm(true)}>
+            <Plus className="w-3.5 h-3.5 mr-1.5" />Add
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">Add Venmo, Zelle, CashApp, PayPal handles for one-tap payments</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-medium">Payment Links</h3>
+        {!hasAny && <Button variant="ghost" size="sm" className="text-xs" onClick={() => setShowForm(false)}>Cancel</Button>}
+      </div>
+      <div className="space-y-3">
+        {fields.map(f => (
+          <div key={f.key} className="flex items-center gap-3">
+            <Label className="text-sm w-20 shrink-0">{f.label}</Label>
+            <Input value={handles[f.key] || ''} onChange={(e) => onChange({ ...handles, [f.key]: e.target.value })} placeholder={f.placeholder} className="bg-secondary/30 border-border/50 focus:border-primary h-9" />
+          </div>
+        ))}
+        <Button size="sm" disabled={isPending || JSON.stringify(handles) === JSON.stringify(saved)} onClick={() => {
+          const cleaned = Object.fromEntries(Object.entries(handles).filter(([, v]) => v.trim()));
+          onSave(cleaned);
+        }}>
+          {isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving...</> : 'Save'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function MessageTemplatesSection({ orgId }: { orgId: string | null }) {
   const { data: org } = useOrganization(orgId);
   const updateOrg = useUpdateOrganization(orgId);
@@ -1581,236 +1728,56 @@ export default function SettingsPage() {
 
                   <Separator className="opacity-50" />
 
-                  <div>
-                    <h3 className="text-sm font-medium mb-3">Payment Instructions</h3>
-                    <div className="space-y-4">
-                      <p className="text-sm text-muted-foreground">
-                        Instructions shown to members on how to pay (Venmo, Zelle, etc.)
-                      </p>
-                      <Textarea
-                        value={paymentInstructions}
-                        onChange={(e) => setPaymentInstructions(e.target.value)}
-                        placeholder="e.g., Venmo: @ThetaChi, Zelle: treasurer@theta.org"
-                        maxLength={500}
-                        className="min-h-[100px] bg-secondary/30 border-border/50 focus:border-primary"
-                      />
-                      <Button
-                        disabled={updateOrganization.isPending || paymentInstructions === (orgDetails?.paymentInstructions || '')}
-                        onClick={() =>
-                          updateOrganization.mutate(
-                            { paymentInstructions },
-                            {
-                              onSuccess: () => toast({ title: 'Payment instructions saved!' }),
-                              onError: (error: any) =>
-                                toast({
-                                  title: 'Error',
-                                  description: error.message || 'Failed to save payment instructions',
-                                  variant: 'destructive',
-                                }),
-                            },
-                          )
-                        }
-                      >
-                        {updateOrganization.isPending ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Saving...
-                          </>
-                        ) : (
-                          'Save Instructions'
-                        )}
-                      </Button>
-                    </div>
-                  </div>
+                  <PaymentInstructionsSection
+                    value={paymentInstructions}
+                    onChange={setPaymentInstructions}
+                    saved={orgDetails?.paymentInstructions || ''}
+                    onSave={() => updateOrganization.mutate({ paymentInstructions }, {
+                      onSuccess: () => toast({ title: 'Payment instructions saved!' }),
+                      onError: (error: any) => toast({ title: 'Error', description: error.message, variant: 'destructive' }),
+                    })}
+                    isPending={updateOrganization.isPending}
+                  />
 
                   <Separator className="opacity-50" />
 
-                  <div>
-                    <h3 className="text-sm font-medium mb-3">Payment Links</h3>
-                    <div className="space-y-4">
-                      <p className="text-sm text-muted-foreground">
-                        Add your payment handles so members can pay with one tap.
-                      </p>
-                      <div className="space-y-3">
-                        <div className="space-y-1.5">
-                          <Label className="text-sm">Venmo</Label>
-                          <Input
-                            value={paymentHandles.venmo || ''}
-                            onChange={(e) => setPaymentHandles((h) => ({ ...h, venmo: e.target.value }))}
-                            placeholder="@username"
-                            className="bg-secondary/30 border-border/50 focus:border-primary"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-sm">Zelle</Label>
-                          <Input
-                            value={paymentHandles.zelle || ''}
-                            onChange={(e) => setPaymentHandles((h) => ({ ...h, zelle: e.target.value }))}
-                            placeholder="email@example.com or phone"
-                            className="bg-secondary/30 border-border/50 focus:border-primary"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-sm">Cash App</Label>
-                          <Input
-                            value={paymentHandles.cashapp || ''}
-                            onChange={(e) => setPaymentHandles((h) => ({ ...h, cashapp: e.target.value }))}
-                            placeholder="$cashtag"
-                            className="bg-secondary/30 border-border/50 focus:border-primary"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-sm">PayPal</Label>
-                          <Input
-                            value={paymentHandles.paypal || ''}
-                            onChange={(e) => setPaymentHandles((h) => ({ ...h, paypal: e.target.value }))}
-                            placeholder="username"
-                            className="bg-secondary/30 border-border/50 focus:border-primary"
-                          />
-                        </div>
-                      </div>
-                      <Button
-                        disabled={updateOrganization.isPending || JSON.stringify(paymentHandles) === JSON.stringify(orgDetails?.paymentHandles || {})}
-                        onClick={() => {
-                          const cleaned = Object.fromEntries(
-                            Object.entries(paymentHandles).filter(([, v]) => v.trim())
-                          );
-                          updateOrganization.mutate(
-                            { paymentHandles: cleaned },
-                            {
-                              onSuccess: () => toast({ title: 'Payment links saved!' }),
-                              onError: (error: any) =>
-                                toast({
-                                  title: 'Error',
-                                  description: error.message || 'Failed to save payment links',
-                                  variant: 'destructive',
-                                }),
-                            },
-                          );
-                        }}
-                      >
-                        {updateOrganization.isPending ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Saving...
-                          </>
-                        ) : (
-                          'Save Payment Links'
-                        )}
-                      </Button>
-                    </div>
-                  </div>
+                  <PaymentLinksSection
+                    handles={paymentHandles}
+                    onChange={setPaymentHandles}
+                    saved={orgDetails?.paymentHandles || {}}
+                    onSave={(cleaned) => updateOrganization.mutate({ paymentHandles: cleaned }, {
+                      onSuccess: () => toast({ title: 'Payment links saved!' }),
+                      onError: (error: any) => toast({ title: 'Error', description: error.message, variant: 'destructive' }),
+                    })}
+                    isPending={updateOrganization.isPending}
+                  />
 
                   <Separator className="opacity-50" />
 
-                  <div>
-                    <h3 className="text-sm font-medium mb-3">Email Reminders</h3>
-                    <div className="space-y-4">
-                      {(reminderRules as any)?.length > 0 ? (
-                        <div className="space-y-2">
-                          {(reminderRules as any).map((rule: { id: string; triggerType: string; daysOffset: number; isActive: boolean }) => (
-                            <div
-                              key={rule.id}
-                              className="flex items-center justify-between p-3 rounded-xl bg-secondary/30"
-                            >
-                              <span className="text-sm">
-                                <span className="font-medium">{rule.daysOffset} day{rule.daysOffset !== 1 ? 's' : ''}</span>{' '}
-                                {rule.triggerType === 'BEFORE_DUE' ? 'before due date' : 'after due date'}
-                              </span>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
-                                onClick={() => {
-                                  if (!currentOrgId) return;
-                                  deleteReminderRule.mutate(
-                                    { orgId: currentOrgId, id: rule.id },
-                                    {
-                                      onSuccess: () => toast({ title: 'Reminder rule deleted' }),
-                                      onError: (error: any) =>
-                                        toast({
-                                          title: 'Error',
-                                          description: error.message || 'Failed to delete rule',
-                                          variant: 'destructive',
-                                        }),
-                                    },
-                                  );
-                                }}
-                                disabled={deleteReminderRule.isPending}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-muted-foreground">
-                          No reminder rules configured. Add one below to automatically email members about upcoming or overdue charges.
-                        </p>
-                      )}
-
-                      <Separator className="opacity-50" />
-
-                      <div className="space-y-3">
-                        <Label className="text-sm font-medium">Add Rule</Label>
-                        <div className="flex items-center gap-3">
-                          <Input
-                            type="number"
-                            min="1"
-                            max="90"
-                            value={newRuleDays}
-                            onChange={(e) => setNewRuleDays(e.target.value)}
-                            className="w-20 h-10 bg-secondary/30 border-border/50"
-                          />
-                          <span className="text-sm text-muted-foreground whitespace-nowrap">days</span>
-                          <Select value={newRuleTrigger} onValueChange={setNewRuleTrigger}>
-                            <SelectTrigger className="h-10 bg-secondary/30 border-border/50">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="BEFORE_DUE">Before due date</SelectItem>
-                              <SelectItem value="AFTER_DUE">After due date</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <Button
-                            size="sm"
-                            disabled={createReminderRule.isPending || !newRuleDays || parseInt(newRuleDays) < 1}
-                            onClick={() => {
-                              if (!currentOrgId) return;
-                              createReminderRule.mutate(
-                                {
-                                  orgId: currentOrgId,
-                                  data: {
-                                    triggerType: newRuleTrigger,
-                                    daysOffset: parseInt(newRuleDays),
-                                  },
-                                },
-                                {
-                                  onSuccess: () => {
-                                    toast({ title: 'Reminder rule added!' });
-                                    setNewRuleDays('3');
-                                    setNewRuleTrigger('BEFORE_DUE');
-                                  },
-                                  onError: (error: any) =>
-                                    toast({
-                                      title: 'Error',
-                                      description: error.message || 'Failed to create rule',
-                                      variant: 'destructive',
-                                    }),
-                                },
-                              );
-                            }}
-                          >
-                            {createReminderRule.isPending ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <Plus className="w-4 h-4" />
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <ReminderRulesSection
+                    rules={reminderRules as any}
+                    orgId={currentOrgId}
+                    newRuleDays={newRuleDays}
+                    newRuleTrigger={newRuleTrigger}
+                    onDaysChange={setNewRuleDays}
+                    onTriggerChange={setNewRuleTrigger}
+                    onDelete={(id) => {
+                      if (!currentOrgId) return;
+                      deleteReminderRule.mutate({ orgId: currentOrgId, id }, {
+                        onSuccess: () => toast({ title: 'Reminder rule deleted' }),
+                        onError: (error: any) => toast({ title: 'Error', description: error.message, variant: 'destructive' }),
+                      });
+                    }}
+                    onCreate={() => {
+                      if (!currentOrgId) return;
+                      createReminderRule.mutate({ orgId: currentOrgId, data: { triggerType: newRuleTrigger, daysOffset: parseInt(newRuleDays) } }, {
+                        onSuccess: () => { toast({ title: 'Reminder rule added!' }); setNewRuleDays('3'); setNewRuleTrigger('BEFORE_DUE'); },
+                        onError: (error: any) => toast({ title: 'Error', description: error.message, variant: 'destructive' }),
+                      });
+                    }}
+                    deleteIsPending={deleteReminderRule.isPending}
+                    createIsPending={createReminderRule.isPending}
+                  />
                 </>
               )}
             </MotionCardContent>
