@@ -1598,6 +1598,8 @@ IMPORTANT: Users are lazy. Short commands are normal. NEVER ask for clarificatio
 - "remind" with no name? Remind all overdue.
 - Single word like "members" or "charges"? List them.
 
+If nothing matches a lookup, say it doesn't exist and offer to create it. For name mismatches, suggest the closest match: "I don't see 'Brian'. Did you mean Bryan Lui?"
+
 ## Pasted data handling
 Users often paste data directly into chat from Google Sheets, Excel, notes, or bullet lists. Handle ALL of these formats:
 - Tab-separated (from Google Sheets/Excel): "Bryan Lui\t$50\tDues\nSarah Kim\t$30\tEvent"
