@@ -85,66 +85,75 @@ function GmailSyncSection({ orgId }: { orgId: string | null }) {
   const connections = gmailStatus?.connections ?? [];
   const hasConnections = gmailStatus?.connected;
 
+  if (!hasConnections) {
+    return (
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">Auto-import payments from Venmo, Zelle, Cash App, PayPal</p>
+        {orgId && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => { window.location.href = getGmailConnectUrl(orgId, '/settings'); }}
+          >
+            <Mail className="w-3.5 h-3.5 mr-1.5" />
+            Connect Gmail
+          </Button>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
-      {connections.length > 0 && (
-        <div className="space-y-3">
-          {connections.map((conn) => (
-            <div key={conn.id} className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium">{conn.email}</p>
-                <p className="text-xs text-muted-foreground">
-                  {conn.lastSyncAt
-                    ? `Last synced ${new Date(conn.lastSyncAt).toLocaleDateString()}`
-                    : 'Connected, waiting for first sync'}
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleDisconnect(conn.id)}
-                disabled={disconnectGmail.isPending}
-                className="text-destructive hover:text-destructive"
-              >
-                {disconnectGmail.isPending ? 'Disconnecting...' : 'Disconnect'}
-              </Button>
+      <div className="space-y-3">
+        {connections.map((conn) => (
+          <div key={conn.id} className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">{conn.email}</p>
+              <p className="text-xs text-muted-foreground">
+                {conn.lastSyncAt
+                  ? `Last synced ${new Date(conn.lastSyncAt).toLocaleDateString()}`
+                  : 'Connected, waiting for first sync'}
+              </p>
             </div>
-          ))}
-        </div>
-      )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleDisconnect(conn.id)}
+              disabled={disconnectGmail.isPending}
+              className="text-destructive hover:text-destructive"
+            >
+              {disconnectGmail.isPending ? 'Disconnecting...' : 'Disconnect'}
+            </Button>
+          </div>
+        ))}
+      </div>
 
       {orgId && (
         <Button
-          variant={hasConnections ? 'outline' : 'default'}
+          variant="outline"
+          size="sm"
           onClick={() => { window.location.href = getGmailConnectUrl(orgId, '/settings'); }}
         >
-          <Mail className="w-4 h-4 mr-2" />
-          {hasConnections ? 'Add another Gmail' : 'Connect Gmail'}
+          <Mail className="w-3.5 h-3.5 mr-1.5" />
+          Add another Gmail
         </Button>
       )}
 
-      {!hasConnections && (
-        <p className="text-sm text-muted-foreground">
-          Connect Gmail to automatically import payment notifications from Venmo, Zelle, Cash App, and PayPal.
-        </p>
-      )}
-
-      {hasConnections && (
-        <div className="space-y-3">
-          <Label className="text-sm">Sync emails after</Label>
-          <div>
-            <DatePicker
-              value={syncAfterValue}
-              onChange={handleSyncDateChange}
-              placeholder="Select start date"
-              className="w-52"
-            />
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Only import payment emails sent after this date. Leave blank for the last 30 days.
-          </p>
+      <div className="space-y-3">
+        <Label className="text-sm">Sync emails after</Label>
+        <div>
+          <DatePicker
+            value={syncAfterValue}
+            onChange={handleSyncDateChange}
+            placeholder="Select start date"
+            className="w-52"
+          />
         </div>
-      )}
+        <p className="text-xs text-muted-foreground">
+          Only import payment emails sent after this date. Leave blank for the last 30 days.
+        </p>
+      </div>
     </div>
   );
 }
@@ -253,117 +262,128 @@ function BankConnectionsSection({ orgId }: { orgId: string | null }) {
     }
   };
 
-  return (
-    <div className="space-y-4">
-      {connections.length > 0 && (
-        <div className="space-y-3">
-          {connections.map((conn) => (
-            <div key={conn.id} className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium">
-                  {conn.institutionName || 'Bank Account'}
-                  {conn.accountMask && (
-                    <span className="text-muted-foreground ml-1">
-                      ****{conn.accountMask}
-                    </span>
-                  )}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {conn.accountName && `${conn.accountName} · `}
-                  {conn.lastSyncAt
-                    ? `Last synced ${new Date(conn.lastSyncAt).toLocaleDateString()}`
-                    : 'Connected, waiting for first sync'}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleFixConnection(conn.id)}
-                  disabled={createUpdateLinkToken.isPending}
-                >
-                  {createUpdateLinkToken.isPending ? (
-                    <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                  ) : (
-                    <Wrench className="w-3.5 h-3.5 mr-1.5" />
-                  )}
-                  Fix
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleDisconnect(conn.id)}
-                  disabled={disconnectPlaid.isPending}
-                  className="text-destructive hover:text-destructive"
-                >
-                  {disconnectPlaid.isPending ? 'Disconnecting...' : 'Disconnect'}
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="flex items-center gap-2">
+  if (connections.length === 0) {
+    return (
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">Auto-import P2P transactions from Venmo, Zelle, Cash App, PayPal</p>
         <Button
-          variant={connections.length > 0 ? 'outline' : 'default'}
+          variant="outline"
+          size="sm"
           onClick={handleConnect}
           disabled={createLinkToken.isPending}
         >
           {createLinkToken.isPending ? (
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
           ) : (
-            <Landmark className="w-4 h-4 mr-2" />
+            <Landmark className="w-3.5 h-3.5 mr-1.5" />
           )}
-          {connections.length > 0 ? 'Add Another Bank' : 'Connect Bank'}
+          Connect Bank
         </Button>
+      </div>
+    );
+  }
 
-        {connections.length > 0 && (
-          <Button
-            variant="outline"
-            onClick={handleSync}
-            disabled={syncPlaid.isPending}
-          >
-            {syncPlaid.isPending ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <RefreshCw className="w-4 h-4 mr-2" />
-            )}
-            Sync Now
-          </Button>
-        )}
+  return (
+    <div className="space-y-4">
+      <div className="space-y-3">
+        {connections.map((conn) => (
+          <div key={conn.id} className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">
+                {conn.institutionName || 'Bank Account'}
+                {conn.accountMask && (
+                  <span className="text-muted-foreground ml-1">
+                    ****{conn.accountMask}
+                  </span>
+                )}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {conn.accountName && `${conn.accountName} · `}
+                {conn.lastSyncAt
+                  ? `Last synced ${new Date(conn.lastSyncAt).toLocaleDateString()}`
+                  : 'Connected, waiting for first sync'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleFixConnection(conn.id)}
+                disabled={createUpdateLinkToken.isPending}
+              >
+                {createUpdateLinkToken.isPending ? (
+                  <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                ) : (
+                  <Wrench className="w-3.5 h-3.5 mr-1.5" />
+                )}
+                Fix
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleDisconnect(conn.id)}
+                disabled={disconnectPlaid.isPending}
+                className="text-destructive hover:text-destructive"
+              >
+                {disconnectPlaid.isPending ? 'Disconnecting...' : 'Disconnect'}
+              </Button>
+            </div>
+          </div>
+        ))}
       </div>
 
-      {connections.length > 0 && (
-        <div className="space-y-3">
-          <Label className="text-sm">Sync transactions after</Label>
-          <div>
-            <DatePicker
-              value={org?.gmailSyncAfter ? new Date(org.gmailSyncAfter).toISOString().split('T')[0] : ''}
-              onChange={async (dateStr) => {
-                if (!orgId) return;
-                try {
-                  await updateOrg.mutateAsync({ gmailSyncAfter: new Date(dateStr).toISOString() });
-                  toast({ title: 'Sync date updated' });
-                } catch {
-                  toast({ title: 'Failed to update', variant: 'destructive' });
-                }
-              }}
-              placeholder="Select start date"
-              className="w-52"
-            />
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Only import transactions after this date. Applies to both Gmail and bank sync.
-          </p>
-        </div>
-      )}
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleConnect}
+          disabled={createLinkToken.isPending}
+        >
+          {createLinkToken.isPending ? (
+            <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+          ) : (
+            <Landmark className="w-3.5 h-3.5 mr-1.5" />
+          )}
+          Add Another Bank
+        </Button>
 
-      {connections.length === 0 && (
-        <p className="text-sm text-muted-foreground">
-          Connect your bank to automatically import P2P transactions from Venmo, Zelle, Cash App, and PayPal.
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleSync}
+          disabled={syncPlaid.isPending}
+        >
+          {syncPlaid.isPending ? (
+            <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+          ) : (
+            <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+          )}
+          Sync Now
+        </Button>
+      </div>
+
+      <div className="space-y-3">
+        <Label className="text-sm">Sync transactions after</Label>
+        <div>
+          <DatePicker
+            value={org?.gmailSyncAfter ? new Date(org.gmailSyncAfter).toISOString().split('T')[0] : ''}
+            onChange={async (dateStr) => {
+              if (!orgId) return;
+              try {
+                await updateOrg.mutateAsync({ gmailSyncAfter: new Date(dateStr).toISOString() });
+                toast({ title: 'Sync date updated' });
+              } catch {
+                toast({ title: 'Failed to update', variant: 'destructive' });
+              }
+            }}
+            placeholder="Select start date"
+            className="w-52"
+          />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Only import transactions after this date. Applies to both Gmail and bank sync.
         </p>
-      )}
+      </div>
     </div>
   );
 }
@@ -376,6 +396,7 @@ function GroupMeSection({ orgId }: { orgId: string | null }) {
   const { toast } = useToast();
   const [botId, setBotId] = useState('');
   const [groupName, setGroupName] = useState('');
+  const [showForm, setShowForm] = useState(false);
 
   const connections = groupmeData?.connections ?? [];
 
@@ -389,6 +410,7 @@ function GroupMeSection({ orgId }: { orgId: string | null }) {
       toast({ title: 'GroupMe bot connected' });
       setBotId('');
       setGroupName('');
+      setShowForm(false);
     } catch {
       toast({ title: 'Failed to connect', variant: 'destructive' });
     }
@@ -414,6 +436,18 @@ function GroupMeSection({ orgId }: { orgId: string | null }) {
     }
   };
 
+  if (connections.length === 0 && !showForm) {
+    return (
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">Not connected</p>
+        <Button variant="outline" size="sm" onClick={() => setShowForm(true)}>
+          <Plus className="w-3.5 h-3.5 mr-1.5" />
+          Add
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {connections.length > 0 && (
@@ -435,72 +469,82 @@ function GroupMeSection({ orgId }: { orgId: string | null }) {
               </Button>
             </div>
           ))}
-        </div>
-      )}
-
-      <div className="space-y-3">
-        <div className="space-y-2">
-          <Label className="text-sm">Bot ID</Label>
-          <Input
-            value={botId}
-            onChange={(e) => setBotId(e.target.value)}
-            placeholder="Paste your GroupMe Bot ID"
-            className="bg-secondary/30 border-border/50 focus:border-primary font-mono text-sm"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label className="text-sm">Group Name (optional)</Label>
-          <Input
-            value={groupName}
-            onChange={(e) => setGroupName(e.target.value)}
-            placeholder="e.g., Chapter Main Chat"
-            className="bg-secondary/30 border-border/50 focus:border-primary"
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={handleConnect}
-            disabled={connectGroupMe.isPending || !botId.trim()}
-          >
-            {connectGroupMe.isPending ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <Plus className="w-4 h-4 mr-2" />
-            )}
-            Connect
-          </Button>
           {connections.length > 0 && (
             <Button
               variant="outline"
+              size="sm"
               onClick={handleTest}
               disabled={testGroupMe.isPending}
             >
               {testGroupMe.isPending ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
               ) : (
-                <Send className="w-4 h-4 mr-2" />
+                <Send className="w-3.5 h-3.5 mr-1.5" />
               )}
               Send Test Message
             </Button>
           )}
         </div>
-      </div>
+      )}
 
-      <div className="text-sm text-muted-foreground space-y-1">
-        <p>
-          <a
-            href="https://dev.groupme.com/bots"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary hover:underline inline-flex items-center gap-1"
-          >
-            Create a bot at dev.groupme.com/bots
-            <ExternalLink className="w-3 h-3" />
-          </a>
-          {' '}and paste the Bot ID above.
-        </p>
-        <p>Payment notifications, reminders, and weekly summaries will be posted to your group.</p>
-      </div>
+      {!showForm ? (
+        <Button variant="outline" size="sm" onClick={() => setShowForm(true)}>
+          <Plus className="w-3.5 h-3.5 mr-1.5" />
+          Add another
+        </Button>
+      ) : (
+        <div className="space-y-3 pt-3 border-t border-border/30">
+          <div className="space-y-2">
+            <Label className="text-sm">Bot ID</Label>
+            <Input
+              value={botId}
+              onChange={(e) => setBotId(e.target.value)}
+              placeholder="Paste your GroupMe Bot ID"
+              className="bg-secondary/30 border-border/50 focus:border-primary font-mono text-sm"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-sm">Group Name (optional)</Label>
+            <Input
+              value={groupName}
+              onChange={(e) => setGroupName(e.target.value)}
+              placeholder="e.g., Chapter Main Chat"
+              className="bg-secondary/30 border-border/50 focus:border-primary"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              onClick={handleConnect}
+              disabled={connectGroupMe.isPending || !botId.trim()}
+            >
+              {connectGroupMe.isPending ? (
+                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+              ) : (
+                <Plus className="w-3.5 h-3.5 mr-1.5" />
+              )}
+              Connect
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setShowForm(false)}>
+              Cancel
+            </Button>
+          </div>
+          <div className="text-sm text-muted-foreground space-y-1">
+            <p>
+              <a
+                href="https://dev.groupme.com/bots"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline inline-flex items-center gap-1"
+              >
+                Create a bot at dev.groupme.com/bots
+                <ExternalLink className="w-3 h-3" />
+              </a>
+              {' '}and paste the Bot ID above.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -513,6 +557,7 @@ function DiscordSection({ orgId }: { orgId: string | null }) {
   const { toast } = useToast();
   const [webhookUrl, setWebhookUrl] = useState('');
   const [channelName, setChannelName] = useState('');
+  const [showForm, setShowForm] = useState(false);
 
   const connections = discordData?.connections ?? [];
 
@@ -526,6 +571,7 @@ function DiscordSection({ orgId }: { orgId: string | null }) {
       toast({ title: 'Discord webhook connected' });
       setWebhookUrl('');
       setChannelName('');
+      setShowForm(false);
     } catch {
       toast({ title: 'Failed to connect', variant: 'destructive' });
     }
@@ -551,6 +597,18 @@ function DiscordSection({ orgId }: { orgId: string | null }) {
     }
   };
 
+  if (connections.length === 0 && !showForm) {
+    return (
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">Not connected</p>
+        <Button variant="outline" size="sm" onClick={() => setShowForm(true)}>
+          <Plus className="w-3.5 h-3.5 mr-1.5" />
+          Add
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {connections.length > 0 && (
@@ -572,61 +630,71 @@ function DiscordSection({ orgId }: { orgId: string | null }) {
               </Button>
             </div>
           ))}
-        </div>
-      )}
-
-      <div className="space-y-3">
-        <div className="space-y-2">
-          <Label className="text-sm">Webhook URL</Label>
-          <Input
-            value={webhookUrl}
-            onChange={(e) => setWebhookUrl(e.target.value)}
-            placeholder="https://discord.com/api/webhooks/..."
-            className="bg-secondary/30 border-border/50 focus:border-primary font-mono text-sm"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label className="text-sm">Channel Name (optional)</Label>
-          <Input
-            value={channelName}
-            onChange={(e) => setChannelName(e.target.value)}
-            placeholder="e.g., #treasury"
-            className="bg-secondary/30 border-border/50 focus:border-primary"
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={handleConnect}
-            disabled={connectDiscord.isPending || !webhookUrl.trim()}
-          >
-            {connectDiscord.isPending ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <Plus className="w-4 h-4 mr-2" />
-            )}
-            Connect
-          </Button>
           {connections.length > 0 && (
             <Button
               variant="outline"
+              size="sm"
               onClick={handleTest}
               disabled={testDiscord.isPending}
             >
               {testDiscord.isPending ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
               ) : (
-                <Send className="w-4 h-4 mr-2" />
+                <Send className="w-3.5 h-3.5 mr-1.5" />
               )}
               Send Test Message
             </Button>
           )}
         </div>
-      </div>
+      )}
 
-      <div className="text-sm text-muted-foreground space-y-1">
-        <p>Create a webhook in your Discord channel settings and paste the URL above.</p>
-        <p>Payment notifications, reminders, and weekly summaries will be posted to your channel.</p>
-      </div>
+      {!showForm ? (
+        <Button variant="outline" size="sm" onClick={() => setShowForm(true)}>
+          <Plus className="w-3.5 h-3.5 mr-1.5" />
+          Add another
+        </Button>
+      ) : (
+        <div className="space-y-3 pt-3 border-t border-border/30">
+          <div className="space-y-2">
+            <Label className="text-sm">Webhook URL</Label>
+            <Input
+              value={webhookUrl}
+              onChange={(e) => setWebhookUrl(e.target.value)}
+              placeholder="https://discord.com/api/webhooks/..."
+              className="bg-secondary/30 border-border/50 focus:border-primary font-mono text-sm"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-sm">Channel Name (optional)</Label>
+            <Input
+              value={channelName}
+              onChange={(e) => setChannelName(e.target.value)}
+              placeholder="e.g., #treasury"
+              className="bg-secondary/30 border-border/50 focus:border-primary"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              onClick={handleConnect}
+              disabled={connectDiscord.isPending || !webhookUrl.trim()}
+            >
+              {connectDiscord.isPending ? (
+                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+              ) : (
+                <Plus className="w-3.5 h-3.5 mr-1.5" />
+              )}
+              Connect
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setShowForm(false)}>
+              Cancel
+            </Button>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Create a webhook in your Discord channel settings and paste the URL above.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -658,12 +726,14 @@ function MessageTemplatesSection({ orgId }: { orgId: string | null }) {
   const { toast } = useToast();
   const saved = (org?.notificationTemplates ?? {}) as Record<string, string>;
   const [templates, setTemplates] = useState<Record<string, string>>({});
+  const [showForm, setShowForm] = useState(false);
 
   useEffect(() => {
     if (org) setTemplates((org.notificationTemplates ?? {}) as Record<string, string>);
   }, [org]);
 
   const hasChanges = JSON.stringify(templates) !== JSON.stringify(saved);
+  const hasCustomTemplates = Object.keys(saved).some((k) => saved[k]);
 
   const handleSave = async () => {
     if (!orgId) return;
@@ -674,6 +744,20 @@ function MessageTemplatesSection({ orgId }: { orgId: string | null }) {
       toast({ title: 'Failed to save templates', variant: 'destructive' });
     }
   };
+
+  if (!showForm) {
+    return (
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          {hasCustomTemplates ? 'Custom templates configured' : 'Using default templates'}
+        </p>
+        <Button variant="outline" size="sm" onClick={() => setShowForm(true)}>
+          <MessageSquare className="w-3.5 h-3.5 mr-1.5" />
+          Customize
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -710,20 +794,25 @@ function MessageTemplatesSection({ orgId }: { orgId: string | null }) {
           </div>
         </div>
       ))}
-      <Button
-        size="sm"
-        disabled={updateOrg.isPending || !hasChanges}
-        onClick={handleSave}
-      >
-        {updateOrg.isPending ? (
-          <>
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            Saving...
-          </>
-        ) : (
-          'Save Templates'
-        )}
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          disabled={updateOrg.isPending || !hasChanges}
+          onClick={handleSave}
+        >
+          {updateOrg.isPending ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            'Save Templates'
+          )}
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => setShowForm(false)}>
+          Cancel
+        </Button>
+      </div>
     </div>
   );
 }
@@ -736,6 +825,7 @@ function SlackSection({ orgId }: { orgId: string | null }) {
   const { toast } = useToast();
   const [webhookUrl, setWebhookUrl] = useState('');
   const [channelName, setChannelName] = useState('');
+  const [showForm, setShowForm] = useState(false);
 
   const connections = slackData?.connections ?? [];
 
@@ -749,6 +839,7 @@ function SlackSection({ orgId }: { orgId: string | null }) {
       toast({ title: 'Slack webhook connected' });
       setWebhookUrl('');
       setChannelName('');
+      setShowForm(false);
     } catch {
       toast({ title: 'Failed to connect', variant: 'destructive' });
     }
@@ -774,6 +865,18 @@ function SlackSection({ orgId }: { orgId: string | null }) {
     }
   };
 
+  if (connections.length === 0 && !showForm) {
+    return (
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">Not connected</p>
+        <Button variant="outline" size="sm" onClick={() => setShowForm(true)}>
+          <Plus className="w-3.5 h-3.5 mr-1.5" />
+          Add
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {connections.length > 0 && (
@@ -795,61 +898,71 @@ function SlackSection({ orgId }: { orgId: string | null }) {
               </Button>
             </div>
           ))}
-        </div>
-      )}
-
-      <div className="space-y-3">
-        <div className="space-y-2">
-          <Label className="text-sm">Webhook URL</Label>
-          <Input
-            value={webhookUrl}
-            onChange={(e) => setWebhookUrl(e.target.value)}
-            placeholder="https://hooks.slack.com/services/..."
-            className="bg-secondary/30 border-border/50 focus:border-primary font-mono text-sm"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label className="text-sm">Channel Name (optional)</Label>
-          <Input
-            value={channelName}
-            onChange={(e) => setChannelName(e.target.value)}
-            placeholder="e.g., #treasury"
-            className="bg-secondary/30 border-border/50 focus:border-primary"
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={handleConnect}
-            disabled={connectSlack.isPending || !webhookUrl.trim()}
-          >
-            {connectSlack.isPending ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <Plus className="w-4 h-4 mr-2" />
-            )}
-            Connect
-          </Button>
           {connections.length > 0 && (
             <Button
               variant="outline"
+              size="sm"
               onClick={handleTest}
               disabled={testSlack.isPending}
             >
               {testSlack.isPending ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
               ) : (
-                <Send className="w-4 h-4 mr-2" />
+                <Send className="w-3.5 h-3.5 mr-1.5" />
               )}
               Send Test Message
             </Button>
           )}
         </div>
-      </div>
+      )}
 
-      <div className="text-sm text-muted-foreground space-y-1">
-        <p>Create an incoming webhook in your Slack workspace settings and paste the URL above.</p>
-        <p>Payment notifications, reminders, and weekly summaries will be posted to your channel.</p>
-      </div>
+      {!showForm ? (
+        <Button variant="outline" size="sm" onClick={() => setShowForm(true)}>
+          <Plus className="w-3.5 h-3.5 mr-1.5" />
+          Add another
+        </Button>
+      ) : (
+        <div className="space-y-3 pt-3 border-t border-border/30">
+          <div className="space-y-2">
+            <Label className="text-sm">Webhook URL</Label>
+            <Input
+              value={webhookUrl}
+              onChange={(e) => setWebhookUrl(e.target.value)}
+              placeholder="https://hooks.slack.com/services/..."
+              className="bg-secondary/30 border-border/50 focus:border-primary font-mono text-sm"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-sm">Channel Name (optional)</Label>
+            <Input
+              value={channelName}
+              onChange={(e) => setChannelName(e.target.value)}
+              placeholder="e.g., #treasury"
+              className="bg-secondary/30 border-border/50 focus:border-primary"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              onClick={handleConnect}
+              disabled={connectSlack.isPending || !webhookUrl.trim()}
+            >
+              {connectSlack.isPending ? (
+                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+              ) : (
+                <Plus className="w-3.5 h-3.5 mr-1.5" />
+              )}
+              Connect
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setShowForm(false)}>
+              Cancel
+            </Button>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Create an incoming webhook in your Slack workspace settings and paste the URL above.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -1750,9 +1863,6 @@ export default function SettingsPage() {
                   <Separator />
                   <div>
                     <h3 className="text-sm font-medium mb-3">Message Templates</h3>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      Customize the messages sent to your chat integrations. Leave blank to use the default.
-                    </p>
                     <MessageTemplatesSection orgId={currentOrgId} />
                   </div>
                 </div>
