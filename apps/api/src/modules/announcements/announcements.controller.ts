@@ -12,9 +12,9 @@ class CreateAnnouncementDto {
   title: string;
 
   @IsString()
-  @MinLength(1)
+  @IsOptional()
   @MaxLength(5000)
-  body: string;
+  body?: string;
 
   @IsBoolean()
   @IsOptional()
@@ -43,7 +43,7 @@ export class AnnouncementsController {
       orgId,
       actorId,
       dto.title,
-      dto.body,
+      dto.body || dto.title,
       dto.broadcast ?? false,
     );
   }

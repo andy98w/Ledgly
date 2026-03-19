@@ -47,9 +47,9 @@ export default function AnnouncementsPage() {
   };
 
   const handleCreate = () => {
-    if (!orgId || !title.trim() || !body.trim()) return;
+    if (!orgId || !title.trim()) return;
     createAnnouncement.mutate(
-      { orgId, data: { title: title.trim(), body: body.trim(), broadcast } },
+      { orgId, data: { title: title.trim(), body: body.trim() || title.trim(), broadcast } },
       {
         onSuccess: () => {
           toast({ title: 'Announcement posted' });
@@ -156,9 +156,11 @@ export default function AnnouncementsPage() {
                   </Button>
                 </div>
               </div>
-              <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
-                {a.body}
-              </p>
+              {a.body && a.body !== a.title && (
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
+                  {a.body}
+                </p>
+              )}
             </div>
           ))}
         </div>

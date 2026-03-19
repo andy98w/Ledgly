@@ -38,7 +38,9 @@ export class AnnouncementsService {
     });
 
     if (broadcastToChat) {
-      const message = `\uD83D\uDCE2 ${title}\n\n${body}`;
+      const message = body && body !== title
+        ? `\uD83D\uDCE2 ${title}\n\n${body}`
+        : `\uD83D\uDCE2 ${title}`;
       await this.channels.broadcastToOrg(orgId, message).catch(() => {});
     }
 
@@ -48,7 +50,9 @@ export class AnnouncementsService {
   async broadcast(orgId: string, id: string) {
     const announcement = await this.prisma.announcement.findFirst({ where: { id, orgId } });
     if (!announcement) return { success: false };
-    const message = `\uD83D\uDCE2 ${announcement.title}\n\n${announcement.body}`;
+    const message = announcement.body && announcement.body !== announcement.title
+      ? `\uD83D\uDCE2 ${announcement.title}\n\n${announcement.body}`
+      : `\uD83D\uDCE2 ${announcement.title}`;
     await this.channels.broadcastToOrg(orgId, message);
     return { success: true };
   }
