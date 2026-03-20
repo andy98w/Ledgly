@@ -276,137 +276,143 @@ export class MembersService {
 
   async createMany(orgId: string, members: CreateMemberDto[], actorId?: string, actorName?: string) {
     const created: any[] = [];
+    const errors: Array<{ name: string; reason: string }> = [];
     const isPrivilegedRole = (role?: MembershipRole) => role === 'OWNER' || role === 'ADMIN' || role === 'TREASURER';
 
-    // Get org name for invitation emails
     const org = await this.prisma.organization.findUnique({
       where: { id: orgId },
       select: { name: true },
     });
 
     for (const dto of members) {
-      const trimmedName = dto.name.trim();
-      let userId: string | null = null;
+      try {
+        const trimmedName = dto.name.trim();
+        let userId: string | null = null;
 
-      // Enforce email for admin/treasurer roles
-      if (isPrivilegedRole(dto.role) && !dto.email) {
-        throw new BadRequestException('Email is required when adding an admin or treasurer');
-      }
-
-      // Check for duplicate name in org (active/invited members only)
-      const nameMatch = await this.prisma.membership.findFirst({
-        where: { orgId, name: trimmedName, status: { in: ['ACTIVE', 'INVITED'] } },
-      });
-      if (nameMatch) {
-        throw new ConflictException(`A member named "${trimmedName}" already exists`);
-      }
-
-      // If email provided, find or create user
-      if (dto.email) {
-        const normalizedEmail = dto.email.toLowerCase().trim();
-        let user = await this.prisma.user.findUnique({
-          where: { email: normalizedEmail },
-        });
-
-        if (!user) {
-          user = await this.prisma.user.create({
-            data: {
-              email: normalizedEmail,
-              name: trimmedName,
-            },
-          });
+        if (isPrivilegedRole(dto.role) && !dto.email) {
+          errors.push({ name: trimmedName, reason: 'Email is required for admin/treasurer roles' });
+          continue;
         }
 
-        userId = user.id;
-
-        // Check if membership already exists for this user
-        const existing = await this.prisma.membership.findFirst({
-          where: { orgId, userId },
+        // Check for duplicate name in org (active/invited members only)
+        const nameMatch = await this.prisma.membership.findFirst({
+          where: { orgId, name: trimmedName, status: { in: ['ACTIVE', 'INVITED'] } },
         });
+        if (nameMatch) {
+          errors.push({ name: trimmedName, reason: `A member named "${trimmedName}" already exists` });
+          continue;
+        }
 
-        if (existing) {
-          // If already INVITED, reset expiry and resend email
-          if (existing.status === 'INVITED') {
-            const inviteToken = randomBytes(24).toString('hex');
-            const updated = await this.prisma.membership.update({
-              where: { id: existing.id },
+        if (dto.email) {
+          const normalizedEmail = dto.email.toLowerCase().trim();
+
+          // Check if another member in this batch already used this email
+          const emailAlreadyInBatch = created.some((m) => m.invitedEmail === normalizedEmail || m._email === normalizedEmail);
+          if (emailAlreadyInBatch) {
+            errors.push({ name: trimmedName, reason: `Email "${normalizedEmail}" was already used for another member in this batch` });
+            continue;
+          }
+
+          let user = await this.prisma.user.findUnique({
+            where: { email: normalizedEmail },
+          });
+
+          if (!user) {
+            user = await this.prisma.user.create({
               data: {
-                role: dto.role || existing.role,
-                name: trimmedName || existing.name,
+                email: normalizedEmail,
+                name: trimmedName,
+              },
+            });
+          }
+
+          userId = user.id;
+
+          const existing = await this.prisma.membership.findFirst({
+            where: { orgId, userId },
+          });
+
+          if (existing) {
+            if (existing.status === 'INVITED') {
+              const inviteToken = randomBytes(24).toString('hex');
+              const updated = await this.prisma.membership.update({
+                where: { id: existing.id },
+                data: {
+                  role: dto.role || existing.role,
+                  name: trimmedName || existing.name,
+                  inviteExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                  inviteToken,
+                },
+              });
+              await this.emailService.sendAdminInvitation(
+                normalizedEmail,
+                org?.name || 'your organization',
+                actorName || 'An admin',
+                inviteToken,
+              );
+              created.push(updated);
+              continue;
+            }
+            if (existing.status !== 'ACTIVE') {
+              const updated = await this.prisma.membership.update({
+                where: { id: existing.id },
+                data: {
+                  status: 'ACTIVE',
+                  role: dto.role || 'MEMBER',
+                  name: trimmedName || existing.name,
+                  leftAt: null,
+                },
+              });
+              created.push(updated);
+              continue;
+            }
+            errors.push({ name: trimmedName, reason: `A member with email "${normalizedEmail}" already exists` });
+            continue;
+          }
+
+          if (isPrivilegedRole(dto.role) && !user.passwordHash) {
+            const inviteToken = randomBytes(24).toString('hex');
+            const membership = await this.prisma.membership.create({
+              data: {
+                orgId,
+                userId,
+                name: trimmedName,
+                role: dto.role!,
+                status: 'INVITED',
+                invitedEmail: normalizedEmail,
                 inviteExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
                 inviteToken,
               },
             });
+
             await this.emailService.sendAdminInvitation(
               normalizedEmail,
               org?.name || 'your organization',
               actorName || 'An admin',
               inviteToken,
             );
-            created.push(updated);
+
+            created.push({ ...membership, _email: normalizedEmail });
             continue;
           }
-          // Reactivate if inactive/left
-          if (existing.status !== 'ACTIVE') {
-            const updated = await this.prisma.membership.update({
-              where: { id: existing.id },
-              data: {
-                status: 'ACTIVE',
-                role: dto.role || 'MEMBER',
-                name: trimmedName || existing.name,
-                leftAt: null,
-              },
-            });
-            created.push(updated);
-            continue;
-          }
-          throw new ConflictException(`A member with email "${normalizedEmail}" already exists`);
         }
 
-        // Determine if we should create as INVITED
-        // Admin/Treasurer roles where the user hasn't registered (no password) → invitation
-        if (isPrivilegedRole(dto.role) && !user.passwordHash) {
-          const inviteToken = randomBytes(24).toString('hex');
-          const membership = await this.prisma.membership.create({
-            data: {
-              orgId,
-              userId,
-              name: trimmedName,
-              role: dto.role!,
-              status: 'INVITED',
-              invitedEmail: normalizedEmail,
-              inviteExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-              inviteToken,
-            },
-          });
+        const membership = await this.prisma.membership.create({
+          data: {
+            orgId,
+            userId,
+            name: trimmedName,
+            role: dto.role || 'MEMBER',
+            status: 'ACTIVE',
+          },
+        });
 
-          await this.emailService.sendAdminInvitation(
-            normalizedEmail,
-            org?.name || 'your organization',
-            actorName || 'An admin',
-            inviteToken,
-          );
-
-          created.push(membership);
-          continue;
-        }
+        created.push({ ...membership, _email: dto.email?.toLowerCase().trim() });
+      } catch (err: any) {
+        errors.push({ name: dto.name, reason: err.message || 'Unknown error' });
       }
-
-      // Create membership (direct add — ACTIVE)
-      const membership = await this.prisma.membership.create({
-        data: {
-          orgId,
-          userId,
-          name: trimmedName,
-          role: dto.role || 'MEMBER',
-          status: 'ACTIVE',
-        },
-      });
-
-      created.push(membership);
     }
 
-    // Audit log
     if (actorId && created.length > 0) {
       const batch = created.length > 1 ? this.auditService.createBatchContext(`Added ${created.length} members`) : undefined;
       for (const m of created) {
@@ -414,7 +420,17 @@ export class MembersService {
       }
     }
 
-    return created;
+    // Clean internal tracking fields before returning
+    const cleanCreated = created.map(({ _email, ...rest }) => rest);
+
+    if (errors.length > 0 && cleanCreated.length === 0) {
+      throw new ConflictException({
+        message: 'All members failed to import',
+        errors,
+      });
+    }
+
+    return { created: cleanCreated, errors };
   }
 
   async resendInvitation(orgId: string, membershipId: string, actorName?: string) {

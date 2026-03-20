@@ -799,8 +799,8 @@ export default function PaymentsPage() {
         members: unmatchedNames.map((name) => ({ name })),
       });
       setSelectedPayments(new Set());
-      const names = created.map((m: any) => m.name).join(', ');
-      toast({ title: `Created ${created.length} member${created.length !== 1 ? 's' : ''}: ${names}` });
+      const names = created.created.map((m: any) => m.name).join(', ');
+      toast({ title: `Created ${created.created.length} member${created.created.length !== 1 ? 's' : ''}: ${names}` });
     } catch (error: any) {
       toast({
         title: 'Error creating members',

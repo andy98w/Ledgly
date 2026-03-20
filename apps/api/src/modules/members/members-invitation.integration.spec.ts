@@ -89,15 +89,16 @@ describe('Members Invitation Flow (integration)', () => {
     await module.close();
   }, 15_000);
 
-  // 1. Admin creation requires email
-  it('creating admin without email throws BadRequestException', async () => {
-    await expect(
-      membersService.createMany(
-        orgId,
-        [{ name: 'No Email Admin', role: 'ADMIN' }],
-        adminMembershipId,
-      ),
-    ).rejects.toThrow(BadRequestException);
+  // 1. Admin creation requires email — now returns error instead of throwing
+  it('creating admin without email returns error', async () => {
+    const result = await membersService.createMany(
+      orgId,
+      [{ name: 'No Email Admin', role: 'ADMIN' }],
+      adminMembershipId,
+    );
+    expect(result.created).toHaveLength(0);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0].reason).toContain('Email is required');
   });
 
   // 2. Member creation does NOT require email
@@ -107,9 +108,9 @@ describe('Members Invitation Flow (integration)', () => {
       [{ name: `Regular Member ${Date.now()}` }],
       adminMembershipId,
     );
-    expect(result).toHaveLength(1);
-    expect(result[0].status).toBe('ACTIVE');
-    expect(result[0].role).toBe('MEMBER');
+    expect(result.created).toHaveLength(1);
+    expect(result.created[0].status).toBe('ACTIVE');
+    expect(result.created[0].role).toBe('MEMBER');
   });
 
   // 3. Admin with email creates INVITED membership
@@ -122,13 +123,13 @@ describe('Members Invitation Flow (integration)', () => {
       'Test Admin',
     );
 
-    expect(result).toHaveLength(1);
-    expect(result[0].status).toBe('INVITED');
-    expect(result[0].invitedEmail).toBe(email);
-    expect(result[0].inviteExpiresAt).toBeDefined();
+    expect(result.created).toHaveLength(1);
+    expect(result.created[0].status).toBe('INVITED');
+    expect(result.created[0].invitedEmail).toBe(email);
+    expect(result.created[0].inviteExpiresAt).toBeDefined();
 
     // Verify expiry is ~7 days from now
-    const expiresAt = new Date(result[0].inviteExpiresAt!);
+    const expiresAt = new Date(result.created[0].inviteExpiresAt!);
     const sevenDaysFromNow = Date.now() + 7 * 24 * 60 * 60 * 1000;
     expect(Math.abs(expiresAt.getTime() - sevenDaysFromNow)).toBeLessThan(10_000);
 
@@ -155,9 +156,9 @@ describe('Members Invitation Flow (integration)', () => {
       adminMembershipId,
     );
 
-    expect(result).toHaveLength(1);
-    expect(result[0].status).toBe('ACTIVE');
-    expect(result[0].role).toBe('ADMIN');
+    expect(result.created).toHaveLength(1);
+    expect(result.created[0].status).toBe('ACTIVE');
+    expect(result.created[0].role).toBe('ADMIN');
   });
 
   // 5. Registration links invited memberships

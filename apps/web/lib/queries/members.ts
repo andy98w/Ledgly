@@ -49,7 +49,7 @@ export function useCreateMembers() {
     }: {
       orgId: string;
       members: Array<{ name: string; email?: string; role?: string }>;
-    }) => api.post<Array<{ id: string; name: string }>>(`/organizations/${orgId}/members`, { members }),
+    }) => api.post<{ created: Array<{ id: string; name: string }>; errors: Array<{ name: string; reason: string }> }>(`/organizations/${orgId}/members`, { members }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.members.all(variables.orgId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(variables.orgId) });

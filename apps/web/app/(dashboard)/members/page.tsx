@@ -465,12 +465,12 @@ function AddMemberDialog() {
     if (!currentOrgId || !name.trim()) return;
 
     try {
-      const created = await createMembers.mutateAsync({
+      const result = await createMembers.mutateAsync({
         orgId: currentOrgId,
         members: [{ name: name.trim(), email: email.trim() || undefined, role }],
       });
       const createdName = name.trim();
-      const createdId = created[0]?.id;
+      const createdId = result.created[0]?.id;
       toast({
         title: `${createdName} added`,
         action: createdId ? (
@@ -625,7 +625,7 @@ export default function MembersPage() {
       }));
     if (members.length === 0) throw new Error('No valid members found');
     const result = await createMembersForImport.mutateAsync({ orgId: currentOrgId, members });
-    return { success: result.length, errors: records.length - result.length };
+    return { success: result.created.length, errors: result.errors.length };
   };
 
   // Sort and paginate members

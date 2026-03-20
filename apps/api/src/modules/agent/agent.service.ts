@@ -253,26 +253,27 @@ Return ONLY the JSON object, no markdown or explanation.`;
             content: finalMessage.content,
           });
 
-          // Execute each read tool and create tool_result messages
-          const toolResults: Anthropic.ToolResultBlockParam[] = [];
-          for (const block of readTools) {
-            try {
-              const result = await this.executeReadTool(orgId, block.name, block.input as Record<string, any>);
-              toolResults.push({
-                type: 'tool_result',
-                tool_use_id: block.id,
-                content: JSON.stringify(result),
-              });
-            } catch (err: any) {
-              this.logFailure(orgId, lastUserMsg, null, 'tool_execution_error', block.name).catch(() => {});
-              toolResults.push({
-                type: 'tool_result',
-                tool_use_id: block.id,
-                content: `Error: ${err.message}. Try a different approach or ask the user for clarification.`,
-                is_error: true,
-              });
-            }
-          }
+          // Execute all read tools in parallel
+          const toolResults: Anthropic.ToolResultBlockParam[] = await Promise.all(
+            readTools.map(async (block) => {
+              try {
+                const result = await this.executeReadTool(orgId, block.name, block.input as Record<string, any>);
+                return {
+                  type: 'tool_result' as const,
+                  tool_use_id: block.id,
+                  content: JSON.stringify(result),
+                };
+              } catch (err: any) {
+                this.logFailure(orgId, lastUserMsg, null, 'tool_execution_error', block.name).catch(() => {});
+                return {
+                  type: 'tool_result' as const,
+                  tool_use_id: block.id,
+                  content: `Error: ${err.message}. Try a different approach or ask the user for clarification.`,
+                  is_error: true as const,
+                };
+              }
+            }),
+          );
 
           anthropicMessages.push({
             role: 'user',
@@ -296,39 +297,87 @@ Return ONLY the JSON object, no markdown or explanation.`;
   ): Promise<Array<{ toolName: string; success: boolean; message: string; details?: any }>> {
     const results: Array<{ toolName: string; success: boolean; message: string; details?: any; skipped?: Array<{ id: string; reason: string }> }> = [];
 
-    // Wrap all agent actions so every audit entry gets source: 'LEDGLY_AI'
     await this.auditService.runWithSource('LEDGLY_AI', async () => {
-      for (const action of actions) {
-        try {
+      const settled = await Promise.allSettled(
+        actions.map(async (action) => {
           const result = await this.executeWriteTool(orgId, actorId, action.toolName, action.args);
-          let message = await this.describeAction(orgId, action.toolName, action.args);
+          // Fire-and-forget memory storage
+          this.storeAgentMemory(orgId, action.toolName, action.args).catch(() => {});
+          return { action, result };
+        }),
+      );
 
-          // Surface partial failures (e.g. bulkRemove skipped items)
-          const skipped = result?.skipped;
+      for (const outcome of settled) {
+        if (outcome.status === 'fulfilled') {
+          const { action, result } = outcome.value;
+          let message = this.describeActionFast(action.toolName, action.args);
+          const skipped = result?.skipped || result?.errors;
           if (Array.isArray(skipped) && skipped.length > 0) {
-            message += ` (${skipped.length} skipped: ${skipped.map((s: any) => s.reason).join(', ')})`;
+            message += ` (${skipped.length} skipped: ${skipped.map((s: any) => s.reason || s.name).join(', ')})`;
           }
-
-          results.push({
-            toolName: action.toolName,
-            success: true,
-            message,
-            details: result,
-            skipped,
-          });
-
-          await this.storeAgentMemory(orgId, action.toolName, action.args).catch(() => {});
-        } catch (err: any) {
-          results.push({
-            toolName: action.toolName,
-            success: false,
-            message: `Failed: ${err.message}`,
-          });
+          results.push({ toolName: action.toolName, success: true, message, details: result, skipped });
+        } else {
+          const action = actions[settled.indexOf(outcome)];
+          results.push({ toolName: action.toolName, success: false, message: `Failed: ${outcome.reason?.message}` });
         }
       }
     });
 
     return results;
+  }
+
+  private describeActionFast(toolName: string, args: Record<string, any>): string {
+    const fmt = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+    switch (toolName) {
+      case 'add_members':
+        return `Added ${args.members?.length || 0} member(s)`;
+      case 'update_member':
+        return `Updated member`;
+      case 'update_charge':
+        return `Updated charge`;
+      case 'update_expense':
+        return `Updated expense`;
+      case 'create_charges':
+      case 'create_multi_charge':
+        return `Charged "${args.title}" (${fmt(args.amountCents || 0)}) to ${args.membershipIds?.length || 0} member(s)`;
+      case 'create_expense':
+        return `Recorded expense "${args.title}" (${fmt(args.amountCents || 0)})`;
+      case 'create_multi_expense':
+        return `Recorded "${args.title}" with ${args.children?.length || 0} line item(s)`;
+      case 'record_payments':
+        return `Recorded ${args.payments?.length || 0} payment(s)`;
+      case 'void_charges':
+        return `Voided ${args.chargeIds?.length || 0} charge(s)`;
+      case 'remove_members':
+        return `Removed ${args.memberIds?.length || 0} member(s)`;
+      case 'delete_expenses':
+        return `Deleted ${args.expenseIds?.length || 0} expense(s)`;
+      case 'restore_charges':
+        return `Restored ${args.chargeIds?.length || 0} charge(s)`;
+      case 'restore_expenses':
+        return `Restored ${args.expenseIds?.length || 0} expense(s)`;
+      case 'restore_members':
+        return `Restored ${args.memberIds?.length || 0} member(s)`;
+      case 'delete_payments':
+        return `Deleted ${args.paymentIds?.length || 0} payment(s)`;
+      case 'restore_payments':
+        return `Restored ${args.paymentIds?.length || 0} payment(s)`;
+      case 'send_reminders':
+        return `Sent reminders`;
+      case 'create_announcement':
+        return `Created announcement "${args.title}"`;
+      case 'broadcast_message':
+        return `Broadcast message to channels`;
+      case 'allocate_payment':
+      case 'auto_allocate_payment':
+        return `Allocated payment`;
+      case 'deallocate_payment':
+        return `Deallocated payment`;
+      case 'import_csv':
+        return `Imported ${args.rows?.length || 0} ${args.type || 'rows'}`;
+      default:
+        return `Executed ${toolName}`;
+    }
   }
 
   private async executeReadTool(orgId: string, toolName: string, args: Record<string, any>): Promise<any> {

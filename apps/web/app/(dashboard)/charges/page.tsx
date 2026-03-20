@@ -552,7 +552,7 @@ export default function ChargesPage() {
         orgId: currentOrgId,
         members: [{ name }],
       });
-      const newMember = result[0];
+      const newMember = result.created[0];
       if (newMember) {
         toast({ title: `Added ${newMember.name}` });
         return { id: newMember.id, displayName: newMember.name };

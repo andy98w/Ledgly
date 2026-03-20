@@ -209,6 +209,80 @@ export class EmailService {
     }
   }
 
+  async sendChargeNotification(
+    email: string,
+    memberName: string,
+    chargeTitle: string,
+    amount: string,
+    orgName: string,
+    dueDate: string | null,
+    paymentHandles?: Record<string, string>,
+    enabledSources?: string[],
+  ): Promise<void> {
+    const from = this.configService.get<string>('EMAIL_FROM', 'Ledgly <noreply@ledgly.app>');
+
+    if (!this.resend) {
+      this.logger.warn(`Resend not configured — skipping charge notification to ${email}`);
+      return;
+    }
+
+    const greeting = memberName ? `Hi ${memberName.split(' ')[0]},` : 'Hi,';
+    const dueLine = dueDate ? `<p style="margin: 0 0 4px; color: #999; font-size: 13px;">Due ${dueDate}</p>` : '';
+
+    let paymentLinksHtml = '';
+    if (paymentHandles && enabledSources) {
+      const links: string[] = [];
+      const buttonStyle = 'display: inline-block; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; text-decoration: none; margin: 4px;';
+      if (enabledSources.includes('venmo') && paymentHandles.venmo) {
+        const handle = paymentHandles.venmo.replace(/^@/, '');
+        const url = `https://account.venmo.com/pay?recipients=${encodeURIComponent(handle)}&amount=${amount}&note=${encodeURIComponent(chargeTitle)}`;
+        links.push(`<a href="${url}" style="${buttonStyle} background: #008CFF; color: white;">Pay $${amount} on Venmo</a>`);
+      }
+      if (enabledSources.includes('cashapp') && paymentHandles.cashapp) {
+        const handle = paymentHandles.cashapp.replace(/^\$/, '');
+        const url = `https://cash.app/$${handle}/${amount}`;
+        links.push(`<a href="${url}" style="${buttonStyle} background: #00D632; color: white;">Pay $${amount} on Cash App</a>`);
+      }
+      if (enabledSources.includes('paypal') && paymentHandles.paypal) {
+        const url = `https://paypal.me/${paymentHandles.paypal}/${amount}`;
+        links.push(`<a href="${url}" style="${buttonStyle} background: #0070BA; color: white;">Pay $${amount} on PayPal</a>`);
+      }
+      if (enabledSources.includes('zelle') && paymentHandles.zelle) {
+        links.push(`<p style="margin: 8px 0 0; font-size: 13px; color: #666;">Pay via Zelle to: <strong>${paymentHandles.zelle}</strong></p>`);
+      }
+      if (links.length > 0) {
+        paymentLinksHtml = `
+          <div style="margin: 24px 0 0; padding: 20px 0 0; border-top: 1px solid #eee;">
+            <p style="margin: 0 0 12px; font-size: 13px; color: #999; text-transform: uppercase; letter-spacing: 0.5px;">Pay now</p>
+            <div style="text-align: center;">${links.join('\n')}</div>
+          </div>`;
+      }
+    }
+
+    try {
+      await this.resend.emails.send({
+        from,
+        to: email,
+        subject: `${orgName}: New charge — ${chargeTitle} ($${amount})`,
+        html: this.wrapTemplate(`
+          <p style="margin: 0 0 20px; color: #666; font-size: 15px; line-height: 1.5;">${greeting}</p>
+          <p style="margin: 0 0 16px; color: #666; font-size: 14px;">You've been charged by <strong>${orgName}</strong>:</p>
+          <div style="background: #F0F9FF; border-left: 4px solid #3B82F6; border-radius: 8px; padding: 16px 20px; margin: 0 0 20px;">
+            <p style="margin: 0 0 4px; font-size: 20px; font-weight: 700; color: #111;">$${amount}</p>
+            <p style="margin: 0 0 4px; color: #333; font-size: 15px; font-weight: 500;">${chargeTitle}</p>
+            ${dueLine}
+          </div>
+          ${paymentLinksHtml}
+          <p style="margin: 24px 0 0; color: #bbb; font-size: 12px;">
+            Sent via Ledgly on behalf of ${orgName}
+          </p>
+        `),
+      });
+    } catch (error) {
+      this.logger.error('Failed to send charge notification', error);
+    }
+  }
+
   async sendOverdueReminder(
     email: string,
     chargeTitle: string,

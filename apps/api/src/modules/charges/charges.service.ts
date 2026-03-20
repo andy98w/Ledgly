@@ -264,6 +264,9 @@ export class ChargesService {
       ),
     );
 
+    // Send email notifications (fire-and-forget)
+    this.sendChargeNotifications(orgId, memberships, dto.title, dto.amountCents, parsedDueDate).catch(() => {});
+
     return { parent, children };
   }
 
@@ -408,7 +411,46 @@ export class ChargesService {
       ),
     );
 
+    // Send email notifications to members with emails (fire-and-forget)
+    this.sendChargeNotifications(orgId, memberships, dto.title, dto.amountCents, parsedDueDate).catch(() => {});
+
     return charges;
+  }
+
+  private async sendChargeNotifications(
+    orgId: string,
+    memberships: Array<{ id: string; name: string | null; user: { name: string | null; email: string | null } | null }>,
+    title: string,
+    amountCents: number,
+    dueDate: Date | null,
+  ) {
+    const org = await this.prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { name: true, paymentHandles: true, enabledPaymentSources: true },
+    });
+    if (!org) return;
+
+    const amount = (amountCents / 100).toFixed(2);
+    const dueDateStr = dueDate ? dueDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : null;
+    const handles = (org.paymentHandles as Record<string, string>) ?? {};
+    const sources = org.enabledPaymentSources ?? [];
+
+    await Promise.all(
+      memberships
+        .filter((m) => m.user?.email)
+        .map((m) =>
+          this.emailService.sendChargeNotification(
+            m.user!.email!,
+            m.name || m.user!.name || 'Member',
+            title,
+            amount,
+            org.name,
+            dueDateStr,
+            handles,
+            sources,
+          ),
+        ),
+    );
   }
 
   async update(orgId: string, chargeId: string, dto: UpdateChargeDto, actorId?: string) {

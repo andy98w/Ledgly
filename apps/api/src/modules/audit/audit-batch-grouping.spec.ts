@@ -134,13 +134,13 @@ describe('Audit batch grouping (integration)', () => {
   it('bulk member creation groups logs into a single batch entry', async () => {
     const { membersService, auditService, prisma, orgId, membershipId } = ctx;
 
-    const created = await membersService.createMany(orgId, [
+    const result = await membersService.createMany(orgId, [
       { name: 'Batch A', role: 'MEMBER' as any },
       { name: 'Batch B', role: 'MEMBER' as any },
       { name: 'Batch C', role: 'MEMBER' as any },
     ], membershipId);
-    expect(created.length).toBe(3);
-    const createdIds = created.map((m) => m.id);
+    expect(result.created.length).toBe(3);
+    const createdIds = result.created.map((m) => m.id);
 
     const auditResult = await auditService.findByOrg(orgId, { groupByBatch: true });
     const data = auditResult.data as any[];
@@ -164,11 +164,11 @@ describe('Audit batch grouping (integration)', () => {
     const { membersService, auditService, prisma, orgId, membershipId } = ctx;
 
     // Create members to remove
-    const created = await membersService.createMany(orgId, [
+    const result = await membersService.createMany(orgId, [
       { name: 'Remove A', role: 'MEMBER' as any },
       { name: 'Remove B', role: 'MEMBER' as any },
     ], membershipId);
-    const ids = created.map((m) => m.id);
+    const ids = result.created.map((m) => m.id);
 
     // Clear creation audit logs
     await prisma.auditLog.deleteMany({ where: { orgId, entityId: { in: ids } } });
