@@ -803,7 +803,7 @@ export default function SpreadsheetPage() {
         orgId: currentOrgId,
         members: [{ name }],
       });
-      const createdId = Array.isArray(result) && result.length > 0 ? result[0].id : null;
+      const createdId = result.created?.length > 0 ? result.created[0].id : null;
       toast({
         title: `Added member: ${name}`,
         action: createdId ? (
