@@ -230,6 +230,33 @@ function useTypewriter(texts: string[], speed = 60, pause = 2000) {
   return displayed;
 }
 
+/* ─── Glow Card ──────────────────────────────────────────────── */
+
+function GlowCard({ children, className }: { children: React.ReactNode; className?: string }) {
+  const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
+
+  return (
+    <div
+      className={cn('relative', className)}
+      onMouseMove={(e) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+      }}
+      onMouseLeave={() => setMousePos(null)}
+    >
+      {mousePos && (
+        <div
+          className="pointer-events-none absolute inset-0 z-10 rounded-2xl"
+          style={{
+            background: `radial-gradient(400px circle at ${mousePos.x}px ${mousePos.y}px, rgba(59,130,246,0.06), transparent 70%)`,
+          }}
+        />
+      )}
+      {children}
+    </div>
+  );
+}
+
 /* ─── Component ──────────────────────────────────────────────── */
 
 export default function LandingPage() {
@@ -436,17 +463,19 @@ export default function LandingPage() {
           <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
             {featureCards.map((feature, i) => (
               <ScrollReveal key={feature.title} delay={i * 120}>
-                <div
-                  className="rounded-2xl bg-card/50 dark:bg-white/5 backdrop-blur-xl border border-border/50 dark:border-white/10 p-8 hover:bg-card/80 dark:hover:bg-white/10 hover:border-border dark:hover:border-white/20 hover:scale-[1.02] shadow-xl dark:shadow-[0_8px_32px_rgba(0,0,0,0.3)] transition-all duration-200 h-full"
-                >
-                  <div className={cn('p-2.5 rounded-lg w-fit mb-4 bg-gradient-to-br border', feature.gradient, feature.border)}>
-                    <feature.icon className="h-5 w-5 text-foreground" />
+                <GlowCard className="h-full">
+                  <div
+                    className="rounded-2xl bg-card/50 dark:bg-white/5 backdrop-blur-xl border border-border/50 dark:border-white/10 p-8 hover:bg-card/80 dark:hover:bg-white/10 hover:border-border dark:hover:border-white/20 hover:scale-[1.02] shadow-xl dark:shadow-[0_8px_32px_rgba(0,0,0,0.3)] transition-all duration-200 h-full"
+                  >
+                    <div className={cn('p-2.5 rounded-lg w-fit mb-4 bg-gradient-to-br border', feature.gradient, feature.border)}>
+                      <feature.icon className="h-5 w-5 text-foreground" />
+                    </div>
+                    <h3 className="font-semibold mb-2 text-foreground">{feature.title}</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      {feature.description}
+                    </p>
                   </div>
-                  <h3 className="font-semibold mb-2 text-foreground">{feature.title}</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    {feature.description}
-                  </p>
-                </div>
+                </GlowCard>
               </ScrollReveal>
             ))}
           </div>
@@ -572,15 +601,17 @@ export default function LandingPage() {
           <div className="grid gap-8 sm:grid-cols-3">
             {whyLedgly.map((item, i) => (
               <ScrollReveal key={item.title} delay={i * 100}>
-                <div className="rounded-2xl bg-card/50 dark:bg-white/5 backdrop-blur-xl border border-border/50 dark:border-white/10 p-8 text-center hover:bg-card/80 dark:hover:bg-white/10 hover:border-border dark:hover:border-white/20 hover:scale-[1.02] shadow-xl dark:shadow-[0_8px_32px_rgba(0,0,0,0.3)] transition-all duration-200 h-full">
-                  <div className="p-3 rounded-xl w-fit mx-auto mb-5 bg-gradient-to-br from-blue-500/20 to-cyan-600/20 border border-blue-500/30">
-                    <item.icon className="h-6 w-6 text-primary dark:text-cyan-400" />
+                <GlowCard className="h-full">
+                  <div className="rounded-2xl bg-card/50 dark:bg-white/5 backdrop-blur-xl border border-border/50 dark:border-white/10 p-8 text-center hover:bg-card/80 dark:hover:bg-white/10 hover:border-border dark:hover:border-white/20 hover:scale-[1.02] shadow-xl dark:shadow-[0_8px_32px_rgba(0,0,0,0.3)] transition-all duration-200 h-full">
+                    <div className="p-3 rounded-xl w-fit mx-auto mb-5 bg-gradient-to-br from-blue-500/20 to-cyan-600/20 border border-blue-500/30">
+                      <item.icon className="h-6 w-6 text-primary dark:text-cyan-400" />
+                    </div>
+                    <h3 className="font-semibold mb-2 text-foreground">{item.title}</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      {item.description}
+                    </p>
                   </div>
-                  <h3 className="font-semibold mb-2 text-foreground">{item.title}</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    {item.description}
-                  </p>
-                </div>
+                </GlowCard>
               </ScrollReveal>
             ))}
           </div>

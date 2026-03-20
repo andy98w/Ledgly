@@ -87,7 +87,7 @@ export default function DashboardLayout({
         {pathname === '/agent' ? (
           <div className="h-screen pt-6 px-2 md:px-4">{children}</div>
         ) : (
-          <div className="container max-w-6xl py-8 px-4 md:px-8">{children}</div>
+          <div className="container max-w-6xl py-8 px-4 md:px-8 animate-in fade-in duration-200">{children}</div>
         )}
       </main>
       <MobileNav />
