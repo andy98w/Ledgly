@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
@@ -188,12 +188,61 @@ const faqItems = [
   },
 ];
 
+/* ─── Typewriter ─────────────────────────────────────────────── */
+
+function useTypewriter(texts: string[], speed = 60, pause = 2000) {
+  const [displayed, setDisplayed] = useState('');
+  const [textIndex, setTextIndex] = useState(0);
+  const [charIndex, setCharIndex] = useState(0);
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    const current = texts[textIndex];
+
+    if (!deleting && charIndex <= current.length) {
+      const timer = setTimeout(() => {
+        setDisplayed(current.slice(0, charIndex));
+        setCharIndex(charIndex + 1);
+      }, charIndex === current.length ? pause : speed);
+      return () => clearTimeout(timer);
+    }
+
+    if (!deleting && charIndex > current.length) {
+      setDeleting(true);
+      return;
+    }
+
+    if (deleting && charIndex >= 0) {
+      const timer = setTimeout(() => {
+        setDisplayed(current.slice(0, charIndex));
+        setCharIndex(charIndex - 1);
+      }, speed / 2);
+      return () => clearTimeout(timer);
+    }
+
+    if (deleting && charIndex < 0) {
+      setDeleting(false);
+      setCharIndex(0);
+      setTextIndex((textIndex + 1) % texts.length);
+    }
+  }, [texts, textIndex, charIndex, deleting, speed, pause]);
+
+  return displayed;
+}
+
 /* ─── Component ──────────────────────────────────────────────── */
 
 export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
   const [openFaq, setOpenFaq] = useState<Set<number>>(new Set());
+
+  const typewriterText = useTypewriter([
+    'Venmo Payments',
+    'Zelle Transfers',
+    'CashApp Payments',
+    'PayPal Receipts',
+  ], 70, 2500);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -273,11 +322,13 @@ export default function LandingPage() {
           </div>
 
           <h1 className="text-4xl md:text-6xl font-bold tracking-tight leading-[1.1] text-foreground animate-reveal-up" style={{ animationDelay: '100ms' }}>
-            Stop Chasing Venmo Payments
+            Stop Chasing
             <br />
             <span className="bg-gradient-to-r from-foreground via-primary to-primary/60 dark:from-white dark:via-blue-200 dark:to-cyan-300 bg-clip-text text-transparent">
-              in a Spreadsheet
+              {typewriterText}<span className="animate-pulse text-primary">|</span>
             </span>
+            <br />
+            <span className="text-muted-foreground text-3xl md:text-5xl">in a Spreadsheet</span>
           </h1>
           <p className="mt-6 text-lg text-muted-foreground max-w-xl mx-auto leading-7 animate-reveal-up" style={{ animationDelay: '200ms' }}>
             Connect your Gmail. We auto-import Venmo, Zelle, CashApp &amp; PayPal payments and match them to dues — for free.
@@ -384,7 +435,7 @@ export default function LandingPage() {
 
           <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
             {featureCards.map((feature, i) => (
-              <ScrollReveal key={feature.title} delay={i * 80}>
+              <ScrollReveal key={feature.title} delay={i * 120}>
                 <div
                   className="rounded-2xl bg-card/50 dark:bg-white/5 backdrop-blur-xl border border-border/50 dark:border-white/10 p-8 hover:bg-card/80 dark:hover:bg-white/10 hover:border-border dark:hover:border-white/20 hover:scale-[1.02] shadow-xl dark:shadow-[0_8px_32px_rgba(0,0,0,0.3)] transition-all duration-200 h-full"
                 >
@@ -550,7 +601,7 @@ export default function LandingPage() {
 
           <div className="space-y-3">
             {faqItems.map((item, i) => (
-              <ScrollReveal key={i} delay={i * 60}>
+              <ScrollReveal key={i} delay={i * 100}>
                 <div className="rounded-2xl bg-card/50 dark:bg-white/5 backdrop-blur-xl border border-border/50 dark:border-white/10 shadow-xl dark:shadow-[0_8px_32px_rgba(0,0,0,0.3)] overflow-hidden transition-all duration-200 hover:border-border dark:hover:border-white/20">
                   <button
                     onClick={() => toggleFaq(i)}

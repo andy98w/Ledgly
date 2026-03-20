@@ -15,11 +15,11 @@ interface ScrollRevealProps {
 }
 
 const directionStyles: Record<Direction, CSSProperties> = {
-  up: { transform: 'translateY(24px)' },
-  down: { transform: 'translateY(-24px)' },
-  left: { transform: 'translateX(24px)' },
-  right: { transform: 'translateX(-24px)' },
-  scale: { transform: 'scale(0.95)' },
+  up: { transform: 'translateY(40px)' },
+  down: { transform: 'translateY(-40px)' },
+  left: { transform: 'translateX(40px)' },
+  right: { transform: 'translateX(-40px)' },
+  scale: { transform: 'scale(0.9)' },
 };
 
 export function ScrollReveal({
