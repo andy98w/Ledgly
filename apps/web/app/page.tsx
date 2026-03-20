@@ -17,6 +17,7 @@ import {
   MessageSquare,
   Shield,
   Download,
+  ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScrollReveal } from '@/components/ui/scroll-reveal';
@@ -160,11 +161,39 @@ const integrations = [
   { label: 'Slack', category: 'notification' },
 ];
 
+const faqItems = [
+  {
+    q: 'Is it really free?',
+    a: "Yes. Ledgly is completely free with no transaction fees. We don't touch your money — we just help you track it.",
+  },
+  {
+    q: 'Do members need to download an app?',
+    a: 'No. Members access their portal through a web link. They keep paying through Venmo, Zelle, CashApp, or PayPal as usual.',
+  },
+  {
+    q: 'How does Gmail sync work?',
+    a: 'You connect your Gmail account, and Ledgly reads payment notification emails from Venmo, Zelle, CashApp, and PayPal. We only read emails from these specific senders — never your personal emails.',
+  },
+  {
+    q: 'Is my data secure?',
+    a: 'Yes. All data is encrypted in transit and at rest. Bank connections use Plaid\u2019s bank-grade security. We never store your banking credentials.',
+  },
+  {
+    q: 'Can I use this for my fraternity/sorority?',
+    a: 'Absolutely. Ledgly was built specifically for Greek life, student clubs, and organizations that collect dues and manage shared finances.',
+  },
+  {
+    q: 'What if we already use OmegaFi or Greek Capital?',
+    a: 'Ledgly is simpler, free, and AI-powered. You can try it alongside your current tool — setup takes 5 minutes.',
+  },
+];
+
 /* ─── Component ──────────────────────────────────────────────── */
 
 export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
+  const [openFaq, setOpenFaq] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -173,6 +202,13 @@ export default function LandingPage() {
   }, []);
 
   const currentTab = showcaseTabs[activeTab];
+
+  const toggleFaq = (i: number) =>
+    setOpenFaq((prev) => {
+      const next = new Set(prev);
+      next.has(i) ? next.delete(i) : next.add(i);
+      return next;
+    });
 
   return (
     <div className="min-h-dvh bg-background text-foreground relative overflow-x-hidden">
@@ -268,15 +304,11 @@ export default function LandingPage() {
 
         {/* Hero screenshot */}
         <div className="max-w-5xl mx-auto mt-16 relative z-10 animate-reveal-up" style={{ animationDelay: '500ms' }}>
-          <div className="rounded-2xl border border-border/50 dark:border-white/10 overflow-hidden shadow-xl dark:shadow-[0_8px_32px_rgba(0,0,0,0.3)] bg-card/50 dark:bg-white/5 backdrop-blur-xl">
-            <Image
-              src="/screenshots/dark/dashboard.png"
-              alt="Ledgly dashboard"
-              width={1230}
-              height={790}
-              className="w-full h-auto"
-              priority
-            />
+          <div className="rounded-2xl border border-border/50 dark:border-white/10 overflow-hidden shadow-xl dark:shadow-[0_8px_32px_rgba(0,0,0,0.3)] bg-gradient-to-br from-blue-500/10 via-purple-500/10 to-cyan-500/10 dark:from-blue-500/20 dark:via-purple-500/20 dark:to-cyan-500/20 backdrop-blur-xl flex flex-col items-center justify-center aspect-[1230/790]">
+            <div className="p-4 rounded-2xl bg-white/10 dark:bg-white/5 border border-white/20 dark:border-white/10 mb-4">
+              <Table2 className="h-10 w-10 text-muted-foreground" />
+            </div>
+            <p className="text-sm text-muted-foreground font-medium">Screenshot coming soon</p>
           </div>
         </div>
       </section>
@@ -429,14 +461,11 @@ export default function LandingPage() {
             <div className="flex flex-col md:flex-row items-center gap-8 md:gap-16">
               <div className="flex-1 min-w-0 w-full">
                 {currentTab.slug ? (
-                  <div className="rounded-2xl border border-border/50 dark:border-white/10 overflow-hidden shadow-xl dark:shadow-[0_8px_32px_rgba(0,0,0,0.3)]">
-                    <Image
-                      src={`/screenshots/dark/${currentTab.slug}.png`}
-                      alt={`${currentTab.label} screenshot`}
-                      width={1230}
-                      height={790}
-                      className="w-full h-auto"
-                    />
+                  <div className="rounded-2xl border border-border/50 dark:border-white/10 overflow-hidden shadow-xl dark:shadow-[0_8px_32px_rgba(0,0,0,0.3)] bg-gradient-to-br from-blue-500/10 via-purple-500/10 to-cyan-500/10 dark:from-blue-500/20 dark:via-purple-500/20 dark:to-cyan-500/20 backdrop-blur-xl flex flex-col items-center justify-center aspect-[1230/790]">
+                    <div className="p-4 rounded-2xl bg-white/10 dark:bg-white/5 border border-white/20 dark:border-white/10 mb-4">
+                      <Table2 className="h-10 w-10 text-muted-foreground" />
+                    </div>
+                    <p className="text-sm text-muted-foreground font-medium">Screenshot coming soon</p>
                   </div>
                 ) : (
                   <div className="rounded-2xl bg-card/50 dark:bg-white/5 backdrop-blur-xl border border-border/50 dark:border-white/10 shadow-xl dark:shadow-[0_8px_32px_rgba(0,0,0,0.3)] p-8 md:p-12 flex flex-col items-center justify-center min-h-[320px] md:min-h-[400px]">
@@ -500,6 +529,53 @@ export default function LandingPage() {
                   <p className="text-sm text-muted-foreground leading-relaxed">
                     {item.description}
                   </p>
+                </div>
+              </ScrollReveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── FAQ ────────────────────────────────────────────────── */}
+      <section className="relative py-24 md:py-36 px-6">
+        <div className="max-w-2xl mx-auto">
+          <ScrollReveal>
+            <h2 className="text-center text-3xl md:text-4xl font-bold tracking-tight mb-4 text-foreground">
+              Frequently Asked Questions
+            </h2>
+            <p className="text-center text-muted-foreground mb-12 max-w-xl mx-auto leading-7">
+              Everything you need to know before getting started.
+            </p>
+          </ScrollReveal>
+
+          <div className="space-y-3">
+            {faqItems.map((item, i) => (
+              <ScrollReveal key={i} delay={i * 60}>
+                <div className="rounded-2xl bg-card/50 dark:bg-white/5 backdrop-blur-xl border border-border/50 dark:border-white/10 shadow-xl dark:shadow-[0_8px_32px_rgba(0,0,0,0.3)] overflow-hidden transition-all duration-200 hover:border-border dark:hover:border-white/20">
+                  <button
+                    onClick={() => toggleFaq(i)}
+                    className="w-full flex items-center justify-between gap-4 px-6 py-5 text-left"
+                  >
+                    <span className="text-sm font-medium text-foreground">{item.q}</span>
+                    <ChevronDown
+                      className={cn(
+                        'h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200',
+                        openFaq.has(i) && 'rotate-180',
+                      )}
+                    />
+                  </button>
+                  <div
+                    className={cn(
+                      'grid transition-all duration-200',
+                      openFaq.has(i) ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
+                    )}
+                  >
+                    <div className="overflow-hidden">
+                      <p className="px-6 pb-5 text-sm text-muted-foreground leading-relaxed">
+                        {item.a}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </ScrollReveal>
             ))}
