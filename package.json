@@ -16,7 +16,7 @@
     "prepare": "husky"
   },
   "lint-staged": {
-    "apps/api/src/**/!(*.spec).ts": ["eslint --fix"],
+    "apps/api/src/!(test)/**/!(*.spec).ts": ["eslint --fix"],
     "apps/web/{app,components,hooks,lib}/**/*.{ts,tsx}": ["eslint --fix"]
   },
   "devDependencies": {

@@ -1,4 +1,5 @@
 import { createTestContext, cleanupTestContext, TestContext } from '../../test/test-helpers';
+import { EmailService } from '../auth/email.service';
 
 jest.setTimeout(60_000);
 
@@ -51,6 +52,34 @@ describe('Charge unit tests', () => {
     expect(charges[0].status).toBe('OPEN');
     expect(charges[0].amountCents).toBe(5000);
     expect(charges[0].title).toBe('Monthly Dues');
+
+    await cleanup([charges[0].id]);
+  });
+
+  it('sends email notification when creating a charge for a member with email', async () => {
+    const emailService = ctx.module.get(EmailService) as any;
+    emailService.sendChargeNotification.mockClear();
+
+    const charges = await ctx.chargesService.create(ctx.orgId, ctx.membershipId, {
+      membershipIds: [member],
+      category: 'DUES' as any,
+      title: 'Notification Test',
+      amountCents: 2500,
+    });
+
+    // Fire-and-forget — give it a tick to resolve
+    await new Promise((r) => setTimeout(r, 500));
+
+    expect(emailService.sendChargeNotification).toHaveBeenCalledWith(
+      expect.stringContaining('@'),
+      expect.any(String),
+      'Notification Test',
+      '25.00',
+      expect.any(String),
+      null,
+      expect.any(Object),
+      expect.any(Array),
+    );
 
     await cleanup([charges[0].id]);
   });
