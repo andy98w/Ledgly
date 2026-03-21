@@ -79,6 +79,48 @@ describe('Members unit tests', () => {
     await ctx.prisma.user.delete({ where: { id: user.id } });
   });
 
+  // ==================== createMany() partial success ====================
+
+  it('createMany succeeds for valid members and reports errors for duplicates', async () => {
+    const ts = Date.now();
+    const result = await ctx.membersService.createMany(ctx.orgId, [
+      { name: `Good Member ${ts}` },
+      { name: 'Portal Member' }, // duplicate name — already exists
+      { name: `Another Good ${ts}` },
+    ], ctx.membershipId);
+
+    expect(result.created).toHaveLength(2);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0].reason).toContain('already exists');
+
+    // Cleanup
+    const ids = result.created.map((m) => m.id);
+    await ctx.prisma.auditLog.deleteMany({ where: { orgId: ctx.orgId, entityId: { in: ids } } });
+    await ctx.prisma.membership.deleteMany({ where: { id: { in: ids } } });
+  });
+
+  it('createMany detects duplicate emails within the same batch', async () => {
+    const ts = Date.now();
+    const email = `dupe-batch-${ts}@test.local`;
+    const result = await ctx.membersService.createMany(ctx.orgId, [
+      { name: `First ${ts}`, email },
+      { name: `Second ${ts}`, email },
+    ], ctx.membershipId);
+
+    expect(result.created).toHaveLength(1);
+    expect(result.created[0].name).toBe(`First ${ts}`);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0].reason).toContain('already used');
+
+    // Cleanup
+    const ids = result.created.map((m) => m.id);
+    await ctx.prisma.auditLog.deleteMany({ where: { orgId: ctx.orgId, entityId: { in: ids } } });
+    await ctx.prisma.membership.deleteMany({ where: { id: { in: ids } } });
+    await ctx.prisma.user.deleteMany({ where: { email } });
+  });
+
+  // ==================== findByUserId() with charges/payments ====================
+
   it('findByUserId returns charges and payments for the member', async () => {
     // Create a charge for this member
     const charges = await ctx.chargesService.create(ctx.orgId, ctx.membershipId, {

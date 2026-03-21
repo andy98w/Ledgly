@@ -1,1 +1,1 @@
-ALTER TABLE "organizations" ADD COLUMN "notification_templates" JSONB DEFAULT '{}';
+ALTER TABLE "organizations" ADD COLUMN IF NOT EXISTS "notification_templates" JSONB DEFAULT '{}';

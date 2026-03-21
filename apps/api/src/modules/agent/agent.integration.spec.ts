@@ -13,6 +13,11 @@ import { PaymentsService } from '../payments/payments.service';
 import { ExpensesModule } from '../expenses/expenses.module';
 import { ExpensesService } from '../expenses/expenses.service';
 import { EmailService } from '../auth/email.service';
+import { AnnouncementsService } from '../announcements/announcements.service';
+import { NotificationChannelsService } from '../notifications/notification-channels.service';
+import { DigestSchedulerService } from '../reports/digest-scheduler.service';
+import { GmailService } from '../gmail/gmail.service';
+import { PlaidService } from '../plaid/plaid.service';
 import { AgentService } from './agent.service';
 
 jest.setTimeout(60_000);
@@ -47,10 +52,17 @@ describe('AgentService integration', () => {
         PaymentsModule,
         ExpensesModule,
       ],
-      providers: [AgentService],
+      providers: [
+        AgentService,
+        { provide: AnnouncementsService, useValue: { create: jest.fn(), findAll: jest.fn(), broadcast: jest.fn(), delete: jest.fn() } },
+        { provide: NotificationChannelsService, useValue: { broadcastToOrg: jest.fn() } },
+        { provide: DigestSchedulerService, useValue: {} },
+        { provide: GmailService, useValue: { syncEmails: jest.fn() } },
+        { provide: PlaidService, useValue: { syncTransactions: jest.fn() } },
+      ],
     })
       .overrideProvider(EmailService)
-      .useValue({ sendAdminInvitation: jest.fn(), sendMagicLink: jest.fn() })
+      .useValue({ sendAdminInvitation: jest.fn(), sendMagicLink: jest.fn(), sendChargeNotification: jest.fn() })
       .compile();
 
     prisma = module.get(PrismaService);

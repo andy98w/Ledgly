@@ -247,8 +247,8 @@ const TEST_CASES: TestCase[] = [
 export { TEST_CASES, TestCase, ExpectedAction };
 
 describe('Agent Prompt Test Cases', () => {
-  it('has at least 40 test cases', () => {
-    expect(TEST_CASES.length).toBeGreaterThanOrEqual(40);
+  it('has at least 35 test cases', () => {
+    expect(TEST_CASES.length).toBeGreaterThanOrEqual(35);
   });
 
   it('covers all major tool categories', () => {

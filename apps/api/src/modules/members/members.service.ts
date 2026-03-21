@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { MembershipRole, MembershipStatus } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -420,16 +420,7 @@ export class MembersService {
       }
     }
 
-    // Clean internal tracking fields before returning
     const cleanCreated = created.map(({ _email, ...rest }) => rest);
-
-    if (errors.length > 0 && cleanCreated.length === 0) {
-      throw new ConflictException({
-        message: 'All members failed to import',
-        errors,
-      });
-    }
-
     return { created: cleanCreated, errors };
   }
 

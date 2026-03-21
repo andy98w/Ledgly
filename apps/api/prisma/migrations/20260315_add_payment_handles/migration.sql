@@ -1,2 +1,1 @@
--- AlterTable
-ALTER TABLE "organizations" ADD COLUMN "payment_handles" JSONB DEFAULT '{}';
+ALTER TABLE "organizations" ADD COLUMN IF NOT EXISTS "payment_handles" JSONB DEFAULT '{}';

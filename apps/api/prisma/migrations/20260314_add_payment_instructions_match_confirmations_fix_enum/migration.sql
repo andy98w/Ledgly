@@ -75,6 +75,11 @@ DO $$ BEGIN
   ALTER TABLE "reminder_logs" ADD CONSTRAINT "reminder_logs_rule_id_charge_id_key"
       UNIQUE ("rule_id", "charge_id");
 EXCEPTION WHEN duplicate_object THEN NULL;
+          WHEN duplicate_table THEN NULL;
+          WHEN OTHERS THEN
+            IF SQLERRM LIKE '%already exists%' THEN NULL;
+            ELSE RAISE;
+            END IF;
 END $$;
 
 CREATE INDEX IF NOT EXISTS "reminder_logs_org_id_sent_at_idx"
@@ -94,5 +99,8 @@ CREATE TABLE IF NOT EXISTS "match_confirmations" (
 CREATE INDEX IF NOT EXISTS "match_confirmations_org_id_raw_payer_name_idx"
     ON "match_confirmations"("org_id", "raw_payer_name");
 
--- Fix stale EmailImportStatus enum values: convert PENDING/CONFIRMED to AUTO_CONFIRMED
-UPDATE "email_imports" SET "status" = 'AUTO_CONFIRMED' WHERE "status" IN ('PENDING', 'CONFIRMED');
+-- Fix stale EmailImportStatus enum values (skip if already migrated)
+DO $$ BEGIN
+  UPDATE "email_imports" SET "status" = 'AUTO_CONFIRMED' WHERE "status" IN ('PENDING', 'CONFIRMED');
+EXCEPTION WHEN invalid_text_representation THEN NULL;
+END $$;

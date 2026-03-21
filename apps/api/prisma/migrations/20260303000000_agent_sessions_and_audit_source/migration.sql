@@ -1,0 +1,1 @@
+-- Migration applied directly to DB, stub for Prisma tracking

@@ -2,8 +2,8 @@ import { agentTools, toolDefinitions, toolMap } from './agent-tools';
 
 describe('Agent tool definitions', () => {
   it('exports correct number of tools', () => {
-    expect(agentTools.length).toBe(32);
-    expect(toolDefinitions.length).toBe(32);
+    expect(agentTools.length).toBe(40);
+    expect(toolDefinitions.length).toBe(40);
   });
 
   it('every tool has a unique name', () => {

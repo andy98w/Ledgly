@@ -1,1 +1,1 @@
-ALTER TABLE "organizations" ADD COLUMN "gmail_sync_after" TIMESTAMP(3);
+ALTER TABLE "organizations" ADD COLUMN IF NOT EXISTS "gmail_sync_after" TIMESTAMP(3);

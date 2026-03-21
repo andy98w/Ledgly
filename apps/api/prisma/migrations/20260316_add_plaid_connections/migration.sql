@@ -1,5 +1,4 @@
--- CreateTable
-CREATE TABLE "plaid_connections" (
+CREATE TABLE IF NOT EXISTS "plaid_connections" (
     "id" TEXT NOT NULL,
     "org_id" TEXT NOT NULL,
     "access_token" TEXT NOT NULL,
@@ -11,12 +10,10 @@ CREATE TABLE "plaid_connections" (
     "last_sync_at" TIMESTAMP(3),
     "is_active" BOOLEAN NOT NULL DEFAULT true,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
     CONSTRAINT "plaid_connections_pkey" PRIMARY KEY ("id")
 );
 
--- CreateIndex
-CREATE INDEX "plaid_connections_org_id_idx" ON "plaid_connections"("org_id");
+CREATE INDEX IF NOT EXISTS "plaid_connections_org_id_idx" ON "plaid_connections"("org_id");
 
--- AddForeignKey
+ALTER TABLE "plaid_connections" DROP CONSTRAINT IF EXISTS "plaid_connections_org_id_fkey";
 ALTER TABLE "plaid_connections" ADD CONSTRAINT "plaid_connections_org_id_fkey" FOREIGN KEY ("org_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
