@@ -9,6 +9,7 @@ export interface SpreadsheetRowContext {
   category: string;
   date: string;
   incomeCents: number;
+  dueCents: number;
   outstandingCents: number;
   expenseCents: number;
   status?: string;

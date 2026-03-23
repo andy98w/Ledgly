@@ -96,6 +96,7 @@ interface SpreadsheetRow {
   member?: string;
   membershipId?: string;
   incomeCents: number;
+  dueCents: number;
   outstandingCents: number;
   expenseCents: number;
   status?: string;
@@ -337,7 +338,7 @@ export default function SpreadsheetPage() {
   const rows: SpreadsheetRow[] = useMemo(() => {
     const allRows: SpreadsheetRow[] = [];
 
-    // Add charges (income)
+    // Add charges (amount due — not income until paid)
     if (chargesData?.data) {
       for (const charge of chargesData.data) {
         if (!typeFilters.has('charge')) continue;
@@ -353,7 +354,8 @@ export default function SpreadsheetPage() {
               description: child.title,
               member: child.membership?.displayName || child.membership?.name || child.membership?.user?.name || undefined,
               membershipId: child.membershipId,
-              incomeCents: child.amountCents,
+              incomeCents: 0,
+              dueCents: child.amountCents,
               outstandingCents: child.balanceDueCents ?? child.amountCents,
               expenseCents: 0,
               status: child.status,
@@ -373,7 +375,8 @@ export default function SpreadsheetPage() {
             ? `${c.children.length} members`
             : (c.membership?.displayName || charge.membership?.name || charge.membership?.user?.name || undefined),
           membershipId: hasChildren ? undefined : charge.membershipId ?? undefined,
-          incomeCents: hasChildren
+          incomeCents: 0,
+          dueCents: hasChildren
             ? c.children.reduce((sum: number, child: any) => sum + child.amountCents, 0)
             : charge.amountCents,
           outstandingCents: hasChildren
@@ -406,6 +409,7 @@ export default function SpreadsheetPage() {
               description: child.description || (child.title ? cleanExpenseTitle(child.title) : 'Expense'),
               member: child.vendor || undefined,
               incomeCents: 0,
+              dueCents: 0,
               outstandingCents: 0,
               expenseCents: child.amountCents,
               isChild: true,
@@ -421,6 +425,7 @@ export default function SpreadsheetPage() {
           description: expense.description || cleanedTitle,
           member: expense.vendor || undefined,
           incomeCents: 0,
+          dueCents: 0,
           outstandingCents: 0,
           expenseCents: hasChildren
             ? e.children.reduce((sum: number, child: any) => sum + child.amountCents, 0)
@@ -446,6 +451,7 @@ export default function SpreadsheetPage() {
           member: memberName,
           membershipId: undefined,
           incomeCents: payment.amountCents,
+          dueCents: 0,
           outstandingCents: 0,
           expenseCents: 0,
           allocatedCents: payment.allocatedCents,
@@ -786,7 +792,7 @@ export default function SpreadsheetPage() {
       if (column === 'member') return row.member || '-';
       if (column === 'category') return row.category;
       if (column === 'description') return row.description;
-      if (column === 'income') return row.incomeCents > 0 ? (row.incomeCents / 100).toFixed(2) : '';
+      if (column === 'income') return (row.incomeCents || row.dueCents) > 0 ? ((row.incomeCents || row.dueCents) / 100).toFixed(2) : '';
       if (column === 'expense') return row.expenseCents > 0 ? (row.expenseCents / 100).toFixed(2) : '';
       return '';
     },
@@ -1266,6 +1272,7 @@ export default function SpreadsheetPage() {
         category: r.category,
         date: r.date,
         incomeCents: r.incomeCents,
+        dueCents: r.dueCents,
         outstandingCents: r.outstandingCents,
         expenseCents: r.expenseCents,
         status: r.status,
@@ -1344,6 +1351,7 @@ export default function SpreadsheetPage() {
         category: row.category,
         date: row.date,
         incomeCents: row.incomeCents,
+        dueCents: row.dueCents,
         outstandingCents: row.outstandingCents,
         expenseCents: row.expenseCents,
         status: row.status,
@@ -1436,7 +1444,7 @@ export default function SpreadsheetPage() {
           ? CHARGE_CATEGORY_LABELS[row.category as ChargeCategory] || row.category
           : EXPENSE_CATEGORY_LABELS[row.category as ExpenseCategory] || row.category,
         `"${row.description}"`,
-        row.incomeCents ? (row.incomeCents / 100).toFixed(2) : '',
+        (row.incomeCents || row.dueCents) ? ((row.incomeCents || row.dueCents) / 100).toFixed(2) : '',
         row.outstandingCents ? (row.outstandingCents / 100).toFixed(2) : '',
         row.expenseCents ? (row.expenseCents / 100).toFixed(2) : '',
       ].join(',')),
@@ -1618,17 +1626,18 @@ export default function SpreadsheetPage() {
           </div>
         );
       case 'income':
-        return row.incomeCents > 0 ? (
-          row.type === 'charge' ? (
+        if (row.type === 'charge' && row.dueCents > 0) {
+          return (
             <div className="flex items-center justify-end gap-1.5">
-              <Money cents={row.incomeCents} size="sm" className="text-success" />
+              <Money cents={row.dueCents} size="sm" className="text-muted-foreground" />
               {row.outstandingCents > 0 ? (
                 <TooltipProvider delayDuration={300}><Tooltip><TooltipTrigger asChild><AlertCircle className="w-3 h-3 text-warning shrink-0" /></TooltipTrigger><TooltipContent side="top"><Money cents={row.outstandingCents} size="xs" inline className="text-warning" /> unpaid</TooltipContent></Tooltip></TooltipProvider>
               ) : (<Check className="w-3 h-3 text-success shrink-0" />)}
             </div>
-          ) : (
-            <EditableCell value={row.incomeCents} type="money" isEditing={editingCell?.rowId === row.id && editingCell?.column === 'amount'} onEdit={() => setEditingCell({ rowId: row.id, column: 'amount' })} onSave={(v) => handleSaveCell(row, 'amount', v)} onCancel={() => setEditingCell(null)} onNavigate={(dir) => handleCellNavigate(row.id, 'amount', dir)} isAdmin={isAdmin} rowType={row.type} column="income" />
-          )
+          );
+        }
+        return row.incomeCents > 0 ? (
+          <EditableCell value={row.incomeCents} type="money" isEditing={editingCell?.rowId === row.id && editingCell?.column === 'amount'} onEdit={() => setEditingCell({ rowId: row.id, column: 'amount' })} onSave={(v) => handleSaveCell(row, 'amount', v)} onCancel={() => setEditingCell(null)} onNavigate={(dir) => handleCellNavigate(row.id, 'amount', dir)} isAdmin={isAdmin} rowType={row.type} column="income" />
         ) : (<span className="text-muted-foreground/30">-</span>);
       case 'expense':
         return row.expenseCents > 0 ? (

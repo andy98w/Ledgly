@@ -151,23 +151,21 @@ export class OrganizationsService {
 
   async getDashboard(orgId: string) {
     // Aggregate charge stats in a single SQL query instead of loading all charges
-    const [chargeStats, payments, memberCount] = await Promise.all([
+    const [chargeStats, totalPaymentsCents, payments, memberCount] = await Promise.all([
       this.prisma.$queryRaw<
-        [{ total_charged_cents: bigint; total_allocated_cents: bigint; open_charges_count: bigint; overdue_count: bigint }]
+        [{ total_charged_cents: bigint; open_charges_count: bigint; overdue_count: bigint }]
       >`
         SELECT
           COALESCE(SUM(c.amount_cents), 0) AS total_charged_cents,
-          COALESCE(SUM(pa_sum.allocated), 0) AS total_allocated_cents,
           COUNT(*) FILTER (WHERE c.status != 'PAID') AS open_charges_count,
           COUNT(*) FILTER (WHERE c.status != 'PAID' AND c.due_date IS NOT NULL AND c.due_date < NOW()) AS overdue_count
         FROM charges c
-        LEFT JOIN LATERAL (
-          SELECT COALESCE(SUM(pa.amount_cents), 0) AS allocated
-          FROM payment_allocations pa
-          WHERE pa.charge_id = c.id
-        ) pa_sum ON true
         WHERE c.org_id = ${orgId} AND c.status != 'VOID'
       `,
+      this.prisma.payment.aggregate({
+        where: { orgId, deletedAt: null },
+        _sum: { amountCents: true },
+      }).then((r) => r._sum.amountCents || 0),
       this.prisma.payment.findMany({
         where: { orgId, deletedAt: null },
         include: {
@@ -185,7 +183,6 @@ export class OrganizationsService {
 
     const stats = chargeStats[0];
     const totalChargedCents = Number(stats.total_charged_cents);
-    const totalAllocatedCents = Number(stats.total_allocated_cents);
 
     const recentPayments = payments.map((p) => {
       const allocatedCents = p.allocations.reduce((sum, a) => sum + a.amountCents, 0);
@@ -201,8 +198,8 @@ export class OrganizationsService {
     });
 
     return {
-      totalOutstandingCents: totalChargedCents - totalAllocatedCents,
-      totalCollectedCents: totalAllocatedCents,
+      totalOutstandingCents: Math.max(0, totalChargedCents - totalPaymentsCents),
+      totalCollectedCents: totalPaymentsCents,
       overdueCount: Number(stats.overdue_count),
       memberCount,
       openChargesCount: Number(stats.open_charges_count),
