@@ -15,6 +15,7 @@ import { useGroupMeConnections, useConnectGroupMe, useDisconnectGroupMe, useTest
 import { useDiscordConnections, useConnectDiscord, useDisconnectDiscord, useTestDiscord } from '@/lib/queries/discord';
 import { useSlackConnections, useConnectSlack, useDisconnectSlack, useTestSlack } from '@/lib/queries/slack';
 import { uploadAvatar } from '@/lib/supabase';
+import { startTour } from '@/components/feature-tour';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -1524,9 +1525,9 @@ export default function SettingsPage() {
                 </div>
                 <Button variant="outline" size="sm" onClick={() => {
                   localStorage.removeItem('ledgly-tour-completed');
-                  toast({ title: 'Tour will restart on your next visit to the dashboard' });
+                  startTour();
                 }}>
-                  Restart tour
+                  Launch tour
                 </Button>
               </div>
             </MotionCardContent>

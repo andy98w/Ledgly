@@ -266,6 +266,7 @@ export function Sidebar() {
                 <Link
                   key={item.href}
                   href={item.href}
+                  data-tour={`nav-${item.href.replace('/', '')}`}
                   className={cn(
                     'relative flex items-center gap-3 px-3 rounded-xl text-sm font-medium transition-all',
                     isSecondary ? 'py-2' : 'py-2.5',
@@ -323,6 +324,7 @@ export function Sidebar() {
                   <TooltipTrigger asChild>
                     <Link
                       href="/settings"
+                      data-tour="nav-settings"
                       className={cn(
                         'flex w-full items-center justify-center py-2.5 rounded-xl text-sm font-medium transition-colors',
                         pathname.startsWith('/settings') ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50',
@@ -349,6 +351,7 @@ export function Sidebar() {
               <>
                 <Link
                   href="/settings"
+                  data-tour="nav-settings"
                   className={cn(
                     'flex w-full items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors',
                     pathname.startsWith('/settings') ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50',

@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { X, ChevronRight, ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 
 const TOUR_STORAGE_KEY = 'ledgly-tour-completed';
+const TOUR_START_EVENT = 'ledgly-tour-start';
 
 interface TourStep {
   target: string;
@@ -15,53 +15,54 @@ interface TourStep {
   placement?: 'top' | 'bottom' | 'left' | 'right';
 }
 
-const DASHBOARD_STEPS: TourStep[] = [
+const TOUR_STEPS: TourStep[] = [
   {
-    target: '[data-tour="sidebar-nav"]',
-    title: 'Navigation',
-    content: 'Navigate between pages — Members, Charges, Payments, Spreadsheet, AI Agent, and more.',
+    target: '[data-tour="dashboard-stats"]',
+    title: 'Welcome to Ledgly',
+    content: 'This is your financial dashboard — unpaid dues, total collected, member count, and overdue charges at a glance.',
+    placement: 'bottom',
+  },
+  {
+    target: '[data-tour="nav-members"]',
+    title: 'Members',
+    content: 'Add your organization\'s members here. Import from CSV, add manually, or paste a list into the AI assistant.',
     placement: 'right',
   },
   {
-    target: '[data-tour="dashboard-stats"]',
-    title: 'Financial overview',
-    content: 'Your key metrics at a glance — unpaid dues, collections, member count, and overdue items.',
-    placement: 'bottom',
+    target: '[data-tour="nav-charges"]',
+    title: 'Charges (Dues & Fees)',
+    content: 'Create charges to track what members owe — dues, event fees, T-shirts, etc. Members get notified by email.',
+    placement: 'right',
+  },
+  {
+    target: '[data-tour="nav-payments"]',
+    title: 'Payments',
+    content: 'Track incoming payments. Import from Venmo, Zelle, bank sync, or add manually. Payments auto-match to members.',
+    placement: 'right',
+  },
+  {
+    target: '[data-tour="nav-spreadsheet"]',
+    title: 'Ledger',
+    content: 'Your full financial ledger in a spreadsheet view. See charges, payments, and expenses together. Sort, filter, and export to CSV.',
+    placement: 'right',
+  },
+  {
+    target: '[data-tour="nav-agent"]',
+    title: 'AI Assistant',
+    content: 'Manage everything with natural language. Try "charge everyone $50 for dues" or "who hasn\'t paid?" — LedgelyAI handles the rest.',
+    placement: 'right',
+  },
+  {
+    target: '[data-tour="nav-settings"]',
+    title: 'Settings',
+    content: 'Set up payment methods (Venmo, Zelle, CashApp), connect chat channels (GroupMe, Discord, Slack), and configure your org.',
+    placement: 'right',
   },
 ];
 
-const PAGE_STEPS: Record<string, TourStep[]> = {
-  '/members': [{
-    target: '[data-tour="members-list"]',
-    title: 'Members',
-    content: 'Manage your organization members. Add individually, import from CSV, or use LedgelyAI.',
-    placement: 'top',
-  }],
-  '/charges': [{
-    target: '[data-tour="charges-list"]',
-    title: 'Charges',
-    content: 'Create and track dues, fees, and charges. Assign to individuals or the whole org.',
-    placement: 'top',
-  }],
-  '/payments': [{
-    target: '[data-tour="payments-list"]',
-    title: 'Payments',
-    content: 'Track payments from Venmo, Zelle, bank sync, or manual entry. Auto-matched to members.',
-    placement: 'top',
-  }],
-  '/spreadsheet': [{
-    target: '[data-tour="spreadsheet-view"]',
-    title: 'Spreadsheet',
-    content: 'Your full ledger in one view. Sort, filter, inline-edit, and export to CSV.',
-    placement: 'top',
-  }],
-  '/agent': [{
-    target: '[data-tour="agent-chat"]',
-    title: 'LedgelyAI',
-    content: 'Manage finances with natural language. Try "charge everyone $50 for dues" or "who hasn\'t paid?"',
-    placement: 'left',
-  }],
-};
+export function startTour() {
+  window.dispatchEvent(new CustomEvent(TOUR_START_EVENT));
+}
 
 function TourTooltip({
   step,
@@ -133,7 +134,6 @@ function TourTooltip({
       tooltip.style.transform = 'translateY(-50%)';
     }
 
-    // Highlight target
     target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     (target as HTMLElement).style.position = 'relative';
     (target as HTMLElement).style.zIndex = '10000';
@@ -180,58 +180,78 @@ function TourTooltip({
 
 export function FeatureTour() {
   const pathname = usePathname();
+  const router = useRouter();
   const [active, setActive] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
-  const [steps, setSteps] = useState<TourStep[]>([]);
 
+  const launch = useCallback(() => {
+    if (pathname !== '/dashboard') {
+      router.push('/dashboard');
+      // Wait for navigation then retry
+      setTimeout(() => {
+        const hasTarget = document.querySelector(TOUR_STEPS[0].target);
+        if (hasTarget) {
+          setStepIndex(0);
+          setActive(true);
+        }
+      }, 800);
+    } else {
+      setStepIndex(0);
+      setActive(true);
+    }
+  }, [pathname, router]);
+
+  // Auto-start on first visit
   useEffect(() => {
+    if (pathname !== '/dashboard') return;
     const completed = localStorage.getItem(TOUR_STORAGE_KEY);
     if (completed) return;
 
     const timeout = setTimeout(() => {
-      const pageSteps = pathname === '/dashboard'
-        ? DASHBOARD_STEPS
-        : PAGE_STEPS[pathname] || [];
-
-      if (pageSteps.length > 0) {
-        const hasTargets = pageSteps.every(s => document.querySelector(s.target));
-        if (hasTargets) {
-          setSteps(pageSteps);
-          setStepIndex(0);
-          setActive(true);
-        }
+      const hasTarget = document.querySelector(TOUR_STEPS[0].target);
+      if (hasTarget) {
+        setStepIndex(0);
+        setActive(true);
       }
     }, 1000);
 
     return () => clearTimeout(timeout);
   }, [pathname]);
 
+  // Listen for manual start (from settings button)
+  useEffect(() => {
+    const handler = () => launch();
+    window.addEventListener(TOUR_START_EVENT, handler);
+    return () => window.removeEventListener(TOUR_START_EVENT, handler);
+  }, [launch]);
+
   const dismiss = useCallback(() => {
     setActive(false);
-    if (pathname === '/dashboard') {
-      localStorage.setItem(TOUR_STORAGE_KEY, 'true');
-    }
-  }, [pathname]);
+    localStorage.setItem(TOUR_STORAGE_KEY, 'true');
+  }, []);
 
   const next = useCallback(() => {
-    if (stepIndex >= steps.length - 1) {
+    if (stepIndex >= TOUR_STEPS.length - 1) {
       dismiss();
     } else {
       setStepIndex(i => i + 1);
     }
-  }, [stepIndex, steps.length, dismiss]);
+  }, [stepIndex, dismiss]);
 
   const prev = useCallback(() => {
     setStepIndex(i => Math.max(0, i - 1));
   }, []);
 
-  if (!active || steps.length === 0) return null;
+  if (!active) return null;
+
+  const step = TOUR_STEPS[stepIndex];
+  if (!step) return null;
 
   return (
     <TourTooltip
-      step={steps[stepIndex]}
+      step={step}
       stepIndex={stepIndex}
-      totalSteps={steps.length}
+      totalSteps={TOUR_STEPS.length}
       onNext={next}
       onPrev={prev}
       onSkip={dismiss}
