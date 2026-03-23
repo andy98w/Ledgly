@@ -227,7 +227,7 @@ function ColumnFilterPopover({ columnId, filter, onSetFilter, allCategories }: {
 }
 
 export default function SpreadsheetPage() {
-  const [typeFilters, setTypeFilters] = useState<Set<string>>(new Set(['charge', 'expense']));
+  const [typeFilters, setTypeFilters] = useState<Set<string>>(new Set(['charge', 'expense', 'payment']));
   const [searchQuery, setSearchQuery] = useState('');
   const { sortSpecs, toggleSort, getSortIndex, getSortDirection } = useSpreadsheetSort();
   const { filters: columnFilters, setFilter: setColumnFilter, clearAll: clearAllFilters, activeFilterCount, matchesFilters } = useColumnFilters();
