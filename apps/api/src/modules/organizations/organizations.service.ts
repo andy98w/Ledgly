@@ -151,7 +151,7 @@ export class OrganizationsService {
 
   async getDashboard(orgId: string) {
     // Aggregate charge stats in a single SQL query instead of loading all charges
-    const [chargeStats, totalPaymentsCents, payments, memberCount] = await Promise.all([
+    const [chargeStats, totalPaymentsCents, payments, memberCount, org] = await Promise.all([
       this.prisma.$queryRaw<
         [{ total_charged_cents: bigint; open_charges_count: bigint; overdue_count: bigint }]
       >`
@@ -179,6 +179,10 @@ export class OrganizationsService {
       this.prisma.membership.count({
         where: { orgId, status: 'ACTIVE' },
       }),
+      this.prisma.organization.findUnique({
+        where: { id: orgId },
+        select: { paymentHandles: true, enabledPaymentSources: true },
+      }),
     ]);
 
     const stats = chargeStats[0];
@@ -197,12 +201,17 @@ export class OrganizationsService {
       };
     });
 
+    const handles = (org?.paymentHandles as Record<string, string>) ?? {};
+    const hasPaymentHandles = Object.values(handles).some((v) => v?.trim());
+
     return {
       totalOutstandingCents: Math.max(0, totalChargedCents - totalPaymentsCents),
       totalCollectedCents: totalPaymentsCents,
       overdueCount: Number(stats.overdue_count),
       memberCount,
       openChargesCount: Number(stats.open_charges_count),
+      paymentsCount: payments.length > 0 || totalPaymentsCents > 0,
+      hasPaymentHandles,
       recentPayments,
     };
   }

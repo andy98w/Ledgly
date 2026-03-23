@@ -1,7 +1,8 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowRight, Users, Receipt, AlertTriangle, AlertCircle, TrendingUp, Sparkles, Upload, CreditCard, Landmark, Table2 } from 'lucide-react';
+import { ArrowRight, Users, Receipt, AlertTriangle, AlertCircle, TrendingUp, Sparkles, CreditCard, Check, Circle } from 'lucide-react';
 import { useDashboard } from '@/lib/queries/organizations';
 import { useInsights } from '@/lib/queries/insights';
 import { useAuthStore } from '@/lib/stores/auth';
@@ -35,6 +36,83 @@ function StatCardSkeleton() {
       <Skeleton className="h-9 w-28 mb-2" />
       <Skeleton className="h-3 w-20" />
     </div>
+  );
+}
+
+const CHECKLIST_DISMISSED_KEY = 'ledgly-checklist-dismissed';
+
+function QuickStartChecklist({ stats }: { stats: any }) {
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    if (localStorage.getItem(CHECKLIST_DISMISSED_KEY)) setDismissed(true);
+  }, []);
+
+  const steps = [
+    { label: 'Add members', description: 'Import from CSV or add one by one', href: '/members', done: stats.memberCount > 1, icon: Users },
+    { label: 'Create a charge', description: 'Charge members for dues, events, or fees', href: '/charges', done: stats.openChargesCount > 0 || stats.totalCollectedCents > 0, icon: Receipt },
+    { label: 'Set up payment methods', description: 'Add Venmo, Zelle, or CashApp handles', href: '/settings', done: stats.hasPaymentHandles, icon: CreditCard },
+    { label: 'Record a payment', description: 'Import from bank, email, or add manually', href: '/payments', done: stats.paymentsCount, icon: TrendingUp },
+    { label: 'Try LedgelyAI', description: 'Manage finances with natural language', href: '/agent', done: false, icon: Sparkles },
+  ];
+
+  const completedCount = steps.filter((s) => s.done).length;
+  const allDone = completedCount === steps.length;
+
+  if (dismissed || allDone) return null;
+
+  return (
+    <FadeIn delay={0.05}>
+      <MotionCard hover={false}>
+        <MotionCardContent className="p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="font-semibold">Get started</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">{completedCount} of {steps.length} completed</p>
+            </div>
+            <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => {
+              localStorage.setItem(CHECKLIST_DISMISSED_KEY, 'true');
+              setDismissed(true);
+            }}>
+              Dismiss
+            </Button>
+          </div>
+          <div className="w-full h-1.5 rounded-full bg-secondary mb-4">
+            <div
+              className="h-full rounded-full bg-primary transition-all duration-500"
+              style={{ width: `${(completedCount / steps.length) * 100}%` }}
+            />
+          </div>
+          <div className="space-y-1">
+            {steps.map((step) => (
+              <Link
+                key={step.label}
+                href={step.href}
+                className={cn(
+                  'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors',
+                  step.done ? 'opacity-60' : 'hover:bg-secondary/50',
+                )}
+              >
+                {step.done ? (
+                  <div className="p-1 rounded-full bg-emerald-500/10">
+                    <Check className="h-3.5 w-3.5 text-emerald-500" />
+                  </div>
+                ) : (
+                  <div className="p-1 rounded-full bg-secondary">
+                    <Circle className="h-3.5 w-3.5 text-muted-foreground" />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className={cn('text-sm font-medium', step.done && 'line-through text-muted-foreground')}>{step.label}</p>
+                  <p className="text-xs text-muted-foreground">{step.description}</p>
+                </div>
+                {!step.done && <ArrowRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+              </Link>
+            ))}
+          </div>
+        </MotionCardContent>
+      </MotionCard>
+    </FadeIn>
   );
 }
 
@@ -103,47 +181,8 @@ export default function DashboardPage() {
         />
       </FadeIn>
 
-      {/* Getting Started (new orgs only) */}
-      {stats.openChargesCount === 0 && stats.memberCount <= 1 && (
-        <FadeIn delay={0.05}>
-          <div className="space-y-4">
-            <div>
-              <h2 className="text-lg font-semibold">Get started</h2>
-              <p className="text-sm text-muted-foreground">Set up your organization in a few quick steps</p>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <Link href="/members" className="group rounded-xl border bg-card p-4 hover:border-primary/40 hover:bg-primary/5 transition-colors">
-                <div className="p-2 rounded-lg bg-violet-500/10 w-fit mb-3">
-                  <Users className="h-4 w-4 text-violet-500" />
-                </div>
-                <p className="font-medium text-sm">Add members</p>
-                <p className="text-xs text-muted-foreground mt-1">Import from CSV or add one by one</p>
-              </Link>
-              <Link href="/charges" className="group rounded-xl border bg-card p-4 hover:border-primary/40 hover:bg-primary/5 transition-colors">
-                <div className="p-2 rounded-lg bg-amber-500/10 w-fit mb-3">
-                  <Receipt className="h-4 w-4 text-amber-500" />
-                </div>
-                <p className="font-medium text-sm">Create charges</p>
-                <p className="text-xs text-muted-foreground mt-1">Charge members for dues, events, or fees</p>
-              </Link>
-              <Link href="/settings" className="group rounded-xl border bg-card p-4 hover:border-primary/40 hover:bg-primary/5 transition-colors">
-                <div className="p-2 rounded-lg bg-emerald-500/10 w-fit mb-3">
-                  <CreditCard className="h-4 w-4 text-emerald-500" />
-                </div>
-                <p className="font-medium text-sm">Payment methods</p>
-                <p className="text-xs text-muted-foreground mt-1">Set up Venmo, Zelle, CashApp handles</p>
-              </Link>
-              <Link href="/agent" className="group rounded-xl border bg-card p-4 hover:border-primary/40 hover:bg-primary/5 transition-colors">
-                <div className="p-2 rounded-lg bg-primary/10 w-fit mb-3">
-                  <Sparkles className="h-4 w-4 text-primary" />
-                </div>
-                <p className="font-medium text-sm">Try LedgelyAI</p>
-                <p className="text-xs text-muted-foreground mt-1">Manage everything with natural language</p>
-              </Link>
-            </div>
-          </div>
-        </FadeIn>
-      )}
+      {/* Quick-start Checklist */}
+      <QuickStartChecklist stats={stats} />
 
       {/* Stats Grid */}
       <div data-tour="dashboard-stats" className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
