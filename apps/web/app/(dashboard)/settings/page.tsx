@@ -1514,6 +1514,21 @@ export default function SettingsPage() {
                   </div>
                 </div>
               </div>
+
+              <Separator className="opacity-50" />
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">Feature Tour</p>
+                  <p className="text-xs text-muted-foreground">Replay the guided walkthrough of Ledgly</p>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => {
+                  localStorage.removeItem('ledgly-tour-completed');
+                  toast({ title: 'Tour will restart on your next visit to the dashboard' });
+                }}>
+                  Restart tour
+                </Button>
+              </div>
             </MotionCardContent>
           )}
         </MotionCard>
