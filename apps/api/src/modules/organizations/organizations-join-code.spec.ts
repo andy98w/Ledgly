@@ -94,7 +94,7 @@ describe('Join Code (integration)', () => {
 
     beforeAll(async () => {
       const user = await ctx.prisma.user.create({
-        data: { email: `joiner-${Date.now()}@test.local`, name: 'Joiner User' },
+        data: { email: `joiner-${crypto.randomUUID()}@test.local`, name: 'Joiner User' },
       });
       joinerUserId = user.id;
     });
@@ -227,7 +227,7 @@ describe('Join Code (integration)', () => {
 
     beforeAll(async () => {
       const user = await ctx.prisma.user.create({
-        data: { email: `pending-${Date.now()}@test.local`, name: 'Pending User' },
+        data: { email: `pending-${crypto.randomUUID()}@test.local`, name: 'Pending User' },
       });
       pendingUserId = user.id;
 

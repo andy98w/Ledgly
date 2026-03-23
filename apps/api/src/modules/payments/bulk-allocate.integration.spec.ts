@@ -11,7 +11,7 @@ describe('Bulk auto-allocate edge cases (integration)', () => {
     ctx = await createTestContext();
 
     const userA = await ctx.prisma.user.create({
-      data: { email: `alloc-a-${Date.now()}@test.local`, name: 'Alice Allocator' },
+      data: { email: `alloc-a-${crypto.randomUUID()}@test.local`, name: 'Alice Allocator' },
     });
     const mA = await ctx.prisma.membership.create({
       data: { orgId: ctx.orgId, userId: userA.id, role: 'MEMBER', status: 'ACTIVE', name: 'Alice Allocator' },
@@ -19,7 +19,7 @@ describe('Bulk auto-allocate edge cases (integration)', () => {
     memberA = mA.id;
 
     const userB = await ctx.prisma.user.create({
-      data: { email: `alloc-b-${Date.now()}@test.local`, name: 'Bob Builder' },
+      data: { email: `alloc-b-${crypto.randomUUID()}@test.local`, name: 'Bob Builder' },
     });
     const mB = await ctx.prisma.membership.create({
       data: { orgId: ctx.orgId, userId: userB.id, role: 'MEMBER', status: 'ACTIVE', name: 'Bob Builder' },

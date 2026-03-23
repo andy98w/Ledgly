@@ -25,7 +25,7 @@ describe('ExpenseMatcherService (integration)', () => {
     await prisma.$connect();
 
     const org = await prisma.organization.create({
-      data: { name: `em-test-${Date.now()}` },
+      data: { name: `em-test-${crypto.randomUUID()}` },
     });
     orgId = org.id;
   }, 30_000);

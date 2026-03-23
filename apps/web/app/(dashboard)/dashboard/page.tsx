@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, Users, Receipt, AlertTriangle, AlertCircle, TrendingUp, Sparkles } from 'lucide-react';
+import { ArrowRight, Users, Receipt, AlertTriangle, AlertCircle, TrendingUp, Sparkles, Upload, CreditCard, Landmark, Table2 } from 'lucide-react';
 import { useDashboard } from '@/lib/queries/organizations';
 import { useInsights } from '@/lib/queries/insights';
 import { useAuthStore } from '@/lib/stores/auth';
@@ -103,30 +103,45 @@ export default function DashboardPage() {
         />
       </FadeIn>
 
-      {/* AI Getting Started Banner (new orgs only) */}
+      {/* Getting Started (new orgs only) */}
       {stats.openChargesCount === 0 && stats.memberCount <= 1 && (
         <FadeIn delay={0.05}>
-          <MotionCard hover={false} className="border-primary/20 bg-primary/5">
-            <MotionCardContent className="flex items-center justify-between p-5">
-              <div className="flex items-center gap-4">
-                <div className="p-3 rounded-xl bg-primary/10">
-                  <Sparkles className="h-6 w-6 text-primary" />
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-lg font-semibold">Get started</h2>
+              <p className="text-sm text-muted-foreground">Set up your organization in a few quick steps</p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Link href="/members" className="group rounded-xl border bg-card p-4 hover:border-primary/40 hover:bg-primary/5 transition-colors">
+                <div className="p-2 rounded-lg bg-violet-500/10 w-fit mb-3">
+                  <Users className="h-4 w-4 text-violet-500" />
                 </div>
-                <div>
-                  <p className="font-semibold">Get started with LedgelyAI</p>
-                  <p className="text-sm text-muted-foreground">
-                    Add members, create charges, and import data using natural language
-                  </p>
+                <p className="font-medium text-sm">Add members</p>
+                <p className="text-xs text-muted-foreground mt-1">Import from CSV or add one by one</p>
+              </Link>
+              <Link href="/charges" className="group rounded-xl border bg-card p-4 hover:border-primary/40 hover:bg-primary/5 transition-colors">
+                <div className="p-2 rounded-lg bg-amber-500/10 w-fit mb-3">
+                  <Receipt className="h-4 w-4 text-amber-500" />
                 </div>
-              </div>
-              <Button asChild>
-                <Link href="/agent">
-                  Try LedgelyAI
-                  <ArrowRight className="ml-1 h-4 w-4" />
-                </Link>
-              </Button>
-            </MotionCardContent>
-          </MotionCard>
+                <p className="font-medium text-sm">Create charges</p>
+                <p className="text-xs text-muted-foreground mt-1">Charge members for dues, events, or fees</p>
+              </Link>
+              <Link href="/settings" className="group rounded-xl border bg-card p-4 hover:border-primary/40 hover:bg-primary/5 transition-colors">
+                <div className="p-2 rounded-lg bg-emerald-500/10 w-fit mb-3">
+                  <CreditCard className="h-4 w-4 text-emerald-500" />
+                </div>
+                <p className="font-medium text-sm">Payment methods</p>
+                <p className="text-xs text-muted-foreground mt-1">Set up Venmo, Zelle, CashApp handles</p>
+              </Link>
+              <Link href="/agent" className="group rounded-xl border bg-card p-4 hover:border-primary/40 hover:bg-primary/5 transition-colors">
+                <div className="p-2 rounded-lg bg-primary/10 w-fit mb-3">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                </div>
+                <p className="font-medium text-sm">Try LedgelyAI</p>
+                <p className="text-xs text-muted-foreground mt-1">Manage everything with natural language</p>
+              </Link>
+            </div>
+          </div>
         </FadeIn>
       )}
 

@@ -10,7 +10,7 @@ describe('Payment allocation unit tests', () => {
     ctx = await createTestContext();
 
     const user = await ctx.prisma.user.create({
-      data: { email: `unit-payment-${Date.now()}@test.local`, name: 'Payment Tester' },
+      data: { email: `unit-payment-${crypto.randomUUID()}@test.local`, name: 'Payment Tester' },
     });
     const m = await ctx.prisma.membership.create({
       data: { orgId: ctx.orgId, userId: user.id, role: 'MEMBER', status: 'ACTIVE', name: 'Payment Tester' },

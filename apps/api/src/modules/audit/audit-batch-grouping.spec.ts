@@ -20,7 +20,7 @@ describe('Audit batch grouping (integration)', () => {
 
     // Create charges for 2 members → should batch
     const secondUser = await prisma.user.create({
-      data: { email: `batch-member-${Date.now()}@test.local`, name: 'Batch Member' },
+      data: { email: `batch-member-${crypto.randomUUID()}@test.local`, name: 'Batch Member' },
     });
     const secondMembership = await prisma.membership.create({
       data: { orgId, userId: secondUser.id, role: 'MEMBER', status: 'ACTIVE', name: 'Batch Member' },
@@ -198,7 +198,7 @@ describe('Audit batch grouping (integration)', () => {
 
     // Create a batch of charges
     const secondUser = await prisma.user.create({
-      data: { email: `flat-${Date.now()}@test.local`, name: 'Flat Test' },
+      data: { email: `flat-${crypto.randomUUID()}@test.local`, name: 'Flat Test' },
     });
     const secondMembership = await prisma.membership.create({
       data: { orgId, userId: secondUser.id, role: 'MEMBER', status: 'ACTIVE', name: 'Flat Test' },

@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PlaidService } from './plaid.service';
 
@@ -12,7 +12,7 @@ export class PlaidSchedulerService {
     private plaidService: PlaidService,
   ) {}
 
-  @Cron(CronExpression.EVERY_HOUR)
+  @Cron('0 */2 * * *')
   async syncAllOrganizations() {
     if (!this.plaidService.isConfigured()) return;
 

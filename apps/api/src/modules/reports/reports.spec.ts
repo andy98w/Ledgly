@@ -19,8 +19,8 @@ describe('ReportsService (integration)', () => {
     extraUserIds = [];
 
     const members = [
-      { name: 'Alice Tester', email: `rpt-alice-${Date.now()}@test.local` },
-      { name: 'Bob Tester', email: `rpt-bob-${Date.now()}@test.local` },
+      { name: 'Alice Tester', email: `rpt-alice-${crypto.randomUUID()}@test.local` },
+      { name: 'Bob Tester', email: `rpt-bob-${crypto.randomUUID()}@test.local` },
     ];
 
     for (const m of members) {

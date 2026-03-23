@@ -15,6 +15,7 @@ import { useAuthStore } from '@/lib/stores/auth';
 import { useSidebarStore } from '@/lib/stores/sidebar';
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import { Skeleton } from '@/components/ui/skeleton';
+import { FeatureTour } from '@/components/feature-tour';
 
 export default function DashboardLayout({
   children,
@@ -94,6 +95,7 @@ export default function DashboardLayout({
       <AISidebar />
       <CommandPalette />
       <KeyboardShortcutsDialog open={showHelp} onOpenChange={setShowHelp} />
+      <FeatureTour />
     </div>
   );
 }

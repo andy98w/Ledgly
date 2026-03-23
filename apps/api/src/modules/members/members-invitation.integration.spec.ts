@@ -44,13 +44,13 @@ describe('Members Invitation Flow (integration)', () => {
 
     // Create test org + admin user + membership
     const org = await prisma.organization.create({
-      data: { name: `invitation-test-${Date.now()}` },
+      data: { name: `invitation-test-${crypto.randomUUID()}` },
     });
     orgId = org.id;
 
     const user = await prisma.user.create({
       data: {
-        email: `admin-${Date.now()}@test.local`,
+        email: `admin-${crypto.randomUUID()}@test.local`,
         name: 'Test Admin',
         passwordHash: 'hashed',
       },
@@ -105,7 +105,7 @@ describe('Members Invitation Flow (integration)', () => {
   it('creating member without email succeeds', async () => {
     const result = await membersService.createMany(
       orgId,
-      [{ name: `Regular Member ${Date.now()}` }],
+      [{ name: `Regular Member ${crypto.randomUUID()}` }],
       adminMembershipId,
     );
     expect(result.created).toHaveLength(1);
@@ -115,7 +115,7 @@ describe('Members Invitation Flow (integration)', () => {
 
   // 3. Admin with email creates INVITED membership
   it('admin with email creates INVITED membership when user has no password', async () => {
-    const email = `invited-admin-${Date.now()}@test.local`;
+    const email = `invited-admin-${crypto.randomUUID()}@test.local`;
     const result = await membersService.createMany(
       orgId,
       [{ name: 'Invited Admin', email, role: 'ADMIN' }],
@@ -144,7 +144,7 @@ describe('Members Invitation Flow (integration)', () => {
 
   // 4. Admin with registered user creates ACTIVE membership
   it('admin with registered user (has passwordHash) creates ACTIVE membership', async () => {
-    const email = `registered-${Date.now()}@test.local`;
+    const email = `registered-${crypto.randomUUID()}@test.local`;
     // Create a user with passwordHash (simulating a registered user)
     await prisma.user.create({
       data: { email, name: 'Registered User', passwordHash: 'hashed-pw' },
@@ -163,7 +163,7 @@ describe('Members Invitation Flow (integration)', () => {
 
   // 5. Registration links invited memberships
   it('linking pending invitations activates membership', async () => {
-    const email = `link-test-${Date.now()}@test.local`;
+    const email = `link-test-${crypto.randomUUID()}@test.local`;
     // Create a user without password
     const user = await prisma.user.create({
       data: { email, name: 'Link Test' },
@@ -214,7 +214,7 @@ describe('Members Invitation Flow (integration)', () => {
 
   // 6. Expired invitation not linked at registration
   it('expired invitation is not linked at registration', async () => {
-    const email = `expired-${Date.now()}@test.local`;
+    const email = `expired-${crypto.randomUUID()}@test.local`;
     const user = await prisma.user.create({
       data: { email, name: 'Expired Test' },
     });
@@ -256,7 +256,7 @@ describe('Members Invitation Flow (integration)', () => {
 
   // 7. Resend invitation resets expiry
   it('resend invitation resets expiry', async () => {
-    const email = `resend-${Date.now()}@test.local`;
+    const email = `resend-${crypto.randomUUID()}@test.local`;
     const user = await prisma.user.create({
       data: { email, name: 'Resend Test' },
     });

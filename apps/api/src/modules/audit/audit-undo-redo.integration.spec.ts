@@ -312,7 +312,7 @@ describe('Audit Undo/Redo Edge Cases (integration)', () => {
 
     // Create a second member for this test (can't remove ourselves)
     const secondUser = await prisma.user.create({
-      data: { email: `member-test-${Date.now()}@test.local`, name: 'Removable Member' },
+      data: { email: `member-test-${crypto.randomUUID()}@test.local`, name: 'Removable Member' },
     });
     const secondMembership = await prisma.membership.create({
       data: { orgId, userId: secondUser.id, role: 'MEMBER', status: 'ACTIVE', name: 'Removable Member' },
@@ -378,7 +378,7 @@ describe('Audit Undo/Redo Edge Cases (integration)', () => {
 
     // Create a non-admin member to act as the actor.
     const helperUser = await prisma.user.create({
-      data: { email: `admin-guard-${Date.now()}@test.local`, name: 'Helper' },
+      data: { email: `admin-guard-${crypto.randomUUID()}@test.local`, name: 'Helper' },
     });
     const helperMembership = await prisma.membership.create({
       data: { orgId, userId: helperUser.id, role: 'MEMBER', status: 'ACTIVE', name: 'Helper' },
@@ -411,7 +411,7 @@ describe('Audit Undo/Redo Edge Cases (integration)', () => {
 
     // Create a second admin
     const secondUser = await prisma.user.create({
-      data: { email: `second-admin-${Date.now()}@test.local`, name: 'Second Admin' },
+      data: { email: `second-admin-${crypto.randomUUID()}@test.local`, name: 'Second Admin' },
     });
     const secondAdmin = await prisma.membership.create({
       data: { orgId, userId: secondUser.id, role: 'ADMIN', status: 'ACTIVE', name: 'Second Admin' },

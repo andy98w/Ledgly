@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -52,12 +53,12 @@ export async function createTestContext(): Promise<TestContext> {
 
   // Create a test org + user + membership
   const org = await prisma.organization.create({
-    data: { name: `test-org-${Date.now()}` },
+    data: { name: `test-org-${randomUUID()}` },
   });
 
   const user = await prisma.user.create({
     data: {
-      email: `test-${Date.now()}@test.local`,
+      email: `test-${randomUUID()}@test.local`,
       name: 'Test User',
     },
   });

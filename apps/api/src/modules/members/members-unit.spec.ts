@@ -12,7 +12,7 @@ describe('Members unit tests', () => {
     ctx = await createTestContext();
 
     const user = await ctx.prisma.user.create({
-      data: { email: `member-unit-${Date.now()}@test.local`, name: 'Portal Member' },
+      data: { email: `member-unit-${crypto.randomUUID()}@test.local`, name: 'Portal Member' },
     });
     memberUserId = user.id;
 
@@ -53,7 +53,7 @@ describe('Members unit tests', () => {
   it('findByUserId throws NotFoundException for user not in org', async () => {
     // Create a user with no membership in the test org
     const otherUser = await ctx.prisma.user.create({
-      data: { email: `other-${Date.now()}@test.local`, name: 'Other User' },
+      data: { email: `other-${crypto.randomUUID()}@test.local`, name: 'Other User' },
     });
 
     await expect(
@@ -65,7 +65,7 @@ describe('Members unit tests', () => {
 
   it('findByUserId throws NotFoundException for inactive member', async () => {
     const user = await ctx.prisma.user.create({
-      data: { email: `left-${Date.now()}@test.local`, name: 'Left Member' },
+      data: { email: `left-${crypto.randomUUID()}@test.local`, name: 'Left Member' },
     });
     await ctx.prisma.membership.create({
       data: { orgId: ctx.orgId, userId: user.id, role: 'MEMBER', status: 'LEFT', name: 'Left Member' },
@@ -82,11 +82,11 @@ describe('Members unit tests', () => {
   // ==================== createMany() partial success ====================
 
   it('createMany succeeds for valid members and reports errors for duplicates', async () => {
-    const ts = Date.now();
+    const uid = crypto.randomUUID();
     const result = await ctx.membersService.createMany(ctx.orgId, [
-      { name: `Good Member ${ts}` },
+      { name: `Good Member ${uid}` },
       { name: 'Portal Member' }, // duplicate name — already exists
-      { name: `Another Good ${ts}` },
+      { name: `Another Good ${uid}` },
     ], ctx.membershipId);
 
     expect(result.created).toHaveLength(2);
@@ -100,15 +100,15 @@ describe('Members unit tests', () => {
   });
 
   it('createMany detects duplicate emails within the same batch', async () => {
-    const ts = Date.now();
-    const email = `dupe-batch-${ts}@test.local`;
+    const uid2 = crypto.randomUUID();
+    const email = `dupe-batch-${uid2}@test.local`;
     const result = await ctx.membersService.createMany(ctx.orgId, [
-      { name: `First ${ts}`, email },
-      { name: `Second ${ts}`, email },
+      { name: `First ${uid2}`, email },
+      { name: `Second ${uid2}`, email },
     ], ctx.membershipId);
 
     expect(result.created).toHaveLength(1);
-    expect(result.created[0].name).toBe(`First ${ts}`);
+    expect(result.created[0].name).toBe(`First ${uid2}`);
     expect(result.errors).toHaveLength(1);
     expect(result.errors[0].reason).toContain('already used');
 

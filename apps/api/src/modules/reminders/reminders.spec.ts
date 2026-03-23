@@ -25,12 +25,12 @@ describe('RemindersService (integration)', () => {
     await prisma.$connect();
 
     const org = await prisma.organization.create({
-      data: { name: `rem-test-${Date.now()}` },
+      data: { name: `rem-test-${crypto.randomUUID()}` },
     });
     orgId = org.id;
 
     const otherOrg = await prisma.organization.create({
-      data: { name: `rem-other-${Date.now()}` },
+      data: { name: `rem-other-${crypto.randomUUID()}` },
     });
     otherOrgId = otherOrg.id;
   }, 30_000);

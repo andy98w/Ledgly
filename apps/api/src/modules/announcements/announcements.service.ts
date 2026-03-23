@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationChannelsService } from '../notifications/notification-channels.service';
+import { sanitizeText } from '../../common/utils/sanitize';
 
 @Injectable()
 export class AnnouncementsService {
@@ -28,6 +29,9 @@ export class AnnouncementsService {
     body: string,
     broadcastToChat = false,
   ) {
+    title = sanitizeText(title) ?? '';
+    body = sanitizeText(body) ?? '';
+
     const announcement = await this.prisma.announcement.create({
       data: { orgId, title, body, createdById: actorId },
       include: {

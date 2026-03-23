@@ -260,10 +260,15 @@ export class EmailService {
     }
 
     try {
+      const unsub = this.unsubscribeUrl(email);
       await this.resend.emails.send({
         from,
         to: email,
         subject: `${orgName}: New charge — ${chargeTitle} ($${amount})`,
+        headers: {
+          'List-Unsubscribe': `<${unsub}>`,
+          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        },
         html: this.wrapTemplate(`
           <p style="margin: 0 0 20px; color: #666; font-size: 15px; line-height: 1.5;">${greeting}</p>
           <p style="margin: 0 0 16px; color: #666; font-size: 14px;">You've been charged by <strong>${orgName}</strong>:</p>
@@ -276,6 +281,7 @@ export class EmailService {
           <p style="margin: 24px 0 0; color: #bbb; font-size: 12px;">
             Sent via Ledgly on behalf of ${orgName}
           </p>
+          ${this.unsubscribeFooter(email)}
         `),
       });
     } catch (error) {
@@ -334,10 +340,15 @@ export class EmailService {
     }
 
     try {
+      const unsub = this.unsubscribeUrl(email);
       await this.resend.emails.send({
         from,
         to: email,
         subject: `${orgName}: $${amount} due for ${chargeTitle}`,
+        headers: {
+          'List-Unsubscribe': `<${unsub}>`,
+          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        },
         html: this.wrapTemplate(`
           <p style="margin: 0 0 20px; color: #666; font-size: 15px; line-height: 1.5;">${greeting}</p>
           <div style="background: #FEF2F2; border-left: 4px solid #EF4444; border-radius: 8px; padding: 16px 20px; margin: 0 0 20px;">
@@ -352,6 +363,7 @@ export class EmailService {
           <p style="margin: 24px 0 0; color: #bbb; font-size: 12px;">
             Sent via Ledgly on behalf of ${orgName}
           </p>
+          ${this.unsubscribeFooter(email)}
         `),
       });
     } catch (error) {
@@ -409,10 +421,15 @@ export class EmailService {
       : '';
 
     try {
+      const unsub = this.unsubscribeUrl(email);
       await this.resend.emails.send({
         from,
         to: email,
         subject: `Weekly Summary — ${orgName}`,
+        headers: {
+          'List-Unsubscribe': `<${unsub}>`,
+          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        },
         html: this.wrapTemplate(`
           <h1 style="margin: 0 0 8px; font-size: 22px; color: #111;">Weekly Summary</h1>
           <p style="margin: 0 0 24px; color: #999; font-size: 14px;">${orgName}</p>
@@ -426,11 +443,22 @@ export class EmailService {
           <p style="margin: 24px 0 0; color: #bbb; font-size: 12px;">
             Sent every Monday by Ledgly
           </p>
+          ${this.unsubscribeFooter(email)}
         `),
       });
     } catch (error) {
       this.logger.error(`Failed to send weekly digest to ${email}`, error);
     }
+  }
+
+  private unsubscribeUrl(email: string): string {
+    const webUrl = this.configService.get<string>('WEB_URL');
+    return `${webUrl}/unsubscribe?email=${encodeURIComponent(email)}&type=notifications`;
+  }
+
+  private unsubscribeFooter(email: string): string {
+    const url = this.unsubscribeUrl(email);
+    return `<p style="margin: 24px 0 0; color: #bbb; font-size: 11px; text-align: center;"><a href="${url}" style="color: #bbb;">Unsubscribe</a> from these notifications</p>`;
   }
 
   private wrapTemplate(content: string): string {

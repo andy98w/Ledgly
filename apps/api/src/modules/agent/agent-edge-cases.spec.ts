@@ -57,12 +57,12 @@ describe('AgentService edge cases', () => {
     membersService = module.get(MembersService);
 
     const org = await prisma.organization.create({
-      data: { name: `edge-test-${Date.now()}` },
+      data: { name: `edge-test-${crypto.randomUUID()}` },
     });
     orgId = org.id;
 
     const user = await prisma.user.create({
-      data: { email: `edge-${Date.now()}@test.local`, name: 'Edge Admin' },
+      data: { email: `edge-${crypto.randomUUID()}@test.local`, name: 'Edge Admin' },
     });
     adminUserId = user.id;
 
@@ -193,7 +193,7 @@ describe('AgentService edge cases', () => {
   it('cannot remove yourself via agent', async () => {
     // Create a second admin so the "last admin" guard doesn't fire first
     const user2 = await prisma.user.create({
-      data: { email: `admin2-${Date.now()}@test.local`, name: 'Admin Two' },
+      data: { email: `admin2-${crypto.randomUUID()}@test.local`, name: 'Admin Two' },
     });
     const m2 = await prisma.membership.create({
       data: { orgId, userId: user2.id, role: 'ADMIN', status: 'ACTIVE', name: 'Admin Two' },

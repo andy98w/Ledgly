@@ -25,12 +25,12 @@ describe('PaymentMatcherService (integration)', () => {
     await prisma.$connect();
 
     const org = await prisma.organization.create({
-      data: { name: `pm-test-${Date.now()}` },
+      data: { name: `pm-test-${crypto.randomUUID()}` },
     });
     orgId = org.id;
 
     const adminUser = await prisma.user.create({
-      data: { email: `pm-admin-${Date.now()}@test.local`, name: 'PM Admin' },
+      data: { email: `pm-admin-${crypto.randomUUID()}@test.local`, name: 'PM Admin' },
     });
     await prisma.membership.create({
       data: { orgId, userId: adminUser.id, role: 'ADMIN', status: 'ACTIVE', name: 'PM Admin' },
@@ -48,7 +48,7 @@ describe('PaymentMatcherService (integration)', () => {
 
     for (const m of members) {
       const user = await prisma.user.create({
-        data: { email: `pm-${m.key}-${Date.now()}@test.local`, name: m.userName },
+        data: { email: `pm-${m.key}-${crypto.randomUUID()}@test.local`, name: m.userName },
       });
       userIds.push(user.id);
       const membership = await prisma.membership.create({

@@ -75,12 +75,12 @@ describe('AgentService integration', () => {
 
     // Seed test org + admin
     const org = await prisma.organization.create({
-      data: { name: `agent-test-${Date.now()}` },
+      data: { name: `agent-test-${crypto.randomUUID()}` },
     });
     orgId = org.id;
 
     const user = await prisma.user.create({
-      data: { email: `agent-${Date.now()}@test.local`, name: 'Agent Admin' },
+      data: { email: `agent-${crypto.randomUUID()}@test.local`, name: 'Agent Admin' },
     });
     userId = user.id;
 
@@ -246,7 +246,7 @@ describe('AgentService integration', () => {
   it('confirm: remove_members removes members', async () => {
     // Create a throwaway member to remove
     const user = await prisma.user.create({
-      data: { email: `remove-${Date.now()}@test.local`, name: 'Remove Me' },
+      data: { email: `remove-${crypto.randomUUID()}@test.local`, name: 'Remove Me' },
     });
     const m = await prisma.membership.create({
       data: { orgId, userId: user.id, role: 'MEMBER', status: 'ACTIVE', name: 'Remove Me' },
@@ -295,7 +295,7 @@ describe('AgentService integration', () => {
   it('confirm: update_member updates a member name', async () => {
     // Create a member to update
     const user = await prisma.user.create({
-      data: { email: `update-member-${Date.now()}@test.local`, name: 'Before Update' },
+      data: { email: `update-member-${crypto.randomUUID()}@test.local`, name: 'Before Update' },
     });
     const m = await prisma.membership.create({
       data: { orgId, userId: user.id, role: 'MEMBER', status: 'ACTIVE', name: 'Before Update' },

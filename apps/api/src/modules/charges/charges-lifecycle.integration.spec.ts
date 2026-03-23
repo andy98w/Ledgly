@@ -11,7 +11,7 @@ describe('Charge lifecycle edge cases (integration)', () => {
     ctx = await createTestContext();
 
     const user = await ctx.prisma.user.create({
-      data: { email: `lifecycle-${Date.now()}@test.local`, name: 'Lifecycle Tester' },
+      data: { email: `lifecycle-${crypto.randomUUID()}@test.local`, name: 'Lifecycle Tester' },
     });
     const m = await ctx.prisma.membership.create({
       data: { orgId: ctx.orgId, userId: user.id, role: 'MEMBER', status: 'ACTIVE', name: 'Lifecycle Tester' },

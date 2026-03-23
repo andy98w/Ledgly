@@ -15,7 +15,7 @@ describe('Organization create — name uniqueness (integration)', () => {
   }, 15_000);
 
   it('creates an org with a unique name', async () => {
-    const name = `Unique Org ${Date.now()}`;
+    const name = `Unique Org ${crypto.randomUUID()}`;
     const org = await ctx.organizationsService.create(ctx.userId, { name });
 
     expect(org.id).toBeDefined();
@@ -45,7 +45,7 @@ describe('Organization create — name uniqueness (integration)', () => {
 
   it('allows same org name for a different user', async () => {
     const otherUser = await ctx.prisma.user.create({
-      data: { email: `other-${Date.now()}@test.local`, name: 'Other User' },
+      data: { email: `other-${crypto.randomUUID()}@test.local`, name: 'Other User' },
     });
 
     const existingOrg = await ctx.prisma.organization.findUnique({ where: { id: ctx.orgId } });
@@ -61,7 +61,7 @@ describe('Organization create — name uniqueness (integration)', () => {
 
   it('allows creating org after user leaves the same-named org', async () => {
     // Create first org
-    const name = `Rejoin Test ${Date.now()}`;
+    const name = `Rejoin Test ${crypto.randomUUID()}`;
     const org1 = await ctx.organizationsService.create(ctx.userId, { name });
 
     // Mark user's membership as LEFT

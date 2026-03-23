@@ -11,7 +11,7 @@ describe('Charge unit tests', () => {
     ctx = await createTestContext();
 
     const user = await ctx.prisma.user.create({
-      data: { email: `unit-charge-${Date.now()}@test.local`, name: 'Unit Tester' },
+      data: { email: `unit-charge-${crypto.randomUUID()}@test.local`, name: 'Unit Tester' },
     });
     const m = await ctx.prisma.membership.create({
       data: { orgId: ctx.orgId, userId: user.id, role: 'MEMBER', status: 'ACTIVE', name: 'Unit Tester' },
@@ -86,7 +86,7 @@ describe('Charge unit tests', () => {
 
   it('creates charges for multiple members at once', async () => {
     const user2 = await ctx.prisma.user.create({
-      data: { email: `multi-${Date.now()}@test.local`, name: 'Multi Tester' },
+      data: { email: `multi-${crypto.randomUUID()}@test.local`, name: 'Multi Tester' },
     });
     const m2 = await ctx.prisma.membership.create({
       data: { orgId: ctx.orgId, userId: user2.id, role: 'MEMBER', status: 'ACTIVE', name: 'Multi Tester' },

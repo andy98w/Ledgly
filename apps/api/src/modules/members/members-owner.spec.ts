@@ -27,7 +27,7 @@ describe('OWNER role — hierarchy & transfer', () => {
 
     // Create an ADMIN member
     const adminUser = await ctx.prisma.user.create({
-      data: { email: `admin-owner-test-${Date.now()}@test.local`, name: 'Test Admin' },
+      data: { email: `admin-owner-test-${crypto.randomUUID()}@test.local`, name: 'Test Admin' },
     });
     adminUserId = adminUser.id;
     const adminMembership = await ctx.prisma.membership.create({
@@ -37,7 +37,7 @@ describe('OWNER role — hierarchy & transfer', () => {
 
     // Create a second ADMIN
     const admin2User = await ctx.prisma.user.create({
-      data: { email: `admin2-owner-test-${Date.now()}@test.local`, name: 'Test Admin 2' },
+      data: { email: `admin2-owner-test-${crypto.randomUUID()}@test.local`, name: 'Test Admin 2' },
     });
     admin2UserId = admin2User.id;
     const admin2Membership = await ctx.prisma.membership.create({
@@ -47,7 +47,7 @@ describe('OWNER role — hierarchy & transfer', () => {
 
     // Create a MEMBER
     const memberUser = await ctx.prisma.user.create({
-      data: { email: `member-owner-test-${Date.now()}@test.local`, name: 'Test Member' },
+      data: { email: `member-owner-test-${crypto.randomUUID()}@test.local`, name: 'Test Member' },
     });
     memberUserId = memberUser.id;
     const memberMembership = await ctx.prisma.membership.create({
@@ -68,7 +68,7 @@ describe('OWNER role — hierarchy & transfer', () => {
 
     beforeAll(async () => {
       const u = await ctx.prisma.user.create({
-        data: { email: `removable-${Date.now()}@test.local`, name: 'Removable Admin' },
+        data: { email: `removable-${crypto.randomUUID()}@test.local`, name: 'Removable Admin' },
       });
       removableUserId = u.id;
       const m = await ctx.prisma.membership.create({
@@ -88,7 +88,7 @@ describe('OWNER role — hierarchy & transfer', () => {
     it('OWNER can remove a regular MEMBER', async () => {
       // Create a throwaway member
       const u = await ctx.prisma.user.create({
-        data: { email: `removable-member-${Date.now()}@test.local`, name: 'Removable Member' },
+        data: { email: `removable-member-${crypto.randomUUID()}@test.local`, name: 'Removable Member' },
       });
       const m = await ctx.prisma.membership.create({
         data: { orgId: ctx.orgId, userId: u.id, role: 'MEMBER', status: 'ACTIVE', name: 'Removable Member' },
@@ -144,7 +144,7 @@ describe('OWNER role — hierarchy & transfer', () => {
 
     it('ADMIN can remove a regular MEMBER', async () => {
       const u = await ctx.prisma.user.create({
-        data: { email: `admin-removes-${Date.now()}@test.local`, name: 'Admin Removes Me' },
+        data: { email: `admin-removes-${crypto.randomUUID()}@test.local`, name: 'Admin Removes Me' },
       });
       const m = await ctx.prisma.membership.create({
         data: { orgId: ctx.orgId, userId: u.id, role: 'MEMBER', status: 'ACTIVE', name: 'Admin Removes Me' },
@@ -156,7 +156,7 @@ describe('OWNER role — hierarchy & transfer', () => {
 
     it('ADMIN can change a MEMBER role to TREASURER', async () => {
       const u = await ctx.prisma.user.create({
-        data: { email: `admin-promotes-${Date.now()}@test.local`, name: 'Admin Promotes Me' },
+        data: { email: `admin-promotes-${crypto.randomUUID()}@test.local`, name: 'Admin Promotes Me' },
       });
       const m = await ctx.prisma.membership.create({
         data: { orgId: ctx.orgId, userId: u.id, role: 'MEMBER', status: 'ACTIVE', name: 'Admin Promotes Me' },
@@ -221,7 +221,7 @@ describe('OWNER role — hierarchy & transfer', () => {
 
     it('cannot transfer to inactive member', async () => {
       const u = await ctx.prisma.user.create({
-        data: { email: `inactive-transfer-${Date.now()}@test.local`, name: 'Inactive' },
+        data: { email: `inactive-transfer-${crypto.randomUUID()}@test.local`, name: 'Inactive' },
       });
       const m = await ctx.prisma.membership.create({
         data: { orgId: ctx.orgId, userId: u.id, role: 'MEMBER', status: 'LEFT', name: 'Inactive' },
@@ -247,11 +247,11 @@ describe('OWNER role — hierarchy & transfer', () => {
 
     it('creator gets OWNER role', async () => {
       const u = await ctx.prisma.user.create({
-        data: { email: `org-creator-${Date.now()}@test.local`, name: 'Org Creator' },
+        data: { email: `org-creator-${crypto.randomUUID()}@test.local`, name: 'Org Creator' },
       });
       creatorUserId = u.id;
 
-      const org = await ctx.organizationsService.create(u.id, { name: `owner-test-org-${Date.now()}` });
+      const org = await ctx.organizationsService.create(u.id, { name: `owner-test-org-${crypto.randomUUID()}` });
       newOrgId = org.id;
 
       expect(org.membership.role).toBe('OWNER');

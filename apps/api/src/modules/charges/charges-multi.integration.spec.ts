@@ -13,7 +13,7 @@ describe('Multi-charge (parent-child) integration', () => {
 
     const createMember = async (email: string, name: string) => {
       const user = await ctx.prisma.user.create({
-        data: { email: `${email}-${Date.now()}@test.local`, name },
+        data: { email: `${email}-${crypto.randomUUID()}@test.local`, name },
       });
       const m = await ctx.prisma.membership.create({
         data: { orgId: ctx.orgId, userId: user.id, role: 'MEMBER', status: 'ACTIVE', name },

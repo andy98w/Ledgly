@@ -13,7 +13,7 @@ describe('Charges bulkCreate (integration)', () => {
 
     // Create two extra members for multi-member tests
     const userA = await ctx.prisma.user.create({
-      data: { email: `bulk-a-${Date.now()}@test.local`, name: 'Alice' },
+      data: { email: `bulk-a-${crypto.randomUUID()}@test.local`, name: 'Alice' },
     });
     const mA = await ctx.prisma.membership.create({
       data: { orgId: ctx.orgId, userId: userA.id, role: 'MEMBER', status: 'ACTIVE', name: 'Alice' },
@@ -21,7 +21,7 @@ describe('Charges bulkCreate (integration)', () => {
     memberA = mA.id;
 
     const userB = await ctx.prisma.user.create({
-      data: { email: `bulk-b-${Date.now()}@test.local`, name: 'Bob' },
+      data: { email: `bulk-b-${crypto.randomUUID()}@test.local`, name: 'Bob' },
     });
     const mB = await ctx.prisma.membership.create({
       data: { orgId: ctx.orgId, userId: userB.id, role: 'MEMBER', status: 'ACTIVE', name: 'Bob' },
