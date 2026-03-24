@@ -2057,7 +2057,7 @@ export default function SpreadsheetPage() {
                                   ),
                                 });
                               }}
-                              className="w-3.5 h-3.5 flex items-center justify-center rounded hover:bg-destructive/20 hover:text-destructive transition-colors text-muted-foreground/40"
+                              className="w-3.5 h-3.5 flex items-center justify-center rounded hover:bg-destructive/20 hover:text-destructive transition-colors text-muted-foreground/40 opacity-0 group-hover/header:opacity-100"
                               title={`Remove ${def.label}`}
                             >
                               <Minus className="h-2.5 w-2.5" />
