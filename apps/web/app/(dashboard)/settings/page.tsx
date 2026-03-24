@@ -1188,6 +1188,21 @@ export default function SettingsPage() {
   const [newRuleDays, setNewRuleDays] = useState('3');
   const [openSections, setOpenSections] = useState<Set<string>>(new Set(['organization', 'profile', 'integrations', 'danger']));
 
+  useEffect(() => {
+    const hash = window.location.hash.replace('#', '');
+    if (!hash) return;
+    const timeout = setTimeout(() => {
+      const el = document.getElementById(hash) || document.getElementById(`section-${hash}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (hash.includes('organization') || hash.includes('integrations')) {
+          setOpenSections((prev) => new Set([...Array.from(prev), hash.replace('section-', '')]));
+        }
+      }
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, []);
+
   const toggleSection = (id: string) => {
     setOpenSections(prev => {
       const next = new Set(prev);
@@ -1572,6 +1587,7 @@ export default function SettingsPage() {
       <FadeIn delay={0.1}>
         <MotionCard hover={false}>
           <button
+            id="section-organization"
             onClick={() => toggleSection('organization')}
             className="flex items-center justify-between w-full p-5 text-left"
           >
@@ -1839,6 +1855,7 @@ export default function SettingsPage() {
         <FadeIn delay={0.3}>
           <MotionCard hover={false}>
             <button
+              id="section-integrations"
               onClick={() => toggleSection('integrations')}
               className="flex items-center justify-between w-full p-5 text-left"
             >

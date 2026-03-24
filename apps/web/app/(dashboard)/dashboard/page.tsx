@@ -51,7 +51,7 @@ function QuickStartChecklist({ stats }: { stats: any }) {
   const steps = [
     { label: 'Add members', description: 'Import from CSV or add one by one', href: '/members', done: stats.memberCount > 1, icon: Users },
     { label: 'Create a charge', description: 'Charge members for dues, events, or fees', href: '/charges', done: stats.openChargesCount > 0 || stats.totalCollectedCents > 0, icon: Receipt },
-    { label: 'Set up payment methods', description: 'Add Venmo, Zelle, or CashApp handles', href: '/settings', done: stats.hasPaymentHandles, icon: CreditCard },
+    { label: 'Set up payment methods', description: 'Add Venmo, Zelle, or CashApp handles', href: '/settings#section-organization', done: stats.hasPaymentHandles, icon: CreditCard },
     { label: 'Record a payment', description: 'Import from bank, email, or add manually', href: '/payments', done: stats.paymentsCount, icon: TrendingUp },
     { label: 'Try LedgelyAI', description: 'Manage finances with natural language', href: '/agent', done: false, icon: Sparkles },
   ];
