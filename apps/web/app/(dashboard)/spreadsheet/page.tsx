@@ -275,8 +275,8 @@ export default function SpreadsheetPage() {
   const isAdmin = useIsAdminOrTreasurer();
   const currentMembership = useCurrentMembership();
 
-  const columnConfig = useColumnConfig();
   const { customColumns, addColumn: addCustomColumn, removeColumn: removeCustomColumn } = useCustomColumns(currentOrgId);
+  const columnConfig = useColumnConfig(customColumns);
   const { onResizeStart } = useColumnResize({ onResize: columnConfig.resizeColumn });
   const { dragColumnId, dropTargetId, onDragStart, onDragOver, onDragLeave, onDrop, onDragEnd } = useColumnReorder({
     onReorder: columnConfig.reorderColumn,
@@ -366,6 +366,7 @@ export default function SpreadsheetPage() {
               allocatedCents: child.allocatedCents || 0,
               isChild: true,
               parentId: charge.id,
+              customFields: (child as any).customFields || {},
             }))
           : [];
 
@@ -392,6 +393,7 @@ export default function SpreadsheetPage() {
           isParent: hasChildren,
           childCount: hasChildren ? c.children.length : undefined,
           children: hasChildren ? childRows : undefined,
+          customFields: (charge as any).customFields || {},
         });
       }
     }
@@ -437,6 +439,7 @@ export default function SpreadsheetPage() {
           isParent: hasChildren,
           childCount: hasChildren ? e.children.length : undefined,
           children: hasChildren ? childRows : undefined,
+          customFields: (expense as any).customFields || {},
         });
       }
     }
@@ -461,6 +464,7 @@ export default function SpreadsheetPage() {
           allocatedCents: payment.allocatedCents,
           unallocatedCents: payment.unallocatedCents,
           isUnallocated: payment.unallocatedCents === payment.amountCents,
+          customFields: (payment as any).customFields || {},
         });
       }
     }
@@ -1647,8 +1651,19 @@ export default function SpreadsheetPage() {
         return row.expenseCents > 0 ? (
           <EditableCell value={row.expenseCents} type="money" isEditing={editingCell?.rowId === row.id && editingCell?.column === 'amount'} onEdit={() => setEditingCell({ rowId: row.id, column: 'amount' })} onSave={(v) => handleSaveCell(row, 'amount', v)} onCancel={() => setEditingCell(null)} onNavigate={(dir) => handleCellNavigate(row.id, 'amount', dir)} isAdmin={isAdmin} rowType={row.type} column="expense" />
         ) : (<span className="text-muted-foreground/30">-</span>);
-      default:
+      default: {
+        const colDef = columnConfig.getColumnDef(colId);
+        if (colDef?.isCustom) {
+          const val = row.customFields?.[colId];
+          const display = val != null ? String(val) : '';
+          return display ? (
+            <span className={cn('text-sm', colDef.customType === 'number' ? 'tabular-nums' : '')}>{
+              colDef.customType === 'number' && typeof val === 'number' ? val.toLocaleString() : display
+            }</span>
+          ) : (<span className="text-muted-foreground/30">-</span>);
+        }
         return null;
+      }
     }
   };
 
@@ -1973,6 +1988,22 @@ export default function SpreadsheetPage() {
                     );
                   })}
                   {isAdmin && <th className="w-8 px-1" />}
+                  {isAdmin && (
+                    <th className="w-8 px-1">
+                      <button
+                        onClick={() => {
+                          const label = prompt('Column name:');
+                          if (!label?.trim()) return;
+                          const type = confirm('Is this a number column?\n\nOK = Number\nCancel = Text') ? 'number' : 'text';
+                          addCustomColumn(label.trim(), type as 'text' | 'number');
+                        }}
+                        className="w-6 h-6 flex items-center justify-center rounded hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
+                        title="Add custom column"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -2345,19 +2376,39 @@ export default function SpreadsheetPage() {
               {!isLoading && displayRows.length > 0 && (
                 <tfoot>
                   <tr className="bg-secondary/50 font-medium">
-                    <td className="px-2 py-2" colSpan={(isAdmin ? 1 : 0) + columnConfig.visibleColumns.filter(c => c !== 'income' && c !== 'expense').length}>
-                      <span className="text-muted-foreground">Total ({displayRows.length} transactions)</span>
-                    </td>
-                    {columnConfig.visibleColumns.includes('income') && (
-                      <td className="px-2 py-2 text-right">
-                        <Money cents={totals.income} size="sm" className="text-success font-semibold" />
-                      </td>
-                    )}
-                    {columnConfig.visibleColumns.includes('expense') && (
-                      <td className="px-2 py-2 text-right">
-                        <Money cents={totals.expenses} size="sm" className="text-destructive font-semibold" />
-                      </td>
-                    )}
+                    {columnConfig.visibleColumns.map((colId, i) => {
+                      if (colId === 'income') {
+                        return (
+                          <td key={colId} className="px-2 py-2 text-right">
+                            <Money cents={totals.income} size="sm" className="text-success font-semibold" />
+                          </td>
+                        );
+                      }
+                      if (colId === 'expense') {
+                        return (
+                          <td key={colId} className="px-2 py-2 text-right">
+                            <Money cents={totals.expenses} size="sm" className="text-destructive font-semibold" />
+                          </td>
+                        );
+                      }
+                      const def = columnConfig.getColumnDef(colId);
+                      if (def?.isCustom && def.customType === 'number') {
+                        const sum = displayRows.reduce((s, r) => s + (Number(r.customFields?.[colId]) || 0), 0);
+                        return (
+                          <td key={colId} className="px-2 py-2 text-right text-sm tabular-nums">
+                            {sum > 0 ? sum.toLocaleString() : '-'}
+                          </td>
+                        );
+                      }
+                      if (i === 0) {
+                        return (
+                          <td key={colId} className="px-2 py-2">
+                            <span className="text-muted-foreground text-xs">{displayRows.length} rows</span>
+                          </td>
+                        );
+                      }
+                      return <td key={colId} />;
+                    })}
                     {isAdmin && <td />}
                   </tr>
                 </tfoot>

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 
 export interface ColumnDef {
   id: string;
@@ -11,6 +11,8 @@ export interface ColumnDef {
   filterable: boolean;
   hideable: boolean;
   frozen?: boolean;
+  isCustom?: boolean;
+  customType?: 'text' | 'number';
 }
 
 export const COLUMN_DEFS: ColumnDef[] = [
@@ -36,7 +38,7 @@ const defaultState: ColumnState = {
   hidden: [],
 };
 
-export function useColumnConfig() {
+export function useColumnConfig(customColumns?: Array<{ id: string; label: string; type: 'text' | 'number' }>) {
   const [state, setState] = useState<ColumnState>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
@@ -49,16 +51,43 @@ export function useColumnConfig() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch {}
   }, [state]);
 
-  const visibleColumns = state.order.filter(id => !state.hidden.includes(id));
+  const allDefs = useMemo(() => {
+    const custom: ColumnDef[] = (customColumns || []).map(c => ({
+      id: c.id,
+      label: c.label,
+      defaultWidth: 120,
+      minWidth: 60,
+      maxWidth: 300,
+      align: c.type === 'number' ? 'right' as const : 'left' as const,
+      filterable: false,
+      hideable: true,
+      isCustom: true,
+      customType: c.type,
+    }));
+    return [...COLUMN_DEFS, ...custom];
+  }, [customColumns]);
 
-  const getColumnDef = useCallback((id: string) => COLUMN_DEFS.find(c => c.id === id)!, []);
+  // Ensure custom columns appear in the order list
+  useEffect(() => {
+    if (!customColumns?.length) return;
+    const customIds = customColumns.map(c => c.id);
+    const missing = customIds.filter(id => !state.order.includes(id));
+    if (missing.length > 0) {
+      setState(prev => ({ ...prev, order: [...prev.order, ...missing] }));
+    }
+  }, [customColumns]);
+
+  const allColumnIds = useMemo(() => new Set(allDefs.map(d => d.id)), [allDefs]);
+  const visibleColumns = state.order.filter(id => !state.hidden.includes(id) && allColumnIds.has(id));
+
+  const getColumnDef = useCallback((id: string) => allDefs.find(c => c.id === id)!, [allDefs]);
 
   const resizeColumn = useCallback((id: string, width: number) => {
-    const def = COLUMN_DEFS.find(c => c.id === id);
+    const def = allDefs.find(c => c.id === id);
     if (!def) return;
     const clamped = Math.max(def.minWidth, Math.min(def.maxWidth, width));
     setState(prev => ({ ...prev, widths: { ...prev.widths, [id]: clamped } }));
-  }, []);
+  }, [allDefs]);
 
   const reorderColumn = useCallback((fromId: string, toId: string) => {
     setState(prev => {
@@ -73,7 +102,7 @@ export function useColumnConfig() {
   }, []);
 
   const toggleVisibility = useCallback((id: string) => {
-    const def = COLUMN_DEFS.find(c => c.id === id);
+    const def = allDefs.find(c => c.id === id);
     if (!def?.hideable) return;
     setState(prev => {
       const hidden = prev.hidden.includes(id)
@@ -81,15 +110,16 @@ export function useColumnConfig() {
         : [...prev.hidden, id];
       return { ...prev, hidden };
     });
-  }, []);
+  }, [allDefs]);
 
   const resetColumns = useCallback(() => setState(defaultState), []);
 
-  const getWidth = useCallback((id: string) => state.widths[id] ?? COLUMN_DEFS.find(c => c.id === id)?.defaultWidth ?? 100, [state.widths]);
+  const getWidth = useCallback((id: string) => state.widths[id] ?? allDefs.find(c => c.id === id)?.defaultWidth ?? 100, [state.widths, allDefs]);
 
   return {
     state,
     visibleColumns,
+    allDefs,
     getColumnDef,
     getWidth,
     resizeColumn,
