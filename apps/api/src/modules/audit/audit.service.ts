@@ -186,10 +186,56 @@ export class AuditService {
         items: logs,
       }));
 
+      // Group standalone entries by actor + 30-min time window
+      const WINDOW_MS = 30 * 60 * 1000;
+      const timeGroups: typeof formattedData[] = [];
+      let currentGroup: typeof formattedData = [];
+      let lastActor: string | null = null;
+      let lastTime: number | null = null;
+
+      const sortedStandalone = [...standalone].sort((a, b) =>
+        new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime(),
+      );
+
+      for (const log of sortedStandalone) {
+        const actorId = log.actor?.id || null;
+        const time = new Date(log.createdAt!).getTime();
+
+        if (currentGroup.length > 0 && actorId === lastActor && lastTime !== null && lastTime - time < WINDOW_MS) {
+          currentGroup.push(log);
+        } else {
+          if (currentGroup.length > 0) timeGroups.push(currentGroup);
+          currentGroup = [log];
+        }
+        lastActor = actorId;
+        lastTime = time;
+      }
+      if (currentGroup.length > 0) timeGroups.push(currentGroup);
+
+      const timeGrouped = timeGroups.map((group) => {
+        if (group.length === 1) {
+          return { ...group[0], isBatch: false, items: undefined, itemCount: 1, sortDate: group[0].createdAt };
+        }
+        return {
+          id: `time_${group[0].id}`,
+          isBatch: true,
+          batchDescription: `${group.length} actions`,
+          itemCount: group.length,
+          entityType: group[0].entityType || 'BATCH',
+          action: group[0].action || 'BATCH',
+          undone: group.every(l => l.undone),
+          source: group[0].source,
+          createdAt: group[0].createdAt,
+          actor: group[0].actor,
+          items: group,
+          sortDate: group[0].createdAt,
+        };
+      });
+
       // Merge and sort by createdAt
       const combined = [
         ...batched.map(b => ({ ...b, sortDate: b.createdAt })),
-        ...standalone.map(s => ({ ...s, isBatch: false, items: undefined, itemCount: 1, sortDate: s.createdAt })),
+        ...timeGrouped,
       ].sort((a, b) => new Date(b.sortDate!).getTime() - new Date(a.sortDate!).getTime());
 
       return {
