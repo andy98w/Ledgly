@@ -790,17 +790,37 @@ export class PaymentsService {
 
       if (charges.length === 0) return { allocated: false as const, reason: 'No open charges for member' };
 
+      // Only auto-allocate if we have a strong signal:
+      // 1. Memo matched a category (derivedCategory is set), OR
+      // 2. Payment amount exactly matches a charge balance, OR
+      // 3. There's only one open charge for this member
+      const chargesWithBalance = charges.map((c) => {
+        const alloc = c.allocations.reduce((sum, a) => sum + a.amountCents, 0);
+        return { ...c, balanceDue: c.amountCents - alloc };
+      }).filter((c) => c.balanceDue > 0);
+
+      const hasExactMatch = chargesWithBalance.some((c) => c.balanceDue === remainingCents);
+      const hasMemoMatch = !!derivedCategory;
+      const singleCharge = chargesWithBalance.length === 1;
+
+      if (!hasExactMatch && !hasMemoMatch && !singleCharge) {
+        return { allocated: false as const, reason: 'No confident charge match — manual allocation needed' };
+      }
+
       let totalAllocated = 0;
       const allocatedChargeIds: string[] = [];
 
-      for (const charge of charges) {
+      // If exact match exists, prefer it
+      const sortedCharges = hasExactMatch
+        ? [...chargesWithBalance].sort((a, b) =>
+            (a.balanceDue === remainingCents ? -1 : 1) - (b.balanceDue === remainingCents ? -1 : 1)
+          )
+        : chargesWithBalance;
+
+      for (const charge of sortedCharges) {
         if (remainingCents <= 0) break;
 
-        const chargeAllocated = charge.allocations.reduce((sum, a) => sum + a.amountCents, 0);
-        const chargeBalance = charge.amountCents - chargeAllocated;
-        if (chargeBalance <= 0) continue;
-
-        const toAllocate = Math.min(remainingCents, chargeBalance);
+        const toAllocate = Math.min(remainingCents, charge.balanceDue);
 
         await tx.paymentAllocation.create({
           data: {

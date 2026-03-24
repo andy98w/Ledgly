@@ -265,8 +265,9 @@ function BankConnectionsSection({ orgId }: { orgId: string | null }) {
 
   if (connections.length === 0) {
     return (
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">Auto-import P2P transactions from Venmo, Zelle, Cash App, PayPal</p>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">Auto-import P2P transactions from Venmo, Zelle, Cash App, PayPal</p>
         <Button
           variant="outline"
           size="sm"
@@ -280,6 +281,11 @@ function BankConnectionsSection({ orgId }: { orgId: string | null }) {
           )}
           Connect Bank
         </Button>
+        </div>
+        <div className="rounded-lg bg-secondary/30 p-3 text-xs text-muted-foreground space-y-1">
+          <p>Powered by <strong className="text-foreground">Plaid</strong> — the same secure connector used by Venmo, Cash App, and Robinhood.</p>
+          <p>Ledgly only reads transactions. We never see your login credentials and cannot move money or modify your account.</p>
+        </div>
       </div>
     );
   }
