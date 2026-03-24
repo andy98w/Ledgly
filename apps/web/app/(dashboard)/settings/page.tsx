@@ -495,6 +495,15 @@ function GroupMeSection({ orgId }: { orgId: string | null }) {
         </Button>
       ) : (
         <div className="space-y-3 pt-3 border-t border-border/30">
+          <div className="rounded-lg bg-secondary/30 p-3 text-xs text-muted-foreground space-y-1.5">
+            <p className="font-medium text-foreground">How to get a GroupMe Bot ID:</p>
+            <ol className="list-decimal list-inside space-y-1">
+              <li>Go to <a href="https://dev.groupme.com/bots" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">dev.groupme.com/bots</a></li>
+              <li>Click "Create Bot" and select your group</li>
+              <li>Set the bot name (e.g. "Ledgly") and leave callback URL blank</li>
+              <li>Copy the <strong>Bot ID</strong> and paste it below</li>
+            </ol>
+          </div>
           <div className="space-y-2">
             <Label className="text-sm">Bot ID</Label>
             <Input
@@ -656,6 +665,15 @@ function DiscordSection({ orgId }: { orgId: string | null }) {
         </Button>
       ) : (
         <div className="space-y-3 pt-3 border-t border-border/30">
+          <div className="rounded-lg bg-secondary/30 p-3 text-xs text-muted-foreground space-y-1.5">
+            <p className="font-medium text-foreground">How to get a Discord Webhook URL:</p>
+            <ol className="list-decimal list-inside space-y-1">
+              <li>Open your Discord server and go to the channel you want</li>
+              <li>Click the gear icon (Edit Channel) → Integrations → Webhooks</li>
+              <li>Click "New Webhook", name it "Ledgly"</li>
+              <li>Click "Copy Webhook URL" and paste it below</li>
+            </ol>
+          </div>
           <div className="space-y-2">
             <Label className="text-sm">Webhook URL</Label>
             <Input
@@ -1071,6 +1089,16 @@ function SlackSection({ orgId }: { orgId: string | null }) {
         </Button>
       ) : (
         <div className="space-y-3 pt-3 border-t border-border/30">
+          <div className="rounded-lg bg-secondary/30 p-3 text-xs text-muted-foreground space-y-1.5">
+            <p className="font-medium text-foreground">How to get a Slack Webhook URL:</p>
+            <ol className="list-decimal list-inside space-y-1">
+              <li>Go to <a href="https://api.slack.com/apps" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">api.slack.com/apps</a> → Create New App → From scratch</li>
+              <li>Name it "Ledgly" and select your workspace</li>
+              <li>Go to Incoming Webhooks (left sidebar) → toggle On</li>
+              <li>Click "Add New Webhook to Workspace" → select a channel → Allow</li>
+              <li>Copy the Webhook URL and paste it below</li>
+            </ol>
+          </div>
           <div className="space-y-2">
             <Label className="text-sm">Webhook URL</Label>
             <Input
