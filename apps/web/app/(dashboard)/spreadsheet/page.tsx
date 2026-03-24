@@ -553,7 +553,14 @@ export default function SpreadsheetPage() {
         case 'category': return (a.category || '').localeCompare(b.category || '');
         case 'member': return (a.member || '').localeCompare(b.member || '');
         case 'status': return (a.status || '').localeCompare(b.status || '');
-        default: return 0;
+        default: {
+          const aVal = a.customFields?.[key];
+          const bVal = b.customFields?.[key];
+          const aNum = Number(aVal);
+          const bNum = Number(bVal);
+          if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
+          return String(aVal || '').localeCompare(String(bVal || ''));
+        }
       }
     };
     filteredRows.sort((a, b) => {

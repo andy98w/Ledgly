@@ -18,6 +18,7 @@ import { NotificationChannelsService } from '../notifications/notification-chann
 import { DigestSchedulerService } from '../reports/digest-scheduler.service';
 import { GmailService } from '../gmail/gmail.service';
 import { PlaidService } from '../plaid/plaid.service';
+import { OrganizationsService } from '../organizations/organizations.service';
 import { AgentService } from './agent.service';
 
 jest.setTimeout(60_000);
@@ -59,6 +60,7 @@ describe('AgentService integration', () => {
         { provide: DigestSchedulerService, useValue: {} },
         { provide: GmailService, useValue: { syncEmails: jest.fn() } },
         { provide: PlaidService, useValue: { syncTransactions: jest.fn() } },
+        { provide: OrganizationsService, useValue: { getCustomColumns: jest.fn().mockResolvedValue([]), updateCustomColumns: jest.fn(), updateCustomField: jest.fn() } },
       ],
     })
       .overrideProvider(EmailService)

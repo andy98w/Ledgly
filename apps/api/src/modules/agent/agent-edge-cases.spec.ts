@@ -13,6 +13,7 @@ import { AnnouncementsService } from '../announcements/announcements.service';
 import { NotificationChannelsService } from '../notifications/notification-channels.service';
 import { DigestSchedulerService } from '../reports/digest-scheduler.service';
 import { GmailService } from '../gmail/gmail.service';
+import { OrganizationsService } from '../organizations/organizations.service';
 import { PlaidService } from '../plaid/plaid.service';
 import { AgentService } from './agent.service';
 
@@ -45,6 +46,7 @@ describe('AgentService edge cases', () => {
         { provide: DigestSchedulerService, useValue: {} },
         { provide: GmailService, useValue: { syncEmails: jest.fn() } },
         { provide: PlaidService, useValue: { syncTransactions: jest.fn() } },
+        { provide: OrganizationsService, useValue: { getCustomColumns: jest.fn().mockResolvedValue([]), updateCustomColumns: jest.fn(), updateCustomField: jest.fn() } },
       ],
     })
       .overrideProvider(EmailService)

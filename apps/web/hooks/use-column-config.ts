@@ -59,6 +59,7 @@ export function useColumnConfig(customColumns?: Array<{ id: string; label: strin
       minWidth: 60,
       maxWidth: 300,
       align: c.type === 'number' ? 'right' as const : 'left' as const,
+      sortKey: c.id,
       filterable: false,
       hideable: true,
       isCustom: true,
