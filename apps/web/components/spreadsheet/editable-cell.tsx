@@ -324,7 +324,7 @@ export function EditableCell({
           onKeyDown={handleKeyDown}
           onBlur={handleSave}
           placeholder="mm/dd/yy or 'yesterday'"
-          className="h-5 text-xs bg-transparent shadow-none !ring-0 !outline-none !border-none rounded px-0 w-full"
+          className="h-5 text-xs bg-transparent shadow-none !ring-0 !outline-none border-0 border-b border-transparent focus:border-primary/40 rounded-none px-0 w-full transition-colors"
           type="text"
         />
       );
@@ -332,7 +332,7 @@ export function EditableCell({
 
     if (type === 'money') {
       return (
-        <div className="inline-flex items-baseline justify-end w-full">
+        <div className="inline-flex items-baseline justify-end w-full border-0 border-b border-primary/40 transition-colors">
           <span className="text-sm font-semibold opacity-70 mr-0.5">$</span>
           <input
             ref={inputRef}
@@ -355,7 +355,7 @@ export function EditableCell({
         onChange={(e) => setEditValue(e.target.value)}
         onKeyDown={handleKeyDown}
         onBlur={handleSave}
-        className="h-5 w-full text-sm bg-transparent shadow-none !ring-0 !outline-none !border-none rounded px-0"
+        className="h-5 w-full text-sm bg-transparent shadow-none !ring-0 !outline-none border-0 border-b border-transparent focus:border-primary/40 rounded-none px-0 transition-colors"
         type="text"
       />
     );

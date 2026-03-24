@@ -122,6 +122,7 @@ model Membership {
   org                    Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
   user                   User?               @relation(fields: [userId], references: [id])
   allocationsCreated     PaymentAllocation[] @relation("AllocationCreatedBy")
+  paymentsAsMember       Payment[]           @relation("PaymentMember")
   paymentsCreated        Payment[]           @relation("PaymentCreatedBy")
   agentSessions          AgentSession[]
   chargeSchedulesCreated ChargeSchedule[]    @relation("ScheduleCreator")
@@ -173,6 +174,7 @@ model Payment {
   deletedAt    DateTime?           @map("deleted_at")
   customFields Json?               @default("{}") @map("custom_fields")
   allocations  PaymentAllocation[]
+  membership   Membership?         @relation("PaymentMember", fields: [membershipId], references: [id])
   createdBy    Membership?         @relation("PaymentCreatedBy", fields: [createdById], references: [id])
   org          Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
 

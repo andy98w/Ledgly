@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Patch, Delete, Body, Param, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { IsString, IsOptional, IsArray, IsBoolean, IsObject, IsIn, MinLength, MaxLength, ValidateNested } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
@@ -175,7 +175,7 @@ export class OrganizationsController {
     return this.organizationsService.getCustomColumns(orgId);
   }
 
-  @Put(':orgId/custom-columns')
+  @Patch(':orgId/custom-columns')
   @UseGuards(RolesGuard)
   @Roles('ADMIN', 'TREASURER')
   async updateCustomColumns(@Param('orgId') orgId: string, @Body() dto: UpdateCustomColumnsDto) {

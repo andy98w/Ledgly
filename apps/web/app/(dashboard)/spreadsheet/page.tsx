@@ -1881,7 +1881,7 @@ export default function SpreadsheetPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-44">
-                  {COLUMN_DEFS.filter(c => c.hideable).map(col => (
+                  {columnConfig.allDefs.filter(c => c.hideable).map(col => (
                     <DropdownMenuItem
                       key={col.id}
                       onClick={() => columnConfig.toggleVisibility(col.id)}
@@ -2011,14 +2011,14 @@ export default function SpreadsheetPage() {
                   })}
                   {isAdmin && <th className="w-8 px-1" />}
                   {isAdmin && (
-                    <th className="w-0 p-0 border-none relative">
+                    <th className="w-8 px-1">
                       <button
                         onClick={() => {
                           setNewColumnName('');
                           setNewColumnType('text');
                           setShowAddColumnDialog(true);
                         }}
-                        className="absolute -right-1 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-secondary/80 hover:bg-primary/20 hover:text-primary transition-colors text-muted-foreground border border-border/50"
+                        className="w-5 h-5 mx-auto flex items-center justify-center rounded-full bg-secondary/80 hover:bg-primary/20 hover:text-primary transition-colors text-muted-foreground border border-border/50"
                         title="Add custom column"
                       >
                         <Plus className="h-3 w-3" />
