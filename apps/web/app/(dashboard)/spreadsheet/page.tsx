@@ -2400,20 +2400,23 @@ export default function SpreadsheetPage() {
                         const def = columnConfig.getColumnDef(colId);
                         const width = colId === 'description' ? undefined : columnConfig.getWidth(colId);
                         const isActive = activeCell?.rowId === row.id && activeCell?.column === colId;
+                        const isFillTarget = dragFill.fillRange.has(row.id) && dragFill.fillColumn === colId;
                         return (
                           <td
                             key={colId}
                             className={cn(
-                              'px-2 py-2 cursor-default',
+                              'px-2 py-2 cursor-default relative',
                               def.align === 'right' && 'text-right',
                               isActive && 'ring-2 ring-inset ring-primary/50',
-                              colIdx % 2 === 0 && 'bg-black/[0.02] dark:bg-white/[0.02]',
+                              isFillTarget && 'bg-primary/10 ring-1 ring-inset ring-primary/30',
+                              colIdx % 2 === 0 && !isFillTarget && 'bg-black/[0.02] dark:bg-white/[0.02]',
                               colId === 'date' && (isAdmin ? 'sticky left-14 z-10' : 'sticky left-0 z-10'),
                               colId === 'date' && stickyDateBg(row),
                               colId === 'description' && row.isChild && 'pl-10',
                             )}
                             style={width ? { width } : undefined}
                             onMouseDown={(e) => handleRowMouseDown(row.id, colId, e)}
+                            onMouseEnter={() => dragFill.isDragging && dragFill.onMouseMove(row.id)}
                             onDoubleClick={() => {
                               if (!isAdmin) return;
                               if (row.isParent && (colId === 'member' || colId === 'income' || colId === 'expense')) return;
@@ -2421,6 +2424,15 @@ export default function SpreadsheetPage() {
                             }}
                           >
                             {renderCellContent(row, colId)}
+                            {isActive && isAdmin && !editingCell && (
+                              <div
+                                className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-primary cursor-crosshair translate-x-1/2 translate-y-1/2 z-20 rounded-sm"
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                  dragFill.startFill(row.id, colId);
+                                }}
+                              />
+                            )}
                           </td>
                         );
                       })}
