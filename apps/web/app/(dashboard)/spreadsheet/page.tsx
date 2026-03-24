@@ -252,7 +252,7 @@ export default function SpreadsheetPage() {
   const [inlineNewRow, setInlineNewRow] = useState(false);
   const [inlineNewRowField, setInlineNewRowField] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(500);
   const [newRowType, setNewRowType] = useState<'charge' | 'multi-charge' | 'expense' | 'multi-expense' | 'payment'>('charge');
   const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
   const [showMultiChargeDialog, setShowMultiChargeDialog] = useState(false);
@@ -2507,8 +2507,8 @@ export default function SpreadsheetPage() {
         </div>
       </FadeIn>
 
-      {/* Pagination Controls - Bottom */}
-      {displayRows.length > 0 && (
+      {/* Pagination Controls - Bottom (only if needed) */}
+      {totalPages > 1 && (
         <FadeIn delay={0.3}>
           <Pagination page={page} totalPages={totalPages} onPageChange={setPage} className="justify-center pt-4" />
         </FadeIn>

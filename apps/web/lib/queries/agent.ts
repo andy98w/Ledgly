@@ -300,6 +300,8 @@ const TOOL_QUERY_MAP: Record<string, (orgId: string) => readonly (readonly unkno
   ],
   allocate_payment: (orgId) => [queryKeys.payments.all(orgId), queryKeys.charges.all(orgId), queryKeys.members.all(orgId)],
   auto_allocate_payment: (orgId) => [queryKeys.payments.all(orgId), queryKeys.charges.all(orgId), queryKeys.members.all(orgId)],
+  manage_columns: (orgId) => [queryKeys.customColumns.all(orgId)],
+  update_custom_field: (orgId) => [queryKeys.charges.all(orgId), queryKeys.expenses.all(orgId), queryKeys.payments.all(orgId)],
 };
 
 export function useConfirmAgentActions() {
