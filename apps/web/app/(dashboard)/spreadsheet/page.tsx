@@ -256,6 +256,9 @@ export default function SpreadsheetPage() {
   const [showMultiChargeDialog, setShowMultiChargeDialog] = useState(false);
   const [showMultiExpenseDialog, setShowMultiExpenseDialog] = useState(false);
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [showAddColumnDialog, setShowAddColumnDialog] = useState(false);
+  const [newColumnName, setNewColumnName] = useState('');
+  const [newColumnType, setNewColumnType] = useState<'text' | 'number'>('text');
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [contextCategorySubmenu, setContextCategorySubmenu] = useState(false);
   const [contextDatePicker, setContextDatePicker] = useState(false);
@@ -1992,10 +1995,9 @@ export default function SpreadsheetPage() {
                     <th className="w-8 px-1">
                       <button
                         onClick={() => {
-                          const label = prompt('Column name:');
-                          if (!label?.trim()) return;
-                          const type = confirm('Is this a number column?\n\nOK = Number\nCancel = Text') ? 'number' : 'text';
-                          addCustomColumn(label.trim(), type as 'text' | 'number');
+                          setNewColumnName('');
+                          setNewColumnType('text');
+                          setShowAddColumnDialog(true);
                         }}
                         className="w-6 h-6 flex items-center justify-center rounded hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
                         title="Add custom column"
@@ -2836,6 +2838,67 @@ export default function SpreadsheetPage() {
           </button>
         </div>
       )}
+      {/* Add Custom Column Dialog */}
+      <Dialog open={showAddColumnDialog} onOpenChange={setShowAddColumnDialog}>
+        <DialogContent className="sm:max-w-[360px]">
+          <DialogHeader>
+            <DialogTitle>Add Column</DialogTitle>
+            <DialogDescription>Add a custom column to your spreadsheet.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Column Name</Label>
+              <Input
+                value={newColumnName}
+                onChange={(e) => setNewColumnName(e.target.value)}
+                placeholder="e.g., Notes, Points, Room #"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && newColumnName.trim()) {
+                    addCustomColumn(newColumnName.trim(), newColumnType);
+                    setShowAddColumnDialog(false);
+                  }
+                }}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Type</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setNewColumnType('text')}
+                  className={cn(
+                    'px-3 py-2 rounded-lg border text-sm font-medium transition-colors',
+                    newColumnType === 'text' ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-secondary/50',
+                  )}
+                >
+                  Text
+                </button>
+                <button
+                  onClick={() => setNewColumnType('number')}
+                  className={cn(
+                    'px-3 py-2 rounded-lg border text-sm font-medium transition-colors',
+                    newColumnType === 'number' ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-secondary/50',
+                  )}
+                >
+                  Number
+                </button>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddColumnDialog(false)}>Cancel</Button>
+            <Button
+              disabled={!newColumnName.trim()}
+              onClick={() => {
+                addCustomColumn(newColumnName.trim(), newColumnType);
+                setShowAddColumnDialog(false);
+              }}
+            >
+              Add Column
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
