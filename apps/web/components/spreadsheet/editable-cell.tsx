@@ -126,13 +126,18 @@ export function EditableCell({
 
   const handleSave = () => {
     if (type === 'money') {
+      let cents: number;
       const parsed = parseFloat(editValue || '0');
       if (!isNaN(parsed)) {
-        onSave(Math.round(parsed * 100));
+        cents = Math.round(parsed * 100);
       } else {
-        const nlCents = parseNaturalAmount(editValue);
-        onSave(nlCents ?? 0);
+        cents = parseNaturalAmount(editValue) ?? 0;
       }
+      if (cents < 0 || cents > 10_000_000) {
+        onCancel();
+        return;
+      }
+      onSave(cents);
     } else if (type === 'date') {
       const iso = parseDateInput(editValue);
       if (iso) {

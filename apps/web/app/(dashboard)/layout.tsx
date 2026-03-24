@@ -16,6 +16,7 @@ import { useSidebarStore } from '@/lib/stores/sidebar';
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FeatureTour } from '@/components/feature-tour';
+import { ErrorBoundary } from '@/components/error-boundary';
 
 export default function DashboardLayout({
   children,
@@ -85,11 +86,13 @@ export default function DashboardLayout({
         className={`pb-20 md:pb-0 transition-all duration-300 max-md:!pr-0 ${isCollapsed ? 'md:pl-[68px]' : 'md:pl-64'}`}
         style={{ paddingRight: isAISidebarOpen && pathname !== '/agent' && !pathname.startsWith('/settings') ? `${aiSidebarWidth}px` : undefined }}
       >
-        {pathname === '/agent' ? (
-          <div className="h-screen pt-6 px-2 md:px-4">{children}</div>
-        ) : (
-          <div className="container max-w-6xl py-8 px-4 md:px-8 animate-in fade-in duration-200">{children}</div>
-        )}
+        <ErrorBoundary>
+          {pathname === '/agent' ? (
+            <div className="h-screen pt-6 px-2 md:px-4">{children}</div>
+          ) : (
+            <div className="container max-w-6xl py-8 px-4 md:px-8 animate-in fade-in duration-200">{children}</div>
+          )}
+        </ErrorBoundary>
       </main>
       <MobileNav />
       <AISidebar />

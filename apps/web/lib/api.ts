@@ -43,9 +43,16 @@ async function attemptTokenRefresh(): Promise<void> {
 }
 
 const MAX_RATE_LIMIT_RETRIES = 3;
+const MAX_RETRY_ATTEMPTS = 2;
+const RETRY_DELAY_MS = 500;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableMethod(options: RequestInit): boolean {
+  const method = (options.method || 'GET').toUpperCase();
+  return method === 'GET' || method === 'HEAD' || method === 'OPTIONS';
 }
 
 async function request<T>(
@@ -59,48 +66,69 @@ async function request<T>(
     ...options.headers,
   };
 
-  const response = await fetch(`${API_URL}${endpoint}`, {
-    ...options,
-    headers,
-    credentials: 'include', // Send httpOnly cookies
-  });
+  const isSafeMethod = isRetryableMethod(options);
+  let lastError: unknown = null;
 
-  // 429 rate-limit: exponential backoff (1s, 2s, 4s), max 3 retries
-  if (response.status === 429 && _rateLimitAttempt < MAX_RATE_LIMIT_RETRIES) {
-    const retryAfter = response.headers.get('Retry-After');
-    const delayMs = retryAfter
-      ? parseInt(retryAfter, 10) * 1000
-      : 1000 * Math.pow(2, _rateLimitAttempt); // 1s, 2s, 4s
-    await sleep(delayMs);
-    return request<T>(endpoint, options, _isRetry, _rateLimitAttempt + 1);
-  }
-
-  // 401 interceptor: attempt refresh once, then retry
-  if (response.status === 401 && !_isRetry && !endpoint.startsWith('/auth/refresh')) {
-    try {
-      await attemptTokenRefresh();
-      return request<T>(endpoint, options, true);
-    } catch {
-      // Refresh failed — force logout
-      clearLegacyTokens();
-      if (typeof window !== 'undefined') {
-        window.location.href = '/login';
-      }
-      throw new ApiError(401, 'Session expired');
+  for (let attempt = 0; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
+    if (attempt > 0) {
+      await sleep(RETRY_DELAY_MS);
     }
+
+    let response: Response;
+    try {
+      response = await fetch(`${API_URL}${endpoint}`, {
+        ...options,
+        headers,
+        credentials: 'include',
+      });
+    } catch (err) {
+      lastError = err;
+      if (attempt < MAX_RETRY_ATTEMPTS) continue;
+      throw err;
+    }
+
+    // 5xx: only retry safe (GET/HEAD/OPTIONS) methods
+    if (response.status >= 500 && isSafeMethod && attempt < MAX_RETRY_ATTEMPTS) {
+      continue;
+    }
+
+    // 429 rate-limit: exponential backoff (1s, 2s, 4s), max 3 retries
+    if (response.status === 429 && _rateLimitAttempt < MAX_RATE_LIMIT_RETRIES) {
+      const retryAfter = response.headers.get('Retry-After');
+      const delayMs = retryAfter
+        ? parseInt(retryAfter, 10) * 1000
+        : 1000 * Math.pow(2, _rateLimitAttempt); // 1s, 2s, 4s
+      await sleep(delayMs);
+      return request<T>(endpoint, options, _isRetry, _rateLimitAttempt + 1);
+    }
+
+    // 401 interceptor: attempt refresh once, then retry
+    if (response.status === 401 && !_isRetry && !endpoint.startsWith('/auth/refresh')) {
+      try {
+        await attemptTokenRefresh();
+        return request<T>(endpoint, options, true);
+      } catch {
+        clearLegacyTokens();
+        if (typeof window !== 'undefined') {
+          window.location.href = '/login';
+        }
+        throw new ApiError(401, 'Session expired');
+      }
+    }
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: 'An error occurred' }));
+      throw new ApiError(response.status, error.message);
+    }
+
+    if (response.status === 204) {
+      return {} as T;
+    }
+
+    return response.json();
   }
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'An error occurred' }));
-    throw new ApiError(response.status, error.message);
-  }
-
-  // Handle 204 No Content
-  if (response.status === 204) {
-    return {} as T;
-  }
-
-  return response.json();
+  throw lastError;
 }
 
 export const api = {
