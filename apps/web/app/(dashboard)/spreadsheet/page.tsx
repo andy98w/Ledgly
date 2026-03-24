@@ -2083,20 +2083,6 @@ export default function SpreadsheetPage() {
                             />
                           )}
                         </span>
-                        {isAdmin && colIdx === columnConfig.visibleColumns.length - 1 && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setNewColumnName('');
-                              setNewColumnType('text');
-                              setShowAddColumnDialog(true);
-                            }}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center rounded hover:bg-primary/20 hover:text-primary transition-colors text-muted-foreground/30"
-                            title="Add custom column"
-                          >
-                            <Plus className="h-3 w-3" />
-                          </button>
-                        )}
                         <div
                           className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/30 transition-colors"
                           onMouseDown={(e) => onResizeStart(colId, columnConfig.getWidth(colId), e)}
@@ -2105,7 +2091,24 @@ export default function SpreadsheetPage() {
                       </th>
                     );
                   })}
-                  {isAdmin && <th className="w-8 px-1" />}
+                  {isAdmin && (
+                    <th className={cn(
+                      'w-8 px-1',
+                      columnConfig.visibleColumns.length % 2 === 0 && 'bg-black/[0.015] dark:bg-white/[0.015]',
+                    )}>
+                      <button
+                        onClick={() => {
+                          setNewColumnName('');
+                          setNewColumnType('text');
+                          setShowAddColumnDialog(true);
+                        }}
+                        className="w-5 h-5 mx-auto flex items-center justify-center rounded hover:bg-primary/20 hover:text-primary transition-colors text-muted-foreground/30"
+                        title="Add custom column"
+                      >
+                        <Plus className="h-3 w-3" />
+                      </button>
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -2450,7 +2453,7 @@ export default function SpreadsheetPage() {
                         );
                       })}
                       {isAdmin && (
-                        <td className="w-8 px-1 py-2">
+                        <td className={cn('w-8 px-1 py-2', columnConfig.visibleColumns.length % 2 === 0 && 'bg-black/[0.02] dark:bg-white/[0.02]')}>
                           {!row.isChild && (() => {
                             const actions = getRowActions(row);
                             if (actions.length === 0) return null;
