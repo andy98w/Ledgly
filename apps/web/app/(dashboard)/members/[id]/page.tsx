@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation';
 
-import { ArrowLeft, Receipt, CreditCard, TrendingUp, Wallet, User, AlertCircle, Check } from 'lucide-react';
+import { ArrowLeft, Receipt, CreditCard, TrendingUp, Wallet, User, AlertCircle, AlertTriangle, Check } from 'lucide-react';
 import { useMember } from '@/lib/queries/members';
 import { useAuthStore } from '@/lib/stores/auth';
 import { formatDate } from '@/lib/utils';
@@ -68,6 +68,8 @@ export default function MemberDetailPage() {
   }
 
   const hasBalance = member.balanceCents > 0;
+  const unpaidCharges = member.charges?.filter((c: any) => c.status === 'OPEN' || c.status === 'PARTIALLY_PAID') || [];
+  const hasUnpaidWithCredit = member.balanceCents <= 0 && unpaidCharges.length > 0;
 
   return (
     <div className="space-y-8">
@@ -131,11 +133,31 @@ export default function MemberDetailPage() {
           title="Current Balance"
           value={member.balanceCents}
           isMoney
-          description={hasBalance ? 'Amount owed' : 'All paid up'}
+          description={
+            hasBalance
+              ? `${unpaidCharges.length} unpaid charge${unpaidCharges.length !== 1 ? 's' : ''}`
+              : hasUnpaidWithCredit
+                ? `${unpaidCharges.length} unallocated charge${unpaidCharges.length !== 1 ? 's' : ''}`
+                : 'All paid up'
+          }
           icon={Wallet}
           delay={0.2}
         />
       </div>
+
+      {hasUnpaidWithCredit && (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3">
+          <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-medium">
+              {unpaidCharges.length} charge{unpaidCharges.length !== 1 ? 's' : ''} still open
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              This member has a positive balance from unrelated payments, but {unpaidCharges.length === 1 ? 'a charge hasn\'t' : 'some charges haven\'t'} been allocated yet.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Charges */}
       <FadeIn delay={0.2}>

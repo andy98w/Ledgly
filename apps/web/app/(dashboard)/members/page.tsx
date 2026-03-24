@@ -159,6 +159,8 @@ const MemberCard = memo(function MemberCard({
                       <span className="text-sm">Owes</span>
                       <Money cents={member.balanceCents} size="sm" className="text-destructive" />
                     </div>
+                  ) : member.overdueCharges > 0 ? (
+                    <Badge variant="warning" className="text-xs">{member.overdueCharges} unpaid</Badge>
                   ) : (
                     <Badge variant="success" className="text-xs">Paid up</Badge>
                   )}
