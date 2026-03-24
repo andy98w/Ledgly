@@ -131,6 +131,7 @@ export interface DashboardStats {
   memberCount: number;
   openChargesCount: number;
   recentPayments: PaymentWithAllocations[];
+  recentActivity: { paymentsLast24h: number; newMembersLast24h: number };
 }
 
 // Auth

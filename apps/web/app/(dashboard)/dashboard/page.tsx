@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowRight, Users, Receipt, AlertTriangle, AlertCircle, TrendingUp, Sparkles, CreditCard, Check, Circle } from 'lucide-react';
+import { ArrowRight, Users, Receipt, AlertTriangle, AlertCircle, TrendingUp, Sparkles, CreditCard, Check, Circle, Activity } from 'lucide-react';
 import { useDashboard } from '@/lib/queries/organizations';
 import { useInsights } from '@/lib/queries/insights';
 import { useAuthStore } from '@/lib/stores/auth';
@@ -180,6 +180,26 @@ export default function DashboardPage() {
           helpText="Overview of your organization finances — unpaid dues, collections, member count, and overdue items."
         />
       </FadeIn>
+
+      {/* Recent Activity */}
+      {(stats.recentActivity?.paymentsLast24h > 0 || stats.recentActivity?.newMembersLast24h > 0) && (
+        <FadeIn delay={0.03}>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Activity className="h-3.5 w-3.5" />
+            <span>
+              Since yesterday:{' '}
+              {[
+                stats.recentActivity.paymentsLast24h > 0 &&
+                  `${stats.recentActivity.paymentsLast24h} payment${stats.recentActivity.paymentsLast24h === 1 ? '' : 's'} received`,
+                stats.recentActivity.newMembersLast24h > 0 &&
+                  `${stats.recentActivity.newMembersLast24h} new member${stats.recentActivity.newMembersLast24h === 1 ? '' : 's'}`,
+              ]
+                .filter(Boolean)
+                .join(', ')}
+            </span>
+          </div>
+        </FadeIn>
+      )}
 
       {/* Quick-start Checklist */}
       <QuickStartChecklist stats={stats} />

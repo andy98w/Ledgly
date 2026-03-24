@@ -220,6 +220,7 @@ export class OrganizationsService {
       paymentsCount: payments.length > 0 || totalPaymentsCents > 0,
       hasPaymentHandles,
       recentPayments,
+      recentActivity: { paymentsLast24h, newMembersLast24h },
     };
   }
 
