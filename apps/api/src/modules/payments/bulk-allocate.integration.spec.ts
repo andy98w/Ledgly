@@ -206,6 +206,7 @@ describe('Bulk auto-allocate edge cases (integration)', () => {
       amountCents: 5000,
       paidAt: '2026-03-15',
       rawPayerName: 'No Match Payer',
+      memo: 'dues payment',
     });
     await ctx.prisma.payment.update({ where: { id: payment.id }, data: { membershipId: memberA } });
 
