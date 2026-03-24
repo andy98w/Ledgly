@@ -54,12 +54,16 @@ export function ChargeEditDialog({ charge, onChange, onSave, isPending }: Charge
                 id="amount"
                 type="number"
                 step="0.01"
+                max={100000}
                 value={(charge.amountCents / 100).toFixed(2)}
                 onChange={(e) => onChange({
                   ...charge,
                   amountCents: Math.round(parseFloat(e.target.value || '0') * 100),
                 })}
               />
+              {charge.amountCents > 10_000_000 && (
+                <p className="text-xs text-destructive">Amount cannot exceed $100,000</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="dueDate">Due Date</Label>
@@ -76,8 +80,7 @@ export function ChargeEditDialog({ charge, onChange, onSave, isPending }: Charge
           </Button>
           <Button
             onClick={onSave}
-            disabled={isPending}
-           
+            disabled={isPending || (charge?.amountCents ?? 0) > 10_000_000}
           >
             {isPending ? (
               <>

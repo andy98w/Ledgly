@@ -569,6 +569,8 @@ export default function ChargesPage() {
     if (formData.membershipIds.length === 0) { toast({ title: 'Please select at least one member', variant: 'destructive' }); return; }
     if (!formData.title.trim()) { toast({ title: 'Please enter a title', variant: 'destructive' }); return; }
     if (!formData.amount) { toast({ title: 'Please enter an amount', variant: 'destructive' }); return; }
+    const amountCents = parseCents(formData.amount);
+    if (amountCents < 0 || amountCents > 10_000_000) { toast({ title: 'Amount must be between $0 and $100,000', variant: 'destructive' }); return; }
 
     try {
       const charges = await createCharge.mutateAsync({
@@ -577,7 +579,7 @@ export default function ChargesPage() {
           membershipIds: formData.membershipIds,
           category: formData.category,
           title: formData.title,
-          amountCents: parseCents(formData.amount),
+          amountCents,
           dueDate: formData.dueDate ? new Date(formData.dueDate).toISOString() : undefined,
         },
       });
@@ -984,6 +986,7 @@ export default function ChargesPage() {
                   id="schedule-amount"
                   type="number"
                   min="0"
+                  max={100000}
                   step="0.01"
                   placeholder="0.00"
                   value={scheduleForm.amountCents}

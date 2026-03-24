@@ -227,7 +227,11 @@ export function ChargeCreateDialog({
                           }
                         }
                       }}
+                      max={100000}
                     />
+                    {parseFloat(formData.amount) > 100000 && (
+                      <p className="text-xs text-destructive">Amount cannot exceed $100,000</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label>Due Date (optional)</Label>
@@ -382,7 +386,7 @@ export function ChargeCreateDialog({
               </Button>
               <Button
                 onClick={handleSubmit}
-                disabled={isPending || selectedMembers.size === 0}
+                disabled={isPending || selectedMembers.size === 0 || parseFloat(formData.amount) > 100000}
               >
                 {isPending ? (
                   <>
