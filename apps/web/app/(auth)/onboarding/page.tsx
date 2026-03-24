@@ -298,7 +298,7 @@ function OnboardingWizard() {
         });
       }
       toast({ title: 'Welcome to Ledgly! \u{1F389}' });
-      router.push('/dashboard');
+      router.push('/agent');
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -746,7 +746,7 @@ function OnboardingWizard() {
                 className="flex-1"
                 onClick={() => {
                   toast({ title: 'Welcome to Ledgly! \u{1F389}' });
-                  router.push('/dashboard');
+                  router.push('/agent');
                 }}
               >
                 Skip for now

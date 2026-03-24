@@ -63,15 +63,15 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Home', icon: LayoutDashboard },
+  { href: '/agent', label: 'AI Assistant', icon: Sparkles },
   { href: '/spreadsheet', label: 'Ledger', icon: FileSpreadsheet },
   { href: '/members', label: 'Members', icon: Users },
 ];
 
 const secondaryNavItems: NavItem[] = [
-  { href: '/charges', label: 'Charges', icon: Receipt },
+  { href: '/charges', label: 'Dues & Fees', icon: Receipt },
   { href: '/payments', label: 'Payments', icon: CreditCard },
   { href: '/expenses', label: 'Expenses', icon: TrendingDown },
-  { href: '/agent', label: 'AI Assistant', icon: Sparkles },
   { href: '/announcements', label: 'Announcements', icon: Megaphone },
   { href: '/audit', label: 'Audit Log', icon: History },
 ];

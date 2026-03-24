@@ -46,7 +46,7 @@ export function getRowActions(row: ActionRow): RowAction[] {
     }
     if (row.status !== 'VOID') {
       actions.push({
-        label: 'Void charge',
+        label: 'Delete charge',
         type: 'direct',
         action: 'void',
         icon: 'void',

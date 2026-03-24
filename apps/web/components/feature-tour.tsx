@@ -34,8 +34,8 @@ const TOUR_STEPS: TourStep[] = [
   {
     path: '/charges',
     target: '[data-tour="charges-list"]',
-    title: 'Charges (Dues & Fees)',
-    content: 'Create charges to track what members owe — dues, event fees, T-shirts, etc. Members get notified by email.',
+    title: 'Dues & Fees',
+    content: 'Create dues and fees to track what members owe — dues, event fees, T-shirts, etc. Members get notified by email.',
     placement: 'top',
   },
   {

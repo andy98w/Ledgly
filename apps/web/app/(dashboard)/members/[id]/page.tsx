@@ -167,7 +167,7 @@ export default function MemberDetailPage() {
               <div className="p-2 rounded-lg bg-primary/10">
                 <Receipt className="h-4 w-4 text-primary" />
               </div>
-              Charges
+              Dues & Fees
             </MotionCardTitle>
           </MotionCardHeader>
           <MotionCardContent>

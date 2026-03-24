@@ -1444,7 +1444,7 @@ export default function SpreadsheetPage() {
       try {
         await voidCharge.mutateAsync({ orgId: currentOrgId, chargeId: row.id });
         toast({
-          title: 'Charge voided',
+          title: 'Charge deleted',
           action: <ToastUndoButton onClick={() => restoreCharge.mutate({ orgId: currentOrgId!, chargeId: row.id })} />,
         });
       } catch (e: any) {
@@ -1801,7 +1801,7 @@ export default function SpreadsheetPage() {
                           className="cursor-pointer"
                         >
                           <Upload className="w-4 h-4 mr-2" />
-                          Import {t === 'charge' ? 'Charges' : t === 'expense' ? 'Expenses' : 'Payments'}
+                          Import {t === 'charge' ? 'Dues & Fees' : t === 'expense' ? 'Expenses' : 'Payments'}
                         </DropdownMenuItem>
                       ))}
                       <DropdownMenuSeparator />
@@ -1927,7 +1927,7 @@ export default function SpreadsheetPage() {
                       : 'bg-secondary/50 text-muted-foreground hover:text-foreground',
                   )}
                 >
-                  {t === 'charge' ? 'Charges' : t === 'expense' ? 'Expenses' : 'Payments'}
+                  {t === 'charge' ? 'Dues' : t === 'expense' ? 'Expenses' : 'Payments'}
                 </button>
               ))}
               {activeFilterCount > 0 && (

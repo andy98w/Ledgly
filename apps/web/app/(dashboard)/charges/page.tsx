@@ -677,8 +677,8 @@ export default function ChargesPage() {
       {/* Header */}
       <FadeIn>
         <PageHeader
-          title="Charges"
-          helpText="Create charges for events, fines, or other fees. Assign to one or multiple members and track payment status."
+          title="Dues & Fees"
+          helpText="Create dues and fees for events, fines, or other costs. Assign to one or multiple members and track payment status."
           actions={
             <div className="flex items-center gap-2">
               {isAdmin && (
@@ -799,7 +799,7 @@ export default function ChargesPage() {
       {/* Stats */}
       {totalCharges > 0 && (
         <div className="grid gap-4 md:grid-cols-3">
-          <StatCard title="Total Charges" value={totalCharges} description="All time charges" icon={Receipt} delay={0} color="amber" />
+          <StatCard title="Total Dues & Fees" value={totalCharges} description="All time dues & fees" icon={Receipt} delay={0} color="amber" />
           <StatCard title="Total Amount" value={totalAmount} isMoney description="Amount billed" icon={TrendingUp} delay={0.1} color="emerald" />
           <StatCard title="% Collected" value={`${collectionRate}%`} description={`${totalCollected > 0 ? `$${(totalCollected / 100).toFixed(0)}` : '$0'} collected`} icon={Percent} delay={0.2} color="violet" />
         </div>
@@ -811,8 +811,8 @@ export default function ChargesPage() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
             <Input
-              placeholder="Search charges..."
-              aria-label="Search charges"
+              placeholder="Search dues & fees..."
+              aria-label="Search dues & fees"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9 h-9 bg-secondary/30 border-border/50"
@@ -858,8 +858,8 @@ export default function ChargesPage() {
         <FadeIn delay={0.3}>
           <EmptyState
             icon={AlertCircle}
-            title="Failed to load charges"
-            description="Something went wrong loading charge data."
+            title="Failed to load dues & fees"
+            description="Something went wrong loading dues & fees data."
             action={<Button onClick={() => refetch()} variant="outline">Try Again</Button>}
             className="rounded-xl border border-border/50 bg-card/50"
           />
@@ -868,10 +868,10 @@ export default function ChargesPage() {
         <FadeIn delay={0.3}>
           <EmptyState
             icon={Receipt}
-            title="No charges yet"
+            title="No dues or fees yet"
             description={isAdmin
-              ? "Charges are how you bill members for dues, events, or fees. Create one to start tracking who owes what."
-              : "Your organization hasn't created any charges yet. Check back later for updates on any dues or fees."
+              ? "Dues & fees are how you bill members for dues, events, or other costs. Create one to start tracking who owes what."
+              : "Your organization hasn't created any dues or fees yet. Check back later for updates."
             }
             action={isAdmin && (
               <Button onClick={() => setShowCreateDialog(true)}>
@@ -953,8 +953,8 @@ export default function ChargesPage() {
       <CSVImportDialog
         open={showImport}
         onOpenChange={setShowImport}
-        title="Import Charges"
-        description="Upload a CSV file to bulk import charges. Member names will be fuzzy-matched to existing members."
+        title="Import Dues & Fees"
+        description="Upload a CSV file to bulk import dues & fees. Member names will be fuzzy-matched to existing members."
         fields={CHARGE_IMPORT_FIELDS}
         onImport={handleImportCharges}
       />
@@ -1064,16 +1064,16 @@ export default function ChargesPage() {
         </Button>
         <Button variant="destructive" size="sm" onClick={() => setShowBulkVoidConfirm(true)} className="h-8">
           <Trash2 className="w-3.5 h-3.5 mr-1.5" />
-          Void
+          Delete
         </Button>
       </BatchActionsBar>
 
       <ConfirmDialog
         open={showBulkVoidConfirm}
         onOpenChange={setShowBulkVoidConfirm}
-        title={`Void ${selectedCharges.size} charge${selectedCharges.size !== 1 ? 's' : ''}?`}
-        description="Voided charges will no longer appear as outstanding. Payment allocations will be removed. This can be undone."
-        confirmLabel="Void"
+        title={`Delete ${selectedCharges.size} charge${selectedCharges.size !== 1 ? 's' : ''}?`}
+        description="Deleted charges will no longer appear as outstanding. Payment allocations will be removed. This can be undone."
+        confirmLabel="Delete"
         isPending={bulkVoidCharges.isPending}
         onConfirm={() => {
           handleBulkDeleteCharges();

@@ -50,10 +50,10 @@ function QuickStartChecklist({ stats }: { stats: any }) {
 
   const steps = [
     { label: 'Add members', description: 'Import from CSV or add one by one', href: '/members', done: stats.memberCount > 1, icon: Users },
-    { label: 'Create a charge', description: 'Charge members for dues, events, or fees', href: '/charges', done: stats.openChargesCount > 0 || stats.totalCollectedCents > 0, icon: Receipt },
+    { label: 'Create a charge', description: 'Bill members for dues, events, or fees', href: '/charges', done: stats.openChargesCount > 0 || stats.totalCollectedCents > 0, icon: Receipt },
     { label: 'Set up payment methods', description: 'Add Venmo, Zelle, or CashApp handles', href: '/settings#section-organization', done: stats.hasPaymentHandles, icon: CreditCard },
     { label: 'Record a payment', description: 'Import from bank, email, or add manually', href: '/payments', done: stats.paymentsCount, icon: TrendingUp },
-    { label: 'Try LedgelyAI', description: 'Manage finances with natural language', href: '/agent', done: false, icon: Sparkles },
+    { label: 'Get started with AI', description: 'Just describe what you need — add members, create dues, import data', href: '/agent', done: false, icon: Sparkles },
   ];
 
   const completedCount = steps.filter((s) => s.done).length;
@@ -297,11 +297,11 @@ export default function DashboardPage() {
       {stats.overdueCount > 0 && (
         <Alert
           variant="destructive"
-          title="Overdue Charges"
-          description={`${stats.overdueCount} charges are past their due date`}
+          title="Overdue Dues & Fees"
+          description={`${stats.overdueCount} dues & fees are past their due date`}
           action={
             <Button asChild variant="outline" size="sm">
-              <Link href="/charges?overdue=true">View Overdue Charges</Link>
+              <Link href="/charges?overdue=true">View Overdue</Link>
             </Button>
           }
         />

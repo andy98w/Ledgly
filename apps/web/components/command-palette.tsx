@@ -83,7 +83,7 @@ export function CommandPalette() {
                 Members
               </CommandItem>
               <CommandItem icon={Receipt} onSelect={() => runCommand(() => router.push('/charges'))}>
-                Charges
+                Dues &amp; Fees
               </CommandItem>
               <CommandItem icon={TrendingDown} onSelect={() => runCommand(() => router.push('/expenses'))}>
                 Expenses
