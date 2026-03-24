@@ -131,6 +131,7 @@ export class ExpensesService {
       receiptUrl: e.receiptUrl,
       createdAt: e.createdAt,
       parentId: e.parentId || null,
+      customFields: e.customFields || {},
       createdBy: e.createdBy
         ? {
             id: e.createdBy.id,

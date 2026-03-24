@@ -102,6 +102,7 @@ export class PaymentsService {
         id: p.id, orgId: p.orgId, membershipId: p.membershipId,
         amountCents: p.amountCents, paidAt: p.paidAt, source: p.source,
         rawPayerName: memberName, memo: p.memo, createdAt: p.createdAt,
+        customFields: p.customFields || {},
         allocatedCents, unallocatedCents: p.amountCents - allocatedCents,
         allocations: p.allocations.map((a: any) => ({
           id: a.id, chargeId: a.chargeId, chargeTitle: a.charge.title, amountCents: a.amountCents,

@@ -1979,7 +1979,7 @@ export default function SpreadsheetPage() {
         )}
         <div ref={tableRef} className="rounded-xl border bg-card overflow-hidden" data-spreadsheet>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm table-fixed">
+            <table className="w-full text-sm table-fixed select-none">
               <thead>
                 <tr className="border-b bg-secondary/30">
                   {isAdmin && (
@@ -2082,21 +2082,21 @@ export default function SpreadsheetPage() {
                               allCategories={colId === 'category' ? allCategories : undefined}
                             />
                           )}
-                          {isAdmin && colIdx === columnConfig.visibleColumns.length - 1 && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setNewColumnName('');
-                                setNewColumnType('text');
-                                setShowAddColumnDialog(true);
-                              }}
-                              className="ml-2 w-4 h-4 flex items-center justify-center rounded hover:bg-primary/20 hover:text-primary transition-colors text-muted-foreground/30 shrink-0"
-                              title="Add custom column"
-                            >
-                              <Plus className="h-3 w-3" />
-                            </button>
-                          )}
                         </span>
+                        {isAdmin && colIdx === columnConfig.visibleColumns.length - 1 && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setNewColumnName('');
+                              setNewColumnType('text');
+                              setShowAddColumnDialog(true);
+                            }}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center rounded hover:bg-primary/20 hover:text-primary transition-colors text-muted-foreground/30"
+                            title="Add custom column"
+                          >
+                            <Plus className="h-3 w-3" />
+                          </button>
+                        )}
                         <div
                           className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/30 transition-colors"
                           onMouseDown={(e) => onResizeStart(colId, columnConfig.getWidth(colId), e)}
@@ -2490,6 +2490,7 @@ export default function SpreadsheetPage() {
               {!isLoading && displayRows.length > 0 && (
                 <tfoot>
                   <tr className="bg-secondary/50 font-medium">
+                    {isAdmin && <td className="w-14" />}
                     {columnConfig.visibleColumns.map((colId, i) => {
                       if (colId === 'income') {
                         return (

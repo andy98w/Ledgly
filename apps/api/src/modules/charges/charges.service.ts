@@ -171,6 +171,7 @@ export class ChargesService {
       id: c.id, orgId: c.orgId, membershipId: c.membershipId, category: c.category,
       title: c.title, amountCents: c.amountCents, dueDate: c.dueDate, status: c.status,
       createdAt: c.createdAt, parentId: c.parentId || null,
+      customFields: c.customFields || {},
       membership,
       allocatedCents, balanceDueCents: c.amountCents - allocatedCents,
       allocations: c.allocations.map((a: any) => ({
