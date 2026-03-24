@@ -12,6 +12,7 @@ import { useColumnConfig, COLUMN_DEFS } from '@/hooks/use-column-config';
 import { useColumnResize } from '@/hooks/use-column-resize';
 import { useColumnReorder } from '@/hooks/use-column-reorder';
 import { useSpreadsheetKeyboard } from '@/hooks/use-spreadsheet-keyboard';
+import { useDragFill } from '@/hooks/use-drag-fill';
 import { useSpreadsheetSort } from '@/hooks/use-spreadsheet-sort';
 import { useColumnFilters, type ColumnFilter } from '@/hooks/use-column-filters';
 import {
@@ -829,6 +830,24 @@ export default function SpreadsheetPage() {
     handleSaveCell(row, entry.field as any, value);
   };
 
+  const spreadsheetGetCellValue = useCallback((rowId: string, column: string) => {
+    const row = paginatedRows.find(r => r.id === rowId);
+    if (!row) return '';
+    if (column === 'date') return formatShortDate(row.date);
+    if (column === 'member') return row.member || '-';
+    if (column === 'category') return row.category;
+    if (column === 'description') return row.description;
+    if (column === 'income') return (row.incomeCents || row.dueCents) > 0 ? ((row.incomeCents || row.dueCents) / 100).toFixed(2) : '';
+    if (column === 'expense') return row.expenseCents > 0 ? (row.expenseCents / 100).toFixed(2) : '';
+    const customVal = row.customFields?.[column];
+    return customVal != null ? String(customVal) : '';
+  }, [paginatedRows]);
+
+  const spreadsheetSaveCell = useCallback((rowId: string, column: string, value: string) => {
+    const row = paginatedRows.find(r => r.id === rowId);
+    if (row) handleSaveCell(row, column as any, value);
+  }, [paginatedRows, handleSaveCell]);
+
   useSpreadsheetKeyboard({
     activeCell,
     setActiveCell,
@@ -836,23 +855,17 @@ export default function SpreadsheetPage() {
     setEditingCell: (cell) => setEditingCell(cell as EditingCell),
     rowIds,
     selectedRowIds: selectedRows,
+    setSelectedRowIds: setSelectedRows,
     visibleColumns: columnConfig.visibleColumns,
     isAdmin,
-    getCellValue: (rowId, column) => {
-      const row = paginatedRows.find(r => r.id === rowId);
-      if (!row) return '';
-      if (column === 'date') return formatShortDate(row.date);
-      if (column === 'member') return row.member || '-';
-      if (column === 'category') return row.category;
-      if (column === 'description') return row.description;
-      if (column === 'income') return (row.incomeCents || row.dueCents) > 0 ? ((row.incomeCents || row.dueCents) / 100).toFixed(2) : '';
-      if (column === 'expense') return row.expenseCents > 0 ? (row.expenseCents / 100).toFixed(2) : '';
-      return '';
-    },
-    onSaveCell: (rowId, column, value) => {
-      const row = paginatedRows.find(r => r.id === rowId);
-      if (row) handleSaveCell(row, column as any, value);
-    },
+    getCellValue: spreadsheetGetCellValue,
+    onSaveCell: spreadsheetSaveCell,
+  });
+
+  const dragFill = useDragFill({
+    rowIds,
+    getCellValue: spreadsheetGetCellValue,
+    onFill: spreadsheetSaveCell,
   });
 
   const handleAddMember = async (name: string): Promise<string | null> => {
@@ -2038,20 +2051,6 @@ export default function SpreadsheetPage() {
                             </button>
                           )}
                           {def.label}
-                          {isAdmin && colIdx === columnConfig.visibleColumns.length - 1 && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setNewColumnName('');
-                                setNewColumnType('text');
-                                setShowAddColumnDialog(true);
-                              }}
-                              className="ml-1 w-4 h-4 flex items-center justify-center rounded hover:bg-primary/20 hover:text-primary transition-colors text-muted-foreground/50"
-                              title="Add custom column"
-                            >
-                              <Plus className="h-3 w-3" />
-                            </button>
-                          )}
                           {def.sortKey && getSortDirection(def.sortKey) && (
                             <span className="flex items-center gap-0.5">
                               {getSortDirection(def.sortKey) === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
@@ -2071,9 +2070,24 @@ export default function SpreadsheetPage() {
                             />
                           )}
                         </span>
+                        {isAdmin && colIdx === columnConfig.visibleColumns.length - 1 && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setNewColumnName('');
+                              setNewColumnType('text');
+                              setShowAddColumnDialog(true);
+                            }}
+                            className="ml-3 w-5 h-5 flex items-center justify-center rounded hover:bg-primary/20 hover:text-primary transition-colors text-muted-foreground/30 shrink-0"
+                            title="Add custom column"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                         <div
                           className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/30 transition-colors"
                           onMouseDown={(e) => onResizeStart(colId, columnConfig.getWidth(colId), e)}
+                          onDoubleClick={() => columnConfig.resizeColumn(colId, columnConfig.getColumnDef(colId)?.defaultWidth || 120)}
                         />
                       </th>
                     );
