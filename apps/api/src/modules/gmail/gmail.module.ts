@@ -6,9 +6,10 @@ import { PaymentMatcherService } from './payment-matcher.service';
 import { ExpenseMatcherService } from './expense-matcher.service';
 import { GmailSchedulerService } from './gmail-scheduler.service';
 import { ChargesModule } from '../charges/charges.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [forwardRef(() => ChargesModule)],
+  imports: [forwardRef(() => ChargesModule), AuthModule],
   controllers: [GmailController, GmailPublicController],
   providers: [GmailService, EmailParserService, PaymentMatcherService, ExpenseMatcherService, GmailSchedulerService],
   exports: [GmailService],
