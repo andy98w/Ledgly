@@ -21,7 +21,7 @@ const shortcuts = [
     items: [
       { keys: ['g', 'd'], description: 'Go to Dashboard' },
       { keys: ['g', 'm'], description: 'Go to Members' },
-      { keys: ['g', 'c'], description: 'Go to Charges' },
+      { keys: ['g', 'c'], description: 'Go to Dues & Fees' },
       { keys: ['g', 'p'], description: 'Go to Payments' },
       { keys: ['g', 'e'], description: 'Go to Expenses' },
       { keys: ['g', 'r'], description: 'Go to Review' },

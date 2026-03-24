@@ -21,7 +21,7 @@ const TOUR_STEPS: TourStep[] = [
     path: '/dashboard',
     target: '[data-tour="dashboard-stats"]',
     title: 'Welcome to Ledgly',
-    content: 'This is your financial dashboard — unpaid dues, total collected, member count, and overdue charges at a glance.',
+    content: 'This is your financial dashboard — unpaid dues, total collected, member count, and overdue items at a glance.',
     placement: 'bottom',
   },
   {
@@ -49,7 +49,7 @@ const TOUR_STEPS: TourStep[] = [
     path: '/spreadsheet',
     target: '[data-tour="spreadsheet-view"]',
     title: 'Ledger',
-    content: 'Your full financial ledger in a spreadsheet view. See charges, payments, and expenses together. Sort, filter, and export to CSV.',
+    content: 'Your full financial ledger in a spreadsheet view. See dues, fees, payments, and expenses together. Sort, filter, and export to CSV.',
     placement: 'top',
   },
   {

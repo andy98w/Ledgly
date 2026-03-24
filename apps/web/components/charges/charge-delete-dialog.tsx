@@ -26,7 +26,7 @@ export function ChargeDeleteDialog({ charge, onClose, onConfirm, isPending }: Ch
         <DialogHeader>
           <DialogTitle>Delete Charge</DialogTitle>
           <DialogDescription>
-            Are you sure you want to delete this charge? This action will void the charge and remove any payment matches.
+            Are you sure you want to delete this charge? This will remove the charge and any payment matches.
           </DialogDescription>
         </DialogHeader>
         {charge && (

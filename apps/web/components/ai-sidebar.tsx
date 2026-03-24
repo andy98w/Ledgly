@@ -320,7 +320,7 @@ export function AISidebar() {
                     if (ids.length) parts.push(`recorded payments [${ids.join(', ')}]`);
                   } else if (r.toolName === 'void_charges') {
                     const ids = m.actions!.find((a) => a.toolName === 'void_charges')?.args?.chargeIds || [];
-                    if (ids.length) parts.push(`voided charges [${ids.join(', ')}]`);
+                    if (ids.length) parts.push(`deleted charges [${ids.join(', ')}]`);
                   } else if (r.toolName === 'delete_expenses') {
                     const ids = m.actions!.find((a) => a.toolName === 'delete_expenses')?.args?.expenseIds || [];
                     if (ids.length) parts.push(`deleted expenses [${ids.join(', ')}]`);

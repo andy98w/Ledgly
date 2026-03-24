@@ -287,7 +287,7 @@ export default function ReportsPage() {
               </MotionCardHeader>
               <MotionCardContent className="space-y-3">
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Charges Created</span>
+                  <span className="text-muted-foreground">Dues & Fees Created</span>
                   <span className="font-medium">{comparisonReport.current?.chargesCreated ?? 0}</span>
                 </div>
                 <div className="flex justify-between text-sm">
@@ -323,7 +323,7 @@ export default function ReportsPage() {
               </MotionCardHeader>
               <MotionCardContent className="space-y-3">
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Charges Created</span>
+                  <span className="text-muted-foreground">Dues & Fees Created</span>
                   <span className="font-medium">{comparisonReport.previous?.chargesCreated ?? 0}</span>
                 </div>
                 <div className="flex justify-between text-sm">

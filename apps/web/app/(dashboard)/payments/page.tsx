@@ -1644,7 +1644,7 @@ export default function PaymentsPage() {
                     ) : (
                       <>
                       {suggestedCharges.length > 0 && chargeGroups.length > 0 && (
-                        <p className="text-xs font-medium text-muted-foreground pt-2">All Charges</p>
+                        <p className="text-xs font-medium text-muted-foreground pt-2">All Dues & Fees</p>
                       )}
                       {chargeGroups.map((group) => {
                         const isSingleMember = group.charges.length === 1;
@@ -1797,7 +1797,7 @@ export default function PaymentsPage() {
         </Button>
         <Button variant="secondary" size="sm" onClick={handleBulkCreateCharges} disabled={bulkCreateCharges.isPending} className="h-8">
           <Receipt className="w-3.5 h-3.5 mr-1.5" />
-          Create Charges
+          Create Dues
         </Button>
         <Button variant="secondary" size="sm" onClick={handleBulkCreateMembers} disabled={createMembers.isPending} className="h-8">
           <UserPlus className="w-3.5 h-3.5 mr-1.5" />

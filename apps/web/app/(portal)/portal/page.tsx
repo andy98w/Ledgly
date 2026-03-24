@@ -135,7 +135,7 @@ export default function PortalPage() {
       {/* Charges */}
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold">Charges</h2>
+          <h2 className="text-lg font-semibold">Dues & Fees</h2>
           <div className="flex items-center rounded-lg border border-border/50 bg-secondary/30 p-0.5">
             {(['all', 'unpaid', 'paid'] as const).map((f) => (
               <button

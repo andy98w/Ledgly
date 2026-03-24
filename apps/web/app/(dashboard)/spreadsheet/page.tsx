@@ -1448,7 +1448,7 @@ export default function SpreadsheetPage() {
           action: <ToastUndoButton onClick={() => restoreCharge.mutate({ orgId: currentOrgId!, chargeId: row.id })} />,
         });
       } catch (e: any) {
-        toast({ title: 'Failed to void', description: e.message, variant: 'destructive' });
+        toast({ title: 'Failed to delete', description: e.message, variant: 'destructive' });
       }
     } else if (action.action === 'delete' && row.type === 'expense') {
       try {
@@ -1765,7 +1765,7 @@ export default function SpreadsheetPage() {
       <FadeIn>
         <PageHeader
           title="Spreadsheet"
-          helpText={`Combined view of all charges, expenses, and payments in one place. ${isAdmin ? 'Click any cell to edit. Sort by clicking column headers.' : 'View all financial transactions.'}`}
+          helpText={`Combined view of all dues, fees, expenses, and payments in one place. ${isAdmin ? 'Click any cell to edit. Sort by clicking column headers.' : 'View all financial transactions.'}`}
           actions={
             <div className="flex items-center gap-2">
               {isAdmin && selectedRows.size > 0 && (
@@ -2766,8 +2766,8 @@ export default function SpreadsheetPage() {
       <CSVImportDialog
         open={showImport}
         onOpenChange={setShowImport}
-        title={`Import ${importType === 'charge' ? 'Charges' : importType === 'expense' ? 'Expenses' : 'Payments'}`}
-        description={`Upload a CSV file to bulk import ${importType === 'charge' ? 'charges' : importType === 'expense' ? 'expenses' : 'payments'}.${importType === 'charge' ? ' Member names will be fuzzy-matched to existing members.' : importType === 'payment' ? ' Payer names will be matched to existing members.' : ''}`}
+        title={`Import ${importType === 'charge' ? 'Dues & Fees' : importType === 'expense' ? 'Expenses' : 'Payments'}`}
+        description={`Upload a CSV file to bulk import ${importType === 'charge' ? 'dues & fees' : importType === 'expense' ? 'expenses' : 'payments'}.${importType === 'charge' ? ' Member names will be fuzzy-matched to existing members.' : importType === 'payment' ? ' Payer names will be matched to existing members.' : ''}`}
         fields={importFieldsByType[importType]}
         onImport={handleImportRecords}
       />

@@ -267,7 +267,7 @@ export default function AgentPage() {
                     if (ids.length) parts.push(`recorded payments [${ids.join(', ')}]`);
                   } else if (r.toolName === 'void_charges') {
                     const ids = m.actions!.find((a) => a.toolName === 'void_charges')?.args?.chargeIds || [];
-                    if (ids.length) parts.push(`voided charges [${ids.join(', ')}]`);
+                    if (ids.length) parts.push(`deleted charges [${ids.join(', ')}]`);
                   } else if (r.toolName === 'delete_expenses') {
                     const ids = m.actions!.find((a) => a.toolName === 'delete_expenses')?.args?.expenseIds || [];
                     if (ids.length) parts.push(`deleted expenses [${ids.join(', ')}]`);
@@ -516,41 +516,71 @@ export default function AgentPage() {
                   <Sparkles className="h-8 w-8 text-primary" />
                 </div>
                 <h2 className="text-lg font-semibold mb-2">
-                  {isNewOrg ? `Welcome to ${currentOrg?.orgName || 'Ledgly'}!` : 'LedgelyAI'}
+                  {isNewOrg ? 'Welcome! Paste your data to get started' : 'LedgelyAI'}
                 </h2>
                 <p className="text-muted-foreground text-sm max-w-md">
                   {isNewOrg
-                    ? "I can help you get started. Try one of these to set up your organization:"
+                    ? "Paste your existing spreadsheet, member list, or just tell me about your organization. I'll set everything up."
                     : "I can help you manage your organization."}
                 </p>
 
                 {/* Suggestion buttons */}
                 <div className="grid gap-2 text-sm text-left max-w-sm w-full mt-6">
-                  {(isNewOrg
-                    ? [
-                        'Add my members',
-                        'Create charges for all members',
-                        'Import members from CSV',
-                        'How does Ledgly work?',
-                      ]
-                    : [
-                        'How many members do I have?',
-                        'Charge all active members $50 for Spring Dues',
-                        'Add John Smith and Jane Doe as members',
-                        'Show me all unpaid balances',
-                      ]
-                  ).map((suggestion) => (
-                    <button
-                      key={suggestion}
-                      onClick={() => {
-                        setInput(suggestion);
-                        inputRef.current?.focus();
-                      }}
-                      className="px-4 py-3 rounded-xl border border-border bg-card hover:bg-secondary/50 transition-colors text-left text-muted-foreground hover:text-foreground"
-                    >
-                      {suggestion}
-                    </button>
-                  ))}
+                  {isNewOrg ? (
+                    <>
+                      <button
+                        onClick={() => {
+                          setInput("Here's my spreadsheet data:\n\n");
+                          setTimeout(() => inputRef.current?.focus(), 0);
+                        }}
+                        className="px-4 py-3 rounded-xl border border-border bg-card hover:bg-secondary/50 transition-colors text-left text-muted-foreground hover:text-foreground"
+                      >
+                        Paste my Google Sheet data
+                      </button>
+                      <button
+                        onClick={() => {
+                          setInput('Add my members: ');
+                          setTimeout(() => inputRef.current?.focus(), 0);
+                        }}
+                        className="px-4 py-3 rounded-xl border border-border bg-card hover:bg-secondary/50 transition-colors text-left text-muted-foreground hover:text-foreground"
+                      >
+                        Add my members
+                      </button>
+                      <button
+                        onClick={() => {
+                          setInput('Charge everyone $__ for ___');
+                          setTimeout(() => inputRef.current?.focus(), 0);
+                        }}
+                        className="px-4 py-3 rounded-xl border border-border bg-card hover:bg-secondary/50 transition-colors text-left text-muted-foreground hover:text-foreground"
+                      >
+                        Charge everyone $__ for ___
+                      </button>
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className="px-4 py-3 rounded-xl border border-border bg-card hover:bg-secondary/50 transition-colors text-left text-muted-foreground hover:text-foreground"
+                      >
+                        Import from CSV
+                      </button>
+                    </>
+                  ) : (
+                    [
+                      "Who hasn't paid?",
+                      'Send reminders to everyone overdue',
+                      "Show me this month's summary",
+                      'Create a charge for all members',
+                    ].map((suggestion) => (
+                      <button
+                        key={suggestion}
+                        onClick={() => {
+                          setInput(suggestion);
+                          inputRef.current?.focus();
+                        }}
+                        className="px-4 py-3 rounded-xl border border-border bg-card hover:bg-secondary/50 transition-colors text-left text-muted-foreground hover:text-foreground"
+                      >
+                        {suggestion}
+                      </button>
+                    ))
+                  )}
                 </div>
               </div>
             )}

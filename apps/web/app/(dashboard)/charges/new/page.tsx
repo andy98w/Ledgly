@@ -183,7 +183,7 @@ export default function NewChargePage() {
   return (
     <div className="space-y-8">
       {/* Breadcrumb */}
-      <Breadcrumb items={[{ label: 'Charges', href: '/charges' }, { label: 'New Charge' }]} />
+      <Breadcrumb items={[{ label: 'Dues & Fees', href: '/charges' }, { label: 'New Charge' }]} />
 
       {/* Header */}
       <FadeIn>

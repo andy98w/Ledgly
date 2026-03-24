@@ -19,7 +19,7 @@ export const WIZARD_ACTIONS: { id: WizardActionId; label: string; icon: typeof P
 
 export const WIZARD_ENTITIES: { id: WizardEntityId; label: string; actions: WizardActionId[] }[] = [
   { id: 'members', label: 'Members', actions: ['create', 'view', 'edit', 'remove'] },
-  { id: 'charges', label: 'Charges', actions: ['create', 'view', 'edit', 'remove'] },
+  { id: 'charges', label: 'Dues & Fees', actions: ['create', 'view', 'edit', 'remove'] },
   { id: 'expenses', label: 'Expenses', actions: ['create', 'edit'] },
   { id: 'payments', label: 'Payments', actions: ['create', 'view'] },
   { id: 'balances', label: 'Balances', actions: ['view'] },
@@ -38,7 +38,7 @@ export const WIZARD_TEMPLATES: Record<string, string> = {
   'edit-charges': `Edit charge:\n[charge details]`,
   'edit-expenses': `Edit expense:\n[expense details]`,
   'remove-members': `Remove members:\n[member names]`,
-  'remove-charges': `Void charges:\n[charge titles]`,
+  'remove-charges': `Delete charges:\n[charge titles]`,
 };
 
 // ── QuickActionPopover ───────────────────────────────────────

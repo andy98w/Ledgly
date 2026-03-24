@@ -174,8 +174,8 @@ export default function MemberDetailPage() {
             {member.charges?.length === 0 ? (
               <EmptyState
                 icon={Receipt}
-                title="No charges yet"
-                description="Charges assigned to this member will appear here"
+                title="No dues or fees yet"
+                description="Dues & fees assigned to this member will appear here"
               />
             ) : (
               <StaggerChildren className="space-y-3">

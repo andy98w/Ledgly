@@ -764,7 +764,7 @@ export default function AuditLogPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="CHARGE">Charges</SelectItem>
+                <SelectItem value="CHARGE">Dues & Fees</SelectItem>
                 <SelectItem value="PAYMENT">Payments</SelectItem>
                 <SelectItem value="EXPENSE">Expenses</SelectItem>
                 <SelectItem value="MEMBER">Members</SelectItem>

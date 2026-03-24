@@ -27,7 +27,7 @@ export function ChargeGroupDeleteDialog({ group, onClose, onConfirm, isPending }
         <DialogHeader>
           <DialogTitle>Delete All Charges</DialogTitle>
           <DialogDescription>
-            Are you sure you want to delete {group?.memberCount} charges? This action will void all charges in this group.
+            Are you sure you want to delete {group?.memberCount} charges? This will remove all charges in this group.
           </DialogDescription>
         </DialogHeader>
         {group && (
