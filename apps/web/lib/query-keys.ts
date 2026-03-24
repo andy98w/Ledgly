@@ -88,6 +88,9 @@ export const queryKeys = {
   discord: {
     all: (orgId: string | null) => ['organizations', orgId, 'discord'] as const,
   },
+  customColumns: {
+    all: (orgId: string | null) => ['organizations', orgId, 'custom-columns'] as const,
+  },
   slack: {
     all: (orgId: string | null) => ['organizations', orgId, 'slack'] as const,
   },

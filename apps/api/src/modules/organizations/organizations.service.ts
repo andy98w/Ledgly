@@ -475,6 +475,53 @@ export class OrganizationsService {
     return insights;
   }
 
+  async getCustomColumns(orgId: string) {
+    const org = await this.prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { customColumns: true },
+    });
+    if (!org) throw new NotFoundException('Organization not found');
+    return (org.customColumns as any[]) ?? [];
+  }
+
+  async updateCustomColumns(orgId: string, columns: Array<{ id: string; label: string; type: 'text' | 'number' }>) {
+    const org = await this.prisma.organization.update({
+      where: { id: orgId },
+      data: { customColumns: columns as any },
+      select: { customColumns: true },
+    });
+    return (org.customColumns as any[]) ?? [];
+  }
+
+  async updateCustomField(
+    orgId: string,
+    entityType: 'charge' | 'expense' | 'payment',
+    entityId: string,
+    columnId: string,
+    value: string | number | null,
+  ) {
+    const delegate = this.prisma[entityType] as any;
+    const entity = await delegate.findFirst({
+      where: { id: entityId, orgId },
+      select: { customFields: true },
+    });
+    if (!entity) throw new NotFoundException(`${entityType} not found`);
+
+    const fields = (entity.customFields as Record<string, any>) ?? {};
+    if (value === null) {
+      delete fields[columnId];
+    } else {
+      fields[columnId] = value;
+    }
+
+    await delegate.update({
+      where: { id: entityId },
+      data: { customFields: fields as any },
+    });
+
+    return fields;
+  }
+
   async delete(orgId: string) {
     await this.prisma.$transaction(async (tx) => {
       await tx.paymentAllocation.deleteMany({ where: { orgId } });

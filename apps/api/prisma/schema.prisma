@@ -38,6 +38,7 @@ model Organization {
   slackConnections      SlackConnection[]
   announcements         Announcement[]
   notificationTemplates Json?               @default("{}") @map("notification_templates")
+  customColumns         Json?               @default("[]") @map("custom_columns")
 
   @@map("organizations")
 }
@@ -148,6 +149,7 @@ model Charge {
   org          Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
   parent       Charge?             @relation("ChargeParentChild", fields: [parentId], references: [id], onDelete: Cascade)
   children     Charge[]            @relation("ChargeParentChild")
+  customFields Json?               @default("{}") @map("custom_fields")
   allocations  PaymentAllocation[]
 
   @@index([orgId, status])
@@ -169,6 +171,7 @@ model Payment {
   createdById  String?             @map("created_by_id")
   createdAt    DateTime            @default(now()) @map("created_at")
   deletedAt    DateTime?           @map("deleted_at")
+  customFields Json?               @default("{}") @map("custom_fields")
   allocations  PaymentAllocation[]
   createdBy    Membership?         @relation("PaymentCreatedBy", fields: [createdById], references: [id])
   org          Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
@@ -290,6 +293,7 @@ model Expense {
   updatedAt   DateTime        @updatedAt @map("updated_at")
   deletedAt   DateTime?       @map("deleted_at")
   parentId    String?         @map("parent_id")
+  customFields Json?           @default("{}") @map("custom_fields")
   createdBy   Membership?     @relation("ExpenseCreatedBy", fields: [createdById], references: [id])
   org         Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
   parent      Expense?        @relation("ExpenseParentChild", fields: [parentId], references: [id], onDelete: Cascade)

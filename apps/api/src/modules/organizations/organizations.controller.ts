@@ -1,7 +1,7 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Body, Param, UseGuards, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { IsString, IsOptional, IsArray, IsBoolean, IsObject, MinLength, MaxLength } from 'class-validator';
-import { Transform } from 'class-transformer';
+import { IsString, IsOptional, IsArray, IsBoolean, IsObject, IsIn, MinLength, MaxLength, ValidateNested } from 'class-validator';
+import { Type, Transform } from 'class-transformer';
 import { OrganizationsService } from './organizations.service';
 import { CurrentUser, CurrentUserData, Roles, Public } from '../../common/decorators';
 import { RolesGuard } from '../../common/guards';
@@ -66,6 +66,32 @@ class UpdateJoinCodeSettingsDto {
 class JoinWithCodeDto {
   @IsString()
   code: string;
+}
+
+class CustomColumnDto {
+  @IsString()
+  id: string;
+
+  @IsString()
+  label: string;
+
+  @IsIn(['text', 'number'])
+  type: 'text' | 'number';
+}
+
+class UpdateCustomColumnsDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CustomColumnDto)
+  columns: CustomColumnDto[];
+}
+
+class UpdateCustomFieldDto {
+  @IsString()
+  columnId: string;
+
+  @IsOptional()
+  value: string | number | null;
 }
 
 @Controller('organizations')
@@ -140,6 +166,32 @@ export class OrganizationsController {
   @Roles('ADMIN', 'TREASURER')
   async getInsights(@Param('orgId') orgId: string) {
     return this.organizationsService.getInsights(orgId);
+  }
+
+  @Get(':orgId/custom-columns')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'TREASURER')
+  async getCustomColumns(@Param('orgId') orgId: string) {
+    return this.organizationsService.getCustomColumns(orgId);
+  }
+
+  @Put(':orgId/custom-columns')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'TREASURER')
+  async updateCustomColumns(@Param('orgId') orgId: string, @Body() dto: UpdateCustomColumnsDto) {
+    return this.organizationsService.updateCustomColumns(orgId, dto.columns);
+  }
+
+  @Patch(':orgId/custom-fields/:entityType/:entityId')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'TREASURER')
+  async updateCustomField(
+    @Param('orgId') orgId: string,
+    @Param('entityType') entityType: 'charge' | 'expense' | 'payment',
+    @Param('entityId') entityId: string,
+    @Body() dto: UpdateCustomFieldDto,
+  ) {
+    return this.organizationsService.updateCustomField(orgId, entityType, entityId, dto.columnId, dto.value);
   }
 
   @Delete(':orgId')

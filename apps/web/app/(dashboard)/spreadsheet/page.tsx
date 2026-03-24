@@ -79,6 +79,8 @@ import { FormulaBar } from '@/components/spreadsheet/formula-bar';
 import { AllocatePaymentsDialog } from '@/components/spreadsheet/allocate-dialog';
 import { EditableCell, formatShortDate } from '@/components/spreadsheet/editable-cell';
 import { parseNaturalAmount } from '@/lib/utils/natural-language';
+import { useCustomColumns, type CustomColumnDef } from '@/hooks/use-custom-columns';
+import { useUndoRedo, type UndoEntry } from '@/hooks/use-undo-redo';
 import type { SpreadsheetQueryResult } from '@/lib/queries/agent';
 
 /** Strip "VENMO payment to " etc. prefixes from Gmail-imported expense titles */
@@ -108,6 +110,7 @@ interface SpreadsheetRow {
   childCount?: number;
   children?: SpreadsheetRow[];
   isUnallocated?: boolean;
+  customFields?: Record<string, any>;
 }
 
 type EditingCell = {
@@ -273,6 +276,7 @@ export default function SpreadsheetPage() {
   const currentMembership = useCurrentMembership();
 
   const columnConfig = useColumnConfig();
+  const { customColumns, addColumn: addCustomColumn, removeColumn: removeCustomColumn } = useCustomColumns(currentOrgId);
   const { onResizeStart } = useColumnResize({ onResize: columnConfig.resizeColumn });
   const { dragColumnId, dropTargetId, onDragStart, onDragOver, onDragLeave, onDrop, onDragEnd } = useColumnReorder({
     onReorder: columnConfig.reorderColumn,
