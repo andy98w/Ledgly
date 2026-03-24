@@ -281,6 +281,11 @@ export default function SpreadsheetPage() {
 
   const { customColumns, addColumn: addCustomColumn, removeColumn: removeCustomColumn } = useCustomColumns(currentOrgId);
   const columnConfig = useColumnConfig(customColumns);
+  const handleUndoRedoRef = useRef<(entry: UndoEntry, isUndo: boolean) => void>(() => {});
+  const undoRedo = useUndoRedo({
+    onUndo: (entry) => handleUndoRedoRef.current(entry, true),
+    onRedo: (entry) => handleUndoRedoRef.current(entry, false),
+  });
   const { onResizeStart } = useColumnResize({ onResize: columnConfig.resizeColumn });
   const { dragColumnId, dropTargetId, onDragStart, onDragOver, onDragLeave, onDrop, onDragEnd } = useColumnReorder({
     onReorder: columnConfig.reorderColumn,
@@ -683,8 +688,20 @@ export default function SpreadsheetPage() {
     }
   };
 
+  const getOldValue = (row: SpreadsheetRow, column: string): any => {
+    switch (column) {
+      case 'description': return row.description;
+      case 'category': return row.category;
+      case 'amount': return row.type === 'expense' ? row.expenseCents : (row.incomeCents || row.dueCents);
+      case 'date': return row.date;
+      case 'member': return row.membershipId || row.member;
+      default: return row.customFields?.[column];
+    }
+  };
+
   const handleSaveCell = async (row: SpreadsheetRow, column: 'description' | 'category' | 'amount' | 'date' | 'member', newValue: string | number) => {
     if (!currentOrgId) return;
+    const oldValue = getOldValue(row, column);
 
     try {
       if (row.type === 'charge') {
@@ -776,7 +793,15 @@ export default function SpreadsheetPage() {
         });
       }
 
-      toast({ title: 'Updated successfully' });
+      undoRedo.push({
+        type: 'cell_edit',
+        rowId: row.id,
+        field: column,
+        oldValue,
+        newValue,
+        rowType: row.type,
+        entityId: row.id,
+      });
     } catch (error: any) {
       toast({
         title: 'Error updating',
@@ -786,6 +811,14 @@ export default function SpreadsheetPage() {
     }
 
     setEditingCell(null);
+  };
+
+  handleUndoRedoRef.current = (entry: UndoEntry, isUndo: boolean) => {
+    if (entry.type !== 'cell_edit' || !entry.rowId || !entry.field) return;
+    const row = paginatedRows.find((r) => r.id === entry.rowId);
+    if (!row) return;
+    const value = isUndo ? entry.oldValue : entry.newValue;
+    handleSaveCell(row, entry.field as any, value);
   };
 
   useSpreadsheetKeyboard({
