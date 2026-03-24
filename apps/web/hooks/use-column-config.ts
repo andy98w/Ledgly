@@ -68,13 +68,21 @@ export function useColumnConfig(customColumns?: Array<{ id: string; label: strin
     return [...COLUMN_DEFS, ...custom];
   }, [customColumns]);
 
-  // Ensure custom columns appear in the order list
+  // Sync custom columns with order list: add new, remove stale
   useEffect(() => {
-    if (!customColumns?.length) return;
-    const customIds = customColumns.map(c => c.id);
+    const customIds = (customColumns || []).map(c => c.id);
+    const builtinIds = COLUMN_DEFS.map(c => c.id);
+    const validIds = new Set([...builtinIds, ...customIds]);
+
     const missing = customIds.filter(id => !state.order.includes(id));
-    if (missing.length > 0) {
-      setState(prev => ({ ...prev, order: [...prev.order, ...missing] }));
+    const stale = state.order.filter(id => !validIds.has(id));
+
+    if (missing.length > 0 || stale.length > 0) {
+      setState(prev => ({
+        ...prev,
+        order: [...prev.order.filter(id => validIds.has(id)), ...missing],
+        hidden: prev.hidden.filter(id => validIds.has(id)),
+      }));
     }
   }, [customColumns]);
 

@@ -2047,9 +2047,15 @@ export default function SpreadsheetPage() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (confirm(`Remove column "${def.label}"?`)) {
-                                  removeCustomColumn(colId);
-                                }
+                                const label = def.label;
+                                const colType = def.customType || 'text';
+                                removeCustomColumn(colId);
+                                toast({
+                                  title: `Removed column "${label}"`,
+                                  action: (
+                                    <ToastUndoButton onClick={() => addCustomColumn(label, colType as 'text' | 'number')} />
+                                  ),
+                                });
                               }}
                               className="w-3.5 h-3.5 flex items-center justify-center rounded hover:bg-destructive/20 hover:text-destructive transition-colors text-muted-foreground/40"
                               title={`Remove ${def.label}`}
