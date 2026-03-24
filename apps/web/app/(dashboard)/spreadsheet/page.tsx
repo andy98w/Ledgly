@@ -1673,11 +1673,17 @@ export default function SpreadsheetPage() {
           </div>
         );
       case 'member':
-        return row.type === 'charge' || row.type === 'payment' ? (
-          <EditableCell value={row.membershipId || ''} type="member" isEditing={editingCell?.rowId === row.id && editingCell?.column === 'member'} onEdit={() => setEditingCell({ rowId: row.id, column: 'member' })} onSave={(v) => handleSaveCell(row, 'member', v)} onCancel={() => setEditingCell(null)} onNavigate={(dir) => handleCellNavigate(row.id, 'member', dir)} isAdmin={isAdmin} rowType={row.type} column="member" members={members} onAddMember={handleAddMember} />
-        ) : (
-          <EditableCell value={row.member || ''} type="text" isEditing={editingCell?.rowId === row.id && editingCell?.column === 'member'} onEdit={() => setEditingCell({ rowId: row.id, column: 'member' })} onSave={(v) => handleSaveCell(row, 'member', v)} onCancel={() => setEditingCell(null)} onNavigate={(dir) => handleCellNavigate(row.id, 'member', dir)} isAdmin={isAdmin} rowType={row.type} column="member" />
-        );
+        if (row.type === 'charge') {
+          return <EditableCell value={row.membershipId || ''} type="member" isEditing={editingCell?.rowId === row.id && editingCell?.column === 'member'} onEdit={() => setEditingCell({ rowId: row.id, column: 'member' })} onSave={(v) => handleSaveCell(row, 'member', v)} onCancel={() => setEditingCell(null)} onNavigate={(dir) => handleCellNavigate(row.id, 'member', dir)} isAdmin={isAdmin} rowType={row.type} column="member" members={members} onAddMember={handleAddMember} />;
+        }
+        if (row.type === 'payment') {
+          const isEditing = editingCell?.rowId === row.id && editingCell?.column === 'member';
+          if (isEditing) {
+            return <EditableCell value={row.membershipId || ''} type="member" isEditing={true} onEdit={() => {}} onSave={(v) => handleSaveCell(row, 'member', v)} onCancel={() => setEditingCell(null)} onNavigate={(dir) => handleCellNavigate(row.id, 'member', dir)} isAdmin={isAdmin} rowType={row.type} column="member" members={members} onAddMember={handleAddMember} />;
+          }
+          return <span className="text-sm truncate">{row.member || <span className="text-muted-foreground/30">-</span>}</span>;
+        }
+        return <EditableCell value={row.member || ''} type="text" isEditing={editingCell?.rowId === row.id && editingCell?.column === 'member'} onEdit={() => setEditingCell({ rowId: row.id, column: 'member' })} onSave={(v) => handleSaveCell(row, 'member', v)} onCancel={() => setEditingCell(null)} onNavigate={(dir) => handleCellNavigate(row.id, 'member', dir)} isAdmin={isAdmin} rowType={row.type} column="member" />;
       case 'category':
         return row.type === 'payment' ? (
           <Badge variant="outline" className="text-[10px] capitalize">{row.category}</Badge>
