@@ -90,14 +90,18 @@ export class PaymentsService {
           },
         },
       },
+      membership: {
+        select: { name: true, user: { select: { name: true } } },
+      },
     };
 
     const mapPayment = (p: any) => {
       const allocatedCents = p.allocations.reduce((sum: number, a: any) => sum + a.amountCents, 0);
+      const memberName = p.rawPayerName || p.membership?.name || p.membership?.user?.name || undefined;
       return {
         id: p.id, orgId: p.orgId, membershipId: p.membershipId,
         amountCents: p.amountCents, paidAt: p.paidAt, source: p.source,
-        rawPayerName: p.rawPayerName, memo: p.memo, createdAt: p.createdAt,
+        rawPayerName: memberName, memo: p.memo, createdAt: p.createdAt,
         allocatedCents, unallocatedCents: p.amountCents - allocatedCents,
         allocations: p.allocations.map((a: any) => ({
           id: a.id, chargeId: a.chargeId, chargeTitle: a.charge.title, amountCents: a.amountCents,

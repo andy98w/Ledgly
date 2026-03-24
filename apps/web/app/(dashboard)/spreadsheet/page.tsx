@@ -79,6 +79,7 @@ import { FormulaBar } from '@/components/spreadsheet/formula-bar';
 import { AllocatePaymentsDialog } from '@/components/spreadsheet/allocate-dialog';
 import { EditableCell, formatShortDate } from '@/components/spreadsheet/editable-cell';
 import { parseNaturalAmount } from '@/lib/utils/natural-language';
+import { api } from '@/lib/api';
 import { useCustomColumns, type CustomColumnDef } from '@/hooks/use-custom-columns';
 import { useUndoRedo, type UndoEntry } from '@/hooks/use-undo-redo';
 import type { SpreadsheetQueryResult } from '@/lib/queries/agent';
@@ -1657,13 +1658,31 @@ export default function SpreadsheetPage() {
       default: {
         const colDef = columnConfig.getColumnDef(colId);
         if (colDef?.isCustom) {
-          const val = row.customFields?.[colId];
-          const display = val != null ? String(val) : '';
-          return display ? (
-            <span className={cn('text-sm', colDef.customType === 'number' ? 'tabular-nums' : '')}>{
-              colDef.customType === 'number' && typeof val === 'number' ? val.toLocaleString() : display
-            }</span>
-          ) : (<span className="text-muted-foreground/30">-</span>);
+          const val = row.customFields?.[colId] ?? '';
+          const isEditing = editingCell?.rowId === row.id && editingCell?.column === colId;
+          return (
+            <EditableCell
+              value={colDef.customType === 'number' ? (Number(val) || 0) : String(val)}
+              type={colDef.customType === 'number' ? 'money' : 'text'}
+              isEditing={isEditing}
+              onEdit={() => setEditingCell({ rowId: row.id, column: colId } as any)}
+              onSave={async (v) => {
+                if (!currentOrgId) return;
+                try {
+                  await api.patch(`/organizations/${currentOrgId}/custom-fields/${row.type}/${row.id}`, {
+                    columnId: colId,
+                    value: colDef.customType === 'number' ? (Number(v) || null) : (String(v).trim() || null),
+                  });
+                } catch {}
+                setEditingCell(null);
+              }}
+              onCancel={() => setEditingCell(null)}
+              onNavigate={(dir) => handleCellNavigate(row.id, colId as any, dir)}
+              isAdmin={isAdmin}
+              rowType={row.type}
+              column="description"
+            />
+          );
         }
         return null;
       }
@@ -1992,17 +2011,17 @@ export default function SpreadsheetPage() {
                   })}
                   {isAdmin && <th className="w-8 px-1" />}
                   {isAdmin && (
-                    <th className="w-8 px-1">
+                    <th className="w-0 p-0 border-none relative">
                       <button
                         onClick={() => {
                           setNewColumnName('');
                           setNewColumnType('text');
                           setShowAddColumnDialog(true);
                         }}
-                        className="w-6 h-6 flex items-center justify-center rounded hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
+                        className="absolute -right-1 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-secondary/80 hover:bg-primary/20 hover:text-primary transition-colors text-muted-foreground border border-border/50"
                         title="Add custom column"
                       >
-                        <Plus className="h-3.5 w-3.5" />
+                        <Plus className="h-3 w-3" />
                       </button>
                     </th>
                   )}
