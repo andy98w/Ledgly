@@ -1448,6 +1448,13 @@ Return ONLY the JSON object, no markdown or explanation.`;
         return `Disconnect all ${args.platform} connections`;
       case 'update_notification_template':
         return `Update ${args.templateType?.replace(/_/g, ' ')} template`;
+      case 'manage_columns':
+        if (args.action === 'add') return `Add column "${args.label}"`;
+        if (args.action === 'remove') return `Remove custom column`;
+        if (args.action === 'rename') return `Rename column to "${args.newLabel}"`;
+        return `Manage columns`;
+      case 'update_custom_field':
+        return `Update custom field on ${args.entityType}`;
       default:
         return toolName;
     }
