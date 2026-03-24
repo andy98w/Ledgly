@@ -336,6 +336,77 @@ describe('Bulk auto-allocate edge cases (integration)', () => {
     await cleanup([charge.id], [payment.id]);
   });
 
+  it('skips auto-allocation when payment amount doesn\'t match any charge and multiple charges exist', async () => {
+    const charges1 = await ctx.chargesService.create(ctx.orgId, ctx.membershipId, {
+      membershipIds: [memberA],
+      category: 'DUES' as any,
+      title: 'Charge A',
+      amountCents: 4000,
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    const charges2 = await ctx.chargesService.create(ctx.orgId, ctx.membershipId, {
+      membershipIds: [memberA],
+      category: 'DUES' as any,
+      title: 'Charge B',
+      amountCents: 4000,
+    });
+    const c1 = charges1[0];
+    const c2 = charges2[0];
+
+    const payment = await ctx.paymentsService.create(ctx.orgId, ctx.membershipId, {
+      amountCents: 10000,
+      paidAt: '2026-07-01',
+      rawPayerName: 'No Match Payer',
+    });
+    await ctx.prisma.payment.update({ where: { id: payment.id }, data: { membershipId: memberA } });
+
+    const result = await ctx.paymentsService.bulkAutoAllocate(ctx.orgId, [payment.id], ctx.membershipId);
+
+    expect(result.successCount).toBe(0);
+    expect(result.skippedCount).toBe(1);
+    expect(result.totalAllocatedCents).toBe(0);
+
+    await cleanup([c1.id, c2.id], [payment.id]);
+  });
+
+  it('auto-allocates when payment exactly matches a single charge amount', async () => {
+    const charges1 = await ctx.chargesService.create(ctx.orgId, ctx.membershipId, {
+      membershipIds: [memberA],
+      category: 'DUES' as any,
+      title: 'Small Charge',
+      amountCents: 4000,
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    const charges2 = await ctx.chargesService.create(ctx.orgId, ctx.membershipId, {
+      membershipIds: [memberA],
+      category: 'DUES' as any,
+      title: 'Exact Match Charge',
+      amountCents: 6000,
+    });
+    const c1 = charges1[0];
+    const c2 = charges2[0];
+
+    const payment = await ctx.paymentsService.create(ctx.orgId, ctx.membershipId, {
+      amountCents: 6000,
+      paidAt: '2026-07-02',
+      rawPayerName: 'No Match Payer',
+    });
+    await ctx.prisma.payment.update({ where: { id: payment.id }, data: { membershipId: memberA } });
+
+    const result = await ctx.paymentsService.bulkAutoAllocate(ctx.orgId, [payment.id], ctx.membershipId);
+
+    expect(result.successCount).toBe(1);
+    expect(result.totalAllocatedCents).toBe(6000);
+
+    const updatedC2 = await ctx.prisma.charge.findUnique({ where: { id: c2.id } });
+    expect(updatedC2?.status).toBe('PAID');
+
+    const paymentData = await ctx.paymentsService.findOne(ctx.orgId, payment.id);
+    expect(paymentData.unallocatedCents).toBe(0);
+
+    await cleanup([c1.id, c2.id], [payment.id]);
+  });
+
   it('voided charges are excluded from auto-allocation', async () => {
     const charges = await ctx.chargesService.create(ctx.orgId, ctx.membershipId, {
       membershipIds: [memberA],

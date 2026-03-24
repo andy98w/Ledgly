@@ -1,5 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 import { createTestContext, cleanupTestContext, TestContext } from '../../test/test-helpers';
+import { EmailService } from '../auth/email.service';
 
 jest.setTimeout(30_000);
 
@@ -150,5 +151,31 @@ describe('Members unit tests', () => {
     await ctx.prisma.auditLog.deleteMany({ where: { orgId: ctx.orgId, entityId: { in: [charges[0].id, payment.id] } } });
     await ctx.prisma.payment.deleteMany({ where: { id: payment.id } });
     await ctx.prisma.charge.deleteMany({ where: { id: charges[0].id } });
+  });
+
+  // ==================== EmailService.sendBalanceSummary ====================
+
+  it('emailService.sendBalanceSummary is callable', async () => {
+    const emailService = ctx.module.get(EmailService);
+    expect(typeof emailService.sendBalanceSummary).toBe('function');
+
+    await emailService.sendBalanceSummary(
+      'test@test.local',
+      'Portal Member',
+      'Test Org',
+      5000,
+      [{ title: 'Dues', amountCents: 5000, dueDate: null }],
+      'https://app.ledgly.app/portal',
+    );
+
+    expect(emailService.sendBalanceSummary).toHaveBeenCalledTimes(1);
+    expect(emailService.sendBalanceSummary).toHaveBeenCalledWith(
+      'test@test.local',
+      'Portal Member',
+      'Test Org',
+      5000,
+      [{ title: 'Dues', amountCents: 5000, dueDate: null }],
+      'https://app.ledgly.app/portal',
+    );
   });
 });

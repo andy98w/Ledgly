@@ -45,7 +45,7 @@ export async function createTestContext(): Promise<TestContext> {
     ],
   })
     .overrideProvider(EmailService)
-    .useValue({ sendAdminInvitation: jest.fn(), sendMagicLink: jest.fn(), sendChargeNotification: jest.fn() })
+    .useValue({ sendAdminInvitation: jest.fn(), sendMagicLink: jest.fn(), sendChargeNotification: jest.fn(), sendBalanceSummary: jest.fn() })
     .compile();
 
   const prisma = module.get(PrismaService);
