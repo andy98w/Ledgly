@@ -126,5 +126,80 @@ export class DigestSchedulerService {
     if (sentCount > 0) {
       this.logger.log(`Sent ${sentCount} weekly digest(s) for org "${orgName}"`);
     }
+
+    // Send balance summaries to members who owe money
+    await this.sendMemberBalanceSummaries(orgId, orgName, webUrl);
+  }
+
+  private async sendMemberBalanceSummaries(orgId: string, orgName: string, webUrl: string) {
+    const org = await this.prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { paymentHandles: true, enabledPaymentSources: true },
+    });
+
+    const members = await this.prisma.membership.findMany({
+      where: { orgId, status: 'ACTIVE', role: 'MEMBER', userId: { not: null } },
+      include: { user: { select: { email: true, name: true } } },
+    });
+
+    if (members.length === 0) return;
+
+    const balanceRows: Array<{
+      membership_id: string;
+      total_charged: bigint;
+      total_paid: bigint;
+    }> = await this.prisma.$queryRaw`
+      SELECT
+        m.id AS membership_id,
+        COALESCE((SELECT SUM(c.amount_cents) FROM charges c WHERE c.membership_id = m.id AND c.status != 'VOID'), 0) AS total_charged,
+        COALESCE((SELECT SUM(p.amount_cents) FROM payments p WHERE p.membership_id = m.id AND p.deleted_at IS NULL), 0) AS total_paid
+      FROM memberships m
+      WHERE m.org_id = ${orgId} AND m.status = 'ACTIVE' AND m.role = 'MEMBER'
+    `;
+
+    const balanceMap = new Map(balanceRows.map((r) => [r.membership_id, Number(r.total_charged) - Number(r.total_paid)]));
+    const handles = (org?.paymentHandles as Record<string, string>) ?? {};
+    const sources = org?.enabledPaymentSources ?? [];
+    const portalUrl = `${webUrl}/portal`;
+
+    let sentCount = 0;
+    for (const member of members) {
+      const balance = balanceMap.get(member.id) || 0;
+      if (balance <= 0) continue;
+
+      const email = member.user?.email;
+      if (!email) continue;
+
+      const openCharges = await this.prisma.charge.findMany({
+        where: { orgId, membershipId: member.id, status: { in: ['OPEN', 'PARTIALLY_PAID'] } },
+        select: { title: true, amountCents: true, dueDate: true },
+        orderBy: { dueDate: 'asc' },
+        take: 10,
+      });
+
+      try {
+        await this.emailService.sendBalanceSummary(
+          email,
+          member.name || member.user?.name || 'Member',
+          orgName,
+          balance,
+          openCharges.map((c) => ({
+            title: c.title,
+            amountCents: c.amountCents,
+            dueDate: c.dueDate ? c.dueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null,
+          })),
+          portalUrl,
+          handles,
+          sources,
+        );
+        sentCount++;
+      } catch (error) {
+        this.logger.error(`Failed to send balance summary to ${email}:`, error);
+      }
+    }
+
+    if (sentCount > 0) {
+      this.logger.log(`Sent ${sentCount} balance summary email(s) for org "${orgName}"`);
+    }
   }
 }
