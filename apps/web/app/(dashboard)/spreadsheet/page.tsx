@@ -457,7 +457,8 @@ export default function SpreadsheetPage() {
     if (paymentsData?.data) {
       for (const payment of paymentsData.data) {
         if (!typeFilters.has('payment')) continue;
-        const memberName = payment.rawPayerName || undefined;
+        const p = payment as any;
+        const memberName = p.rawPayerName || p.membership?.name || p.membership?.user?.name || undefined;
         allRows.push({
           id: payment.id,
           date: typeof payment.paidAt === 'string' ? payment.paidAt : new Date(payment.paidAt).toISOString(),
@@ -2016,6 +2017,20 @@ export default function SpreadsheetPage() {
                         <span className="group/header flex items-center gap-1" style={{ justifyContent: def.align === 'right' ? 'flex-end' : 'flex-start' }}>
                           {(colId === 'income' || colId === 'expense') && <DollarSign className="h-3 w-3" />}
                           {def.label}
+                          {isAdmin && colIdx === columnConfig.visibleColumns.length - 1 && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setNewColumnName('');
+                                setNewColumnType('text');
+                                setShowAddColumnDialog(true);
+                              }}
+                              className="ml-1 w-4 h-4 flex items-center justify-center rounded hover:bg-primary/20 hover:text-primary transition-colors text-muted-foreground/50"
+                              title="Add custom column"
+                            >
+                              <Plus className="h-3 w-3" />
+                            </button>
+                          )}
                           {def.sortKey && getSortDirection(def.sortKey) && (
                             <span className="flex items-center gap-0.5">
                               {getSortDirection(def.sortKey) === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
@@ -2043,21 +2058,6 @@ export default function SpreadsheetPage() {
                     );
                   })}
                   {isAdmin && <th className="w-8 px-1" />}
-                  {isAdmin && (
-                    <th className="w-8 px-1">
-                      <button
-                        onClick={() => {
-                          setNewColumnName('');
-                          setNewColumnType('text');
-                          setShowAddColumnDialog(true);
-                        }}
-                        className="w-5 h-5 mx-auto flex items-center justify-center rounded-full bg-secondary/80 hover:bg-primary/20 hover:text-primary transition-colors text-muted-foreground border border-border/50"
-                        title="Add custom column"
-                      >
-                        <Plus className="h-3 w-3" />
-                      </button>
-                    </th>
-                  )}
                 </tr>
               </thead>
               <tbody>
