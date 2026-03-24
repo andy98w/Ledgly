@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 
 export interface ColumnDef {
   id: string;
@@ -69,8 +69,19 @@ export function useColumnConfig(customColumns?: Array<{ id: string; label: strin
   }, [customColumns]);
 
   // Sync custom columns with order list: add new, remove stale
+  // Skip when customColumns is undefined (still loading) to avoid wiping saved order
+  const customColumnsLoaded = useRef(false);
   useEffect(() => {
-    const customIds = (customColumns || []).map(c => c.id);
+    if (!customColumns) return;
+    // On first load, mark as loaded but don't remove stale IDs
+    // (the saved order may contain custom IDs that haven't loaded yet)
+    if (!customColumnsLoaded.current && customColumns.length === 0) {
+      customColumnsLoaded.current = true;
+      return;
+    }
+    customColumnsLoaded.current = true;
+
+    const customIds = customColumns.map(c => c.id);
     const builtinIds = COLUMN_DEFS.map(c => c.id);
     const validIds = new Set([...builtinIds, ...customIds]);
 
