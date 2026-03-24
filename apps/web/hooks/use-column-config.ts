@@ -132,7 +132,14 @@ export function useColumnConfig(customColumns?: Array<{ id: string; label: strin
     });
   }, [allDefs]);
 
-  const resetColumns = useCallback(() => setState(defaultState), []);
+  const resetColumns = useCallback(() => {
+    const customIds = (customColumns || []).map(c => c.id);
+    setState({
+      order: [...defaultState.order, ...customIds],
+      widths: defaultState.widths,
+      hidden: [],
+    });
+  }, [customColumns]);
 
   const getWidth = useCallback((id: string) => state.widths[id] ?? allDefs.find(c => c.id === id)?.defaultWidth ?? 100, [state.widths, allDefs]);
 

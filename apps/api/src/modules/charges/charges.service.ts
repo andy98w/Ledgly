@@ -26,6 +26,7 @@ interface UpdateChargeDto {
   amountCents?: number;
   dueDate?: string | null;
   status?: ChargeStatus;
+  updatedAt?: string;
 }
 
 interface ChargeFilters {
@@ -170,7 +171,7 @@ export class ChargesService {
     const row: any = {
       id: c.id, orgId: c.orgId, membershipId: c.membershipId, category: c.category,
       title: c.title, amountCents: c.amountCents, dueDate: c.dueDate, status: c.status,
-      createdAt: c.createdAt, parentId: c.parentId || null,
+      createdAt: c.createdAt, updatedAt: c.updatedAt, parentId: c.parentId || null,
       customFields: c.customFields || {},
       membership,
       allocatedCents, balanceDueCents: c.amountCents - allocatedCents,
@@ -466,6 +467,14 @@ export class ChargesService {
 
     if (!charge) {
       throw new NotFoundException('Charge not found');
+    }
+
+    if (dto.updatedAt) {
+      const clientUpdatedAt = new Date(dto.updatedAt).getTime();
+      const serverUpdatedAt = charge.updatedAt.getTime();
+      if (clientUpdatedAt < serverUpdatedAt) {
+        throw new BadRequestException('This row was modified by someone else. Please refresh and try again.');
+      }
     }
 
     // If changing amount, make sure it's not less than allocated

@@ -144,6 +144,7 @@ model Charge {
   status       ChargeStatus        @default(OPEN)
   createdById  String              @map("created_by_id")
   createdAt    DateTime            @default(now()) @map("created_at")
+  updatedAt    DateTime            @updatedAt @map("updated_at")
   parentId     String?             @map("parent_id")
   createdBy    Membership          @relation("ChargeCreatedBy", fields: [createdById], references: [id])
   membership   Membership?         @relation("ChargeAssignedTo", fields: [membershipId], references: [id], onDelete: Cascade)
@@ -171,6 +172,7 @@ model Payment {
   externalId   String?             @map("external_id")
   createdById  String?             @map("created_by_id")
   createdAt    DateTime            @default(now()) @map("created_at")
+  updatedAt    DateTime            @updatedAt @map("updated_at")
   deletedAt    DateTime?           @map("deleted_at")
   customFields Json?               @default("{}") @map("custom_fields")
   allocations  PaymentAllocation[]

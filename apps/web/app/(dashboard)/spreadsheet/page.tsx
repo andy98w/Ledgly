@@ -2100,7 +2100,7 @@ export default function SpreadsheetPage() {
                   {isAdmin && (
                     <th className={cn(
                       'w-8 px-1',
-                      columnConfig.visibleColumns.length % 2 === 0 && 'bg-black/[0.015] dark:bg-white/[0.015]',
+                      columnConfig.visibleColumns.length % 2 !== 0 && 'bg-black/[0.015] dark:bg-white/[0.015]',
                     )}>
                       <button
                         onClick={() => {
@@ -2459,7 +2459,7 @@ export default function SpreadsheetPage() {
                         );
                       })}
                       {isAdmin && (
-                        <td className={cn('w-8 px-1 py-2', columnConfig.visibleColumns.length % 2 === 0 && 'bg-black/[0.02] dark:bg-white/[0.02]')}>
+                        <td className={cn('w-8 px-1 py-2', columnConfig.visibleColumns.length % 2 !== 0 && 'bg-black/[0.02] dark:bg-white/[0.02]')}>
                           {!row.isChild && (() => {
                             const actions = getRowActions(row);
                             if (actions.length === 0) return null;
