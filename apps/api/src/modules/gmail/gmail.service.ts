@@ -8,6 +8,7 @@ import { PaymentMatcherService } from './payment-matcher.service';
 import { ExpenseMatcherService } from './expense-matcher.service';
 import { ChargesService } from '../charges/charges.service';
 import { AuditService } from '../audit/audit.service';
+import { EmailService } from '../auth/email.service';
 import { sanitizeText } from '../../common/utils/sanitize';
 
 function formatSourceName(source: string): string {
@@ -54,6 +55,7 @@ export class GmailService {
     private readonly expenseMatcher: ExpenseMatcherService,
     private readonly chargesService: ChargesService,
     private readonly auditService: AuditService,
+    private readonly emailService: EmailService,
   ) {
     this.oauth2Client = new google.auth.OAuth2(
       this.configService.get<string>('GOOGLE_CLIENT_ID'),
@@ -235,8 +237,12 @@ export class GmailService {
           where: { id: connection.id },
           data: { lastSyncAt: new Date() },
         });
-      } catch (err) {
+      } catch (err: any) {
         this.logger.error(`Failed to sync connection ${connection.email}: ${err.message}`);
+
+        if (err.message?.includes('invalid_grant') || err.message?.includes('Token has been expired')) {
+          this.notifyBrokenConnection(orgId, connection.email).catch(() => {});
+        }
       }
     }
 
@@ -854,5 +860,34 @@ export class GmailService {
         },
       });
     });
+  }
+
+  private async notifyBrokenConnection(orgId: string, connectionEmail: string) {
+    const [admins, org] = await Promise.all([
+      this.prisma.membership.findMany({
+        where: { orgId, status: 'ACTIVE', role: { in: ['OWNER', 'ADMIN', 'TREASURER'] }, userId: { not: null } },
+        include: { user: { select: { email: true } } },
+      }),
+      this.prisma.organization.findUnique({
+        where: { id: orgId },
+        select: { name: true },
+      }),
+    ]);
+
+    const orgName = org?.name || 'your organization';
+    const webUrl = this.configService.get<string>('WEB_URL', 'https://app.ledgly.app');
+
+    for (const admin of admins) {
+      if (!admin.user?.email) continue;
+      await this.emailService.sendIntegrationAlert(
+        admin.user.email,
+        orgName,
+        'Gmail Sync',
+        `The connection for ${connectionEmail} has expired. Please reconnect in Settings to resume auto-importing payments.`,
+        `${webUrl}/settings`,
+      ).catch(() => {});
+    }
+
+    this.logger.warn(`Gmail connection ${connectionEmail} expired for org ${orgName}. Admins notified.`);
   }
 }

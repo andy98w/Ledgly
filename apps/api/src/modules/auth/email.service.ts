@@ -539,6 +539,40 @@ export class EmailService {
     }
   }
 
+  async sendIntegrationAlert(
+    email: string,
+    orgName: string,
+    integration: string,
+    detail: string,
+    settingsUrl: string,
+  ): Promise<void> {
+    const from = this.configService.get<string>('EMAIL_FROM', 'Ledgly <noreply@ledgly.app>');
+    if (!this.resend) return;
+
+    try {
+      await this.resend.emails.send({
+        from,
+        to: email,
+        subject: `${orgName}: ${integration} connection needs attention`,
+        html: this.wrapTemplate(`
+          <h1 style="margin: 0 0 24px; font-size: 24px; color: #111;">Integration Alert</h1>
+          <div style="background: #FEF2F2; border-left: 4px solid #EF4444; border-radius: 8px; padding: 16px 20px; margin: 0 0 20px;">
+            <p style="margin: 0 0 4px; font-size: 15px; font-weight: 600; color: #111;">${integration}</p>
+            <p style="margin: 0; color: #666; font-size: 14px;">${detail}</p>
+          </div>
+          <a href="${settingsUrl}" style="display: inline-block; background: #111; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500;">
+            Go to Settings
+          </a>
+          <p style="margin: 24px 0 0; color: #bbb; font-size: 12px;">
+            Sent by Ledgly on behalf of ${orgName}
+          </p>
+        `),
+      });
+    } catch (error) {
+      this.logger.error('Failed to send integration alert', error);
+    }
+  }
+
   private unsubscribeUrl(email: string): string {
     const webUrl = this.configService.get<string>('WEB_URL');
     return `${webUrl}/unsubscribe?email=${encodeURIComponent(email)}&type=notifications`;
