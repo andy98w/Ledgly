@@ -25,7 +25,7 @@ export function useCustomColumns(orgId: string | null) {
     mutationFn: (columns: CustomColumnDef[]) =>
       api.patch<CustomColumnDef[]>(
         `/organizations/${orgId}/custom-columns`,
-        { columns },
+        { columns: columns.map(({ id, label, type }) => ({ id, label, type })) },
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({

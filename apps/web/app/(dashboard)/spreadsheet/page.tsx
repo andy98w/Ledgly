@@ -2016,6 +2016,20 @@ export default function SpreadsheetPage() {
                       >
                         <span className="group/header flex items-center gap-1" style={{ justifyContent: def.align === 'right' ? 'flex-end' : 'flex-start' }}>
                           {(colId === 'income' || colId === 'expense') && <DollarSign className="h-3 w-3" />}
+                          {def.isCustom && isAdmin && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (confirm(`Remove column "${def.label}"?`)) {
+                                  removeCustomColumn(colId);
+                                }
+                              }}
+                              className="w-3.5 h-3.5 flex items-center justify-center rounded hover:bg-destructive/20 hover:text-destructive transition-colors text-muted-foreground/40"
+                              title={`Remove ${def.label}`}
+                            >
+                              <Minus className="h-2.5 w-2.5" />
+                            </button>
+                          )}
                           {def.label}
                           {isAdmin && colIdx === columnConfig.visibleColumns.length - 1 && (
                             <button
@@ -2892,57 +2906,30 @@ export default function SpreadsheetPage() {
       )}
       {/* Add Custom Column Dialog */}
       <Dialog open={showAddColumnDialog} onOpenChange={setShowAddColumnDialog}>
-        <DialogContent className="sm:max-w-[360px]">
+        <DialogContent className="sm:max-w-[320px]">
           <DialogHeader>
             <DialogTitle>Add Column</DialogTitle>
-            <DialogDescription>Add a custom column to your spreadsheet.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>Column Name</Label>
-              <Input
-                value={newColumnName}
-                onChange={(e) => setNewColumnName(e.target.value)}
-                placeholder="e.g., Notes, Points, Room #"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && newColumnName.trim()) {
-                    addCustomColumn(newColumnName.trim(), newColumnType);
-                    setShowAddColumnDialog(false);
-                  }
-                }}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Type</Label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => setNewColumnType('text')}
-                  className={cn(
-                    'px-3 py-2 rounded-lg border text-sm font-medium transition-colors',
-                    newColumnType === 'text' ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-secondary/50',
-                  )}
-                >
-                  Text
-                </button>
-                <button
-                  onClick={() => setNewColumnType('number')}
-                  className={cn(
-                    'px-3 py-2 rounded-lg border text-sm font-medium transition-colors',
-                    newColumnType === 'number' ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-secondary/50',
-                  )}
-                >
-                  Number
-                </button>
-              </div>
-            </div>
+          <div className="py-2">
+            <Input
+              value={newColumnName}
+              onChange={(e) => setNewColumnName(e.target.value)}
+              placeholder="Column name"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && newColumnName.trim()) {
+                  addCustomColumn(newColumnName.trim(), 'text');
+                  setShowAddColumnDialog(false);
+                }
+              }}
+            />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAddColumnDialog(false)}>Cancel</Button>
             <Button
               disabled={!newColumnName.trim()}
               onClick={() => {
-                addCustomColumn(newColumnName.trim(), newColumnType);
+                addCustomColumn(newColumnName.trim(), 'text');
                 setShowAddColumnDialog(false);
               }}
             >
