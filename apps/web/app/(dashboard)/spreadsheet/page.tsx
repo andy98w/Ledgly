@@ -2,6 +2,8 @@
 
 import { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { ArrowUpRight, ArrowDownRight, Download, Upload, Filter, Plus, DollarSign, AlertCircle, Search, Minus, ArrowUp, ArrowDown, Trash2, Check, Link2, Loader2, CreditCard, MoreVertical, FileSpreadsheet, ChevronDown, ChevronRight, Layers, Sparkles, Ban, Zap, Columns3, Copy, Calendar, Tag } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/query-keys';
 import { useCharges, useUpdateCharge, useCreateCharge, useCreateMultiCharge, useVoidCharge, useRestoreCharge, useBulkCreateCharges } from '@/lib/queries/charges';
 import { useExpenses, useUpdateExpense, useCreateExpense, useCreateMultiExpense, useDeleteExpense, useRestoreExpense } from '@/lib/queries/expenses';
 import { usePayments, useUpdatePayment, useCreatePayment, useDeletePayment, useRestorePayment, useAllocatePayment, useAutoAllocateToCharge, useBulkAutoAllocate, useBulkCreatePayments } from '@/lib/queries/payments';
@@ -276,6 +278,7 @@ export default function SpreadsheetPage() {
   });
 
   const currentOrgId = useAuthStore((s) => s.currentOrgId);
+  const queryClient = useQueryClient();
   const { toast } = useToast();
   const isAdmin = useIsAdminOrTreasurer();
   const currentMembership = useCurrentMembership();
@@ -1727,6 +1730,10 @@ export default function SpreadsheetPage() {
                     columnId: colId,
                     value: colDef.customType === 'number' ? (Number(v) || null) : (String(v).trim() || null),
                   });
+                  const key = row.type === 'charge' ? queryKeys.charges.all(currentOrgId)
+                    : row.type === 'expense' ? queryKeys.expenses.all(currentOrgId)
+                    : queryKeys.payments.all(currentOrgId);
+                  queryClient.invalidateQueries({ queryKey: key });
                 } catch {}
                 setEditingCell(null);
               }}
@@ -2069,21 +2076,21 @@ export default function SpreadsheetPage() {
                               allCategories={colId === 'category' ? allCategories : undefined}
                             />
                           )}
+                          {isAdmin && colIdx === columnConfig.visibleColumns.length - 1 && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setNewColumnName('');
+                                setNewColumnType('text');
+                                setShowAddColumnDialog(true);
+                              }}
+                              className="ml-2 w-4 h-4 flex items-center justify-center rounded hover:bg-primary/20 hover:text-primary transition-colors text-muted-foreground/30 shrink-0"
+                              title="Add custom column"
+                            >
+                              <Plus className="h-3 w-3" />
+                            </button>
+                          )}
                         </span>
-                        {isAdmin && colIdx === columnConfig.visibleColumns.length - 1 && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setNewColumnName('');
-                              setNewColumnType('text');
-                              setShowAddColumnDialog(true);
-                            }}
-                            className="ml-3 w-5 h-5 flex items-center justify-center rounded hover:bg-primary/20 hover:text-primary transition-colors text-muted-foreground/30 shrink-0"
-                            title="Add custom column"
-                          >
-                            <Plus className="h-3.5 w-3.5" />
-                          </button>
-                        )}
                         <div
                           className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/30 transition-colors"
                           onMouseDown={(e) => onResizeStart(colId, columnConfig.getWidth(colId), e)}
