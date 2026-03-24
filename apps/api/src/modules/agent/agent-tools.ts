@@ -822,6 +822,65 @@ export const agentTools: AgentTool[] = [
       },
     },
   },
+  {
+    requiresConfirmation: false,
+    definition: {
+      name: 'list_custom_columns',
+      description: 'List all custom columns configured for the spreadsheet',
+      input_schema: {
+        type: 'object' as const,
+        properties: {},
+        required: [],
+      },
+    },
+  },
+  {
+    requiresConfirmation: true,
+    definition: {
+      name: 'update_custom_field',
+      description: 'Set a custom column value on a charge, expense, or payment',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          entityType: {
+            type: 'string',
+            enum: ['charge', 'expense', 'payment'],
+            description: 'The type of entity to update',
+          },
+          entityId: { type: 'string', description: 'The ID of the entity' },
+          columnId: { type: 'string', description: 'The custom column ID' },
+          value: { type: 'string', description: 'The value to set' },
+        },
+        required: ['entityType', 'entityId', 'columnId', 'value'],
+      },
+    },
+  },
+  {
+    requiresConfirmation: true,
+    definition: {
+      name: 'manage_columns',
+      description: 'Add, remove, or rename a custom spreadsheet column',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          action: {
+            type: 'string',
+            enum: ['add', 'remove', 'rename'],
+            description: 'The action to perform',
+          },
+          label: { type: 'string', description: 'Column label (required for add)' },
+          type: {
+            type: 'string',
+            enum: ['text', 'number', 'date', 'boolean'],
+            description: 'Column data type (required for add)',
+          },
+          columnId: { type: 'string', description: 'Column ID (required for remove/rename)' },
+          newLabel: { type: 'string', description: 'New label (required for rename)' },
+        },
+        required: ['action'],
+      },
+    },
+  },
 ];
 
 export const toolDefinitions = agentTools.map((t) => t.definition);

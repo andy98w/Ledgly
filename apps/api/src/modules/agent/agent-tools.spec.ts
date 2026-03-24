@@ -2,8 +2,8 @@ import { agentTools, toolDefinitions, toolMap } from './agent-tools';
 
 describe('Agent tool definitions', () => {
   it('exports correct number of tools', () => {
-    expect(agentTools.length).toBe(40);
-    expect(toolDefinitions.length).toBe(40);
+    expect(agentTools.length).toBe(43);
+    expect(toolDefinitions.length).toBe(43);
   });
 
   it('every tool has a unique name', () => {
@@ -25,7 +25,7 @@ describe('Agent tool definitions', () => {
   });
 
   it('read tools do not require confirmation', () => {
-    const readNames = ['list_members', 'list_charges', 'list_payments', 'get_balances', 'list_expenses', 'get_insights', 'generate_report'];
+    const readNames = ['list_members', 'list_charges', 'list_payments', 'get_balances', 'list_expenses', 'get_insights', 'generate_report', 'list_custom_columns'];
     for (const name of readNames) {
       const tool = toolMap.get(name);
       expect(tool).toBeDefined();
@@ -43,6 +43,7 @@ describe('Agent tool definitions', () => {
       'import_csv',
       'restore_charges', 'restore_expenses', 'restore_members',
       'delete_payments', 'restore_payments',
+      'update_custom_field', 'manage_columns',
     ];
     for (const name of writeNames) {
       const tool = toolMap.get(name);

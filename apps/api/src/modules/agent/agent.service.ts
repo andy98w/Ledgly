@@ -12,6 +12,7 @@ import { GmailService } from '../gmail/gmail.service';
 import { DigestSchedulerService } from '../reports/digest-scheduler.service';
 import { PlaidService } from '../plaid/plaid.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { OrganizationsService } from '../organizations/organizations.service';
 import { toolDefinitions, toolMap } from './agent-tools';
 
 interface ChatMessage {
@@ -50,6 +51,7 @@ export class AgentService {
     private gmailService: GmailService,
     private plaidService: PlaidService,
     private prisma: PrismaService,
+    private organizationsService: OrganizationsService,
     private configService: ConfigService,
   ) {
     const apiKey = this.configService.get<string>('ANTHROPIC_API_KEY');
@@ -375,6 +377,10 @@ Return ONLY the JSON object, no markdown or explanation.`;
         return `Deallocated payment`;
       case 'import_csv':
         return `Imported ${args.rows?.length || 0} ${args.type || 'rows'}`;
+      case 'update_custom_field':
+        return `Updated custom field on ${args.entityType}`;
+      case 'manage_columns':
+        return `${args.action === 'add' ? 'Added' : args.action === 'remove' ? 'Removed' : 'Renamed'} custom column`;
       default:
         return `Executed ${toolName}`;
     }
@@ -600,6 +606,9 @@ Return ONLY the JSON object, no markdown or explanation.`;
           return { success: false, error: err.message };
         }
       }
+
+      case 'list_custom_columns':
+        return this.organizationsService.getCustomColumns(orgId);
 
       default:
         throw new Error(`Unknown read tool: ${toolName}`);
@@ -923,6 +932,30 @@ Return ONLY the JSON object, no markdown or explanation.`;
         }
         await this.prisma.organization.update({ where: { id: orgId }, data: { notificationTemplates: templates as any } });
         return { success: true, templateType: args.templateType };
+      }
+
+      case 'update_custom_field':
+        return this.organizationsService.updateCustomField(orgId, args.entityType, args.entityId, args.columnId, args.value);
+
+      case 'manage_columns': {
+        const columns = await this.organizationsService.getCustomColumns(orgId);
+        if (args.action === 'add') {
+          const newCol = { id: `custom_${Date.now()}`, label: args.label, type: args.type };
+          columns.push(newCol);
+          await this.organizationsService.updateCustomColumns(orgId, columns);
+          return { success: true, column: newCol };
+        } else if (args.action === 'remove') {
+          const filtered = columns.filter((c: any) => c.id !== args.columnId);
+          await this.organizationsService.updateCustomColumns(orgId, filtered);
+          return { success: true, removedColumnId: args.columnId };
+        } else if (args.action === 'rename') {
+          const col = columns.find((c: any) => c.id === args.columnId);
+          if (!col) throw new Error(`Column ${args.columnId} not found`);
+          col.label = args.newLabel;
+          await this.organizationsService.updateCustomColumns(orgId, columns);
+          return { success: true, column: col };
+        }
+        throw new Error(`Unknown manage_columns action: ${args.action}`);
       }
 
       default:
