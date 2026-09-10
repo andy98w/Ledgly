@@ -190,7 +190,7 @@ export function Sidebar() {
                   <Tooltip>
                     <DropdownMenuTrigger asChild>
                       <TooltipTrigger asChild>
-                        <button className="w-full flex items-center justify-center p-2.5 rounded-xl bg-secondary/50 hover:bg-secondary transition-colors">
+                        <button className="w-full flex items-center justify-center p-2.5 rounded-md bg-secondary/50 hover:bg-secondary transition-colors">
                           <div className="p-2 rounded-lg bg-primary/10">
                             <Building2 className="h-4 w-4 text-primary" />
                           </div>
@@ -202,7 +202,7 @@ export function Sidebar() {
                 </TooltipProvider>
               ) : (
                 <DropdownMenuTrigger asChild>
-                  <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-secondary/50 hover:bg-secondary transition-colors text-left">
+                  <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md bg-secondary/50 hover:bg-secondary transition-colors text-left">
                     <div className="p-2 rounded-lg bg-primary/10">
                       <Building2 className="h-4 w-4 text-primary" />
                     </div>
@@ -268,7 +268,7 @@ export function Sidebar() {
                   href={item.href}
                   data-tour={`nav-${item.href.replace('/', '')}`}
                   className={cn(
-                    'relative flex items-center gap-3 px-3 rounded-xl text-sm font-medium transition-all',
+                    'relative flex items-center gap-3 px-3 rounded-md text-sm font-medium transition-all',
                     isSecondary ? 'py-2' : 'py-2.5',
                     isCollapsed && 'justify-center px-0',
                     isActive
@@ -278,7 +278,7 @@ export function Sidebar() {
                 >
                   {isActive && (
                     <>
-                      <div className="absolute inset-0 bg-primary/8 rounded-xl transition-all" />
+                      <div className="absolute inset-0 bg-primary/8 rounded-md transition-all" />
                       <div className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-primary" />
                     </>
                   )}
@@ -326,7 +326,7 @@ export function Sidebar() {
                       href="/settings"
                       data-tour="nav-settings"
                       className={cn(
-                        'flex w-full items-center justify-center py-2.5 rounded-xl text-sm font-medium transition-colors',
+                        'flex w-full items-center justify-center py-2.5 rounded-md text-sm font-medium transition-colors',
                         pathname.startsWith('/settings') ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50',
                       )}
                     >
@@ -339,7 +339,7 @@ export function Sidebar() {
                   <TooltipTrigger asChild>
                     <button
                       onClick={() => { logout(); window.location.href = '/login'; }}
-                      className="flex w-full items-center justify-center py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+                      className="flex w-full items-center justify-center py-2.5 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
                     >
                       <LogOut className="h-5 w-5" />
                     </button>
@@ -353,7 +353,7 @@ export function Sidebar() {
                   href="/settings"
                   data-tour="nav-settings"
                   className={cn(
-                    'flex w-full items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors',
+                    'flex w-full items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors',
                     pathname.startsWith('/settings') ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50',
                   )}
                 >
@@ -362,7 +362,7 @@ export function Sidebar() {
                 </Link>
                 <button
                   onClick={() => { logout(); window.location.href = '/login'; }}
-                  className="flex w-full items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+                  className="flex w-full items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
                 >
                   <LogOut className="h-5 w-5" />
                   Sign out

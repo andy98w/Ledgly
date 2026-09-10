@@ -14,7 +14,7 @@ const MotionCard = React.forwardRef<HTMLDivElement, MotionCardProps>(
       <div
         ref={ref}
         className={cn(
-          'rounded-xl bg-card text-card-foreground shadow-layered-sm',
+          'rounded-lg border border-border/70 bg-card text-card-foreground shadow-layered-xs',
           hover && 'transition-shadow duration-150 hover:shadow-layered-md',
           className,
         )}

@@ -47,10 +47,21 @@ export function StatCard({
   delay = 0,
   className,
 }: StatCardProps) {
+  const accent = color === 'amber'
+    ? 'border-l-amber-500'
+    : color === 'emerald'
+      ? 'border-l-emerald-600'
+      : color === 'violet'
+        ? 'border-l-violet-500'
+        : color === 'rose'
+          ? 'border-l-rose-500'
+          : 'border-l-primary';
+
   return (
     <div
       className={cn(
-        'relative overflow-hidden rounded-xl bg-card p-5 shadow-layered-sm',
+        'relative overflow-hidden rounded-lg border border-border/70 border-l-2 bg-card p-5 shadow-layered-xs',
+        accent,
         className,
       )}
     >
