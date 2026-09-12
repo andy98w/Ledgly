@@ -10,6 +10,13 @@ if (!['localhost','127.0.0.1'].includes(url.hostname) || !url.pathname.endsWith(
 
 describe('PostgreSQL payment reliability', () => {
   const db = new PrismaService();
+  let failAudit = false;
+  db.$use(async (params, next) => {
+    if (failAudit && params.model === 'AuditLog' && params.action === 'create') {
+      throw new Error('Injected audit failure');
+    }
+    return next(params);
+  });
   const audit = {logCreate:jest.fn(),logUpdate:jest.fn()};
   const charges = new ChargesService(db, audit as any, {} as any, {} as any);
   const service = new PaymentsService(db, charges, {} as any, audit as any, {} as any);
@@ -45,6 +52,17 @@ describe('PostgreSQL payment reliability', () => {
     const other=await service.create(otherOrg,otherActor,{...dto},'same-request-001');
     expect(other.orgId).toBe(otherOrg);
     await expect(service.create(orgId,actor,{...dto,membershipId:otherActor},'bad-member-001')).rejects.toThrow('Invalid member');
+  });
+  it('rolls back payment and request record when the audit write fails',async()=>{
+    const before = await db.payment.count({where:{orgId}});
+    failAudit = true;
+    try {
+      await expect(service.create(orgId,actor,{...dto},'rollback-request-001')).rejects.toThrow('Injected audit failure');
+    } finally { failAudit = false; }
+    expect(await db.payment.count({where:{orgId}})).toBe(before);
+    expect(await db.paymentRequest.count({where:{orgId,requestKey:'rollback-request-001'}})).toBe(0);
+    const payment = await service.create(orgId,actor,{...dto},'rollback-request-001');
+    expect(payment.id).toBeTruthy();
   });
   it('rejects invalid dates, amounts, and keys',async()=>{
     await expect(service.create(orgId,actor,{...dto,paidAt:'2026-02-30'},'invalid-date-001')).rejects.toThrow();
