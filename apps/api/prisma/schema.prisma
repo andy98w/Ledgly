@@ -9,6 +9,7 @@ datasource db {
 }
 
 model Organization {
+  durableJobs DurableJob[]
   paymentRequests       PaymentRequest[]
   id                    String              @id @default(cuid())
   name                  String
@@ -580,4 +581,22 @@ model Announcement {
   @@index([orgId])
   @@index([orgId, createdAt])
   @@map("announcements")
+}
+
+model DurableJob {
+  id           String   @id
+  orgId        String   @map("org_id")
+  org          Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  requestKey   String   @map("request_key")
+  payload      Json
+  status       String   @default("pending")
+  attempts     Int      @default(0)
+  availableAt  DateTime @default(now()) @map("available_at") @db.Timestamptz
+  leaseUntil   DateTime? @map("lease_until") @db.Timestamptz
+  leaseToken   String?  @map("lease_token")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime @default(now()) @map("updated_at") @db.Timestamptz
+  @@unique([orgId, requestKey])
+  @@index([status, availableAt, leaseUntil], map: "durable_jobs_claim")
+  @@map("durable_jobs")
 }

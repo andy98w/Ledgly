@@ -1,7 +1,7 @@
 name: Payment reliability
 on:
   push:
-    branches: [main, codex/payment-reliability]
+    branches: [main, codex/payment-reliability, codex/durable-payment-jobs]
   pull_request:
   workflow_dispatch:
 permissions:
@@ -32,4 +32,4 @@ jobs:
       - run: pnpm --filter @ledgly/api exec prisma migrate deploy
       - run: pnpm --filter @ledgly/api exec tsc --noEmit
       - run: pnpm --filter @ledgly/api exec tsc -p tsconfig.reliability.json
-      - run: pnpm --filter @ledgly/api exec jest --runInBand payment-reliability.spec.ts
+      - run: pnpm --filter @ledgly/api exec jest --runInBand payment-reliability.spec.ts durable-jobs.spec.ts
