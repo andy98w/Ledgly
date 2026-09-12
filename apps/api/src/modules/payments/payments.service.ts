@@ -355,8 +355,10 @@ export class PaymentsService {
         await tx.auditLog.create({data:{orgId,actorId,entityType:'PAYMENT',entityId:payment.id,action:'CREATE',
           diffJson:{after:{amountCents:payment.amountCents,paidAt:payload.paidAt}},source:'idempotent-api'}});
         const response = JSON.parse(JSON.stringify({...payment,allocationResult:{allocated:false,reason:'Explicit allocation required'}}));
-        await tx.paymentRequest.create({data:{orgId,requestKey:key,fingerprint,response}});
-        return response;
+        const committedRequest = await tx.paymentRequest.create({data:{orgId,requestKey:key,fingerprint,response}});
+        // Return PostgreSQL's JSON representation on the first call too, so
+        // replay has the same field ordering as the original response.
+        return committedRequest.response;
       });
     } catch (error: any) {
       // The unique-key loser rolled back its payment and audit before replay.
