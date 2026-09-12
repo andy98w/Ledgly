@@ -338,9 +338,16 @@ export class PaymentsService {
     const payload = { membershipId: dto.membershipId || null, amountCents: dto.amountCents,
       paidAt: dto.paidAt, rawPayerName: sanitizeText(dto.rawPayerName) || null, memo: sanitizeText(dto.memo) || null };
     const fingerprint = createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+    const readResponse = (response: Prisma.JsonValue) => {
+      if (!response || typeof response !== 'object' || Array.isArray(response) ||
+          typeof response.id !== 'string' || typeof response.orgId !== 'string') {
+        throw new Error('Invalid stored payment response');
+      }
+      return response as Prisma.JsonObject & { id: string; orgId: string };
+    };
     const replay = (saved: {fingerprint: string; response: Prisma.JsonValue}) => {
       if (saved.fingerprint !== fingerprint) throw new ConflictException('Idempotency-Key was used with different payment data');
-      return saved.response;
+      return readResponse(saved.response);
     };
     try {
       return await serializable(this.prisma, async tx => {
@@ -358,7 +365,7 @@ export class PaymentsService {
         const committedRequest = await tx.paymentRequest.create({data:{orgId,requestKey:key,fingerprint,response}});
         // Return PostgreSQL's JSON representation on the first call too, so
         // replay has the same field ordering as the original response.
-        return committedRequest.response;
+        return readResponse(committedRequest.response);
       });
     } catch (error: any) {
       // The unique-key loser rolled back its payment and audit before replay.
