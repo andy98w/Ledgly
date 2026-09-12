@@ -9,6 +9,7 @@ datasource db {
 }
 
 model Organization {
+  paymentRequests       PaymentRequest[]
   id                    String              @id @default(cuid())
   name                  String
   timezone              String              @default("America/New_York")
@@ -203,6 +204,19 @@ model PaymentAllocation {
   @@index([paymentId])
   @@index([chargeId])
   @@map("payment_allocations")
+}
+
+model PaymentRequest {
+  id          String       @id @default(cuid())
+  orgId       String       @map("org_id")
+  requestKey  String       @map("request_key")
+  fingerprint String
+  response    Json
+  createdAt   DateTime     @default(now()) @map("created_at")
+  org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, requestKey])
+  @@map("payment_requests")
 }
 
 model AuditLog {

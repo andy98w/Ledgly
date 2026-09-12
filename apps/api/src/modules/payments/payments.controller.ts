@@ -188,7 +188,7 @@ export class PaymentsController {
   @Roles('ADMIN', 'TREASURER')
   async create(@Param('orgId') orgId: string, @Body() dto: CreatePaymentDto, @Req() req: any) {
     const membershipId = req.membership.id;
-    return this.paymentsService.create(orgId, membershipId, dto);
+    return this.paymentsService.create(orgId, membershipId, dto, req.headers['idempotency-key']);
   }
 
   @Post(':id/allocate')

@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { createHash } from 'crypto';
+import { serializable } from '../../prisma/serializable';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ChargesService } from '../charges/charges.service';
 import { ExpensesService } from '../expenses/expenses.service';
@@ -228,7 +230,8 @@ export class PaymentsService {
     };
   }
 
-  async create(orgId: string, createdById: string, dto: CreatePaymentDto) {
+  async create(orgId: string, createdById: string, dto: CreatePaymentDto, requestKey?: string) {
+    if (requestKey !== undefined) return this.createIdempotent(orgId, createdById, dto, requestKey);
     dto.rawPayerName = sanitizeText(dto.rawPayerName) ?? undefined;
     dto.memo = sanitizeText(dto.memo) ?? undefined;
 
@@ -239,7 +242,7 @@ export class PaymentsService {
     endOfDay.setHours(23, 59, 59, 999);
 
     // Wrap duplicate check + create in a transaction to prevent TOCTOU race
-    const payment = await this.prisma.$transaction(async (tx) => {
+    const payment = await serializable(this.prisma, async (tx) => {
       const existing = await tx.payment.findFirst({
         where: {
           orgId,
@@ -319,6 +322,51 @@ export class PaymentsService {
     return { ...payment, allocationResult };
   }
 
+
+  // Idempotent creation deliberately leaves allocation/notification as separate
+  // actions. The immutable response and audit row commit with the payment.
+  private async createIdempotent(orgId: string, actorId: string, dto: CreatePaymentDto, key: string) {
+    if (typeof key !== 'string' || !/^[A-Za-z0-9._:-]{8,128}$/.test(key)) {
+      throw new BadRequestException('Idempotency-Key must contain 8–128 URL-safe characters');
+    }
+    if (!Number.isSafeInteger(dto.amountCents) || dto.amountCents < 1 || dto.amountCents > 99_999_999 ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(dto.paidAt) ||
+        !Number.isFinite(Date.parse(dto.paidAt + 'T12:00:00Z')) ||
+        new Date(dto.paidAt + 'T12:00:00Z').toISOString().slice(0,10) !== dto.paidAt) {
+      throw new BadRequestException('A positive integer amount and valid ISO date are required');
+    }
+    const payload = { membershipId: dto.membershipId || null, amountCents: dto.amountCents,
+      paidAt: dto.paidAt, rawPayerName: sanitizeText(dto.rawPayerName) || null, memo: sanitizeText(dto.memo) || null };
+    const fingerprint = createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+    const replay = (saved: {fingerprint: string; response: Prisma.JsonValue}) => {
+      if (saved.fingerprint !== fingerprint) throw new ConflictException('Idempotency-Key was used with different payment data');
+      return saved.response;
+    };
+    try {
+      return await serializable(this.prisma, async tx => {
+        const saved = await tx.paymentRequest.findUnique({where:{orgId_requestKey:{orgId,requestKey:key}}});
+        if (saved) return replay(saved);
+        const actor = await tx.membership.findFirst({where:{id:actorId,orgId}});
+        if (!actor) throw new BadRequestException('Invalid actor');
+        if (payload.membershipId && !await tx.membership.findFirst({where:{id:payload.membershipId,orgId}})) {
+          throw new BadRequestException('Invalid member');
+        }
+        const payment = await tx.payment.create({data:{...payload,paidAt:new Date(payload.paidAt+'T12:00:00Z'),orgId,createdById:actorId,source:'manual'}});
+        await tx.auditLog.create({data:{orgId,actorId,entityType:'PAYMENT',entityId:payment.id,action:'CREATE',
+          diffJson:{after:{amountCents:payment.amountCents,paidAt:payload.paidAt}},source:'idempotent-api'}});
+        const response = JSON.parse(JSON.stringify({...payment,allocationResult:{allocated:false,reason:'Explicit allocation required'}}));
+        await tx.paymentRequest.create({data:{orgId,requestKey:key,fingerprint,response}});
+        return response;
+      });
+    } catch (error: any) {
+      // The unique-key loser rolled back its payment and audit before replay.
+      if (error?.code !== 'P2002') throw error;
+      const saved = await this.prisma.paymentRequest.findUnique({where:{orgId_requestKey:{orgId,requestKey:key}}});
+      if (!saved) throw error;
+      return replay(saved);
+    }
+  }
+
   async bulkCreate(orgId: string, createdById: string, items: CreatePaymentDto[]) {
     const results: any[] = [];
     const errors: string[] = [];
@@ -336,15 +384,19 @@ export class PaymentsService {
   }
 
   async allocate(orgId: string, paymentId: string, createdById: string, dto: AllocatePaymentDto) {
-    const chargeIds = dto.allocations.map((a) => a.chargeId);
+    const chargeIds = dto.allocations.map((a) => a.chargeId).sort();
+    if (!chargeIds.length || new Set(chargeIds).size !== chargeIds.length ||
+        dto.allocations.some(a => !Number.isSafeInteger(a.amountCents) || a.amountCents <= 0)) {
+      throw new BadRequestException('Allocations require distinct charges and positive integer amounts');
+    }
 
-    const { createdAllocations, charges, paymentRawPayerName } = await this.prisma.$transaction(async (tx) => {
+    const { createdAllocations, charges, paymentRawPayerName } = await serializable(this.prisma, async (tx) => {
       // Lock the payment row
-      await tx.$queryRaw`SELECT 1 FROM payments WHERE id = ${paymentId} FOR UPDATE`;
+      await tx.$queryRaw`SELECT 1 FROM payments WHERE id = ${paymentId} AND org_id = ${orgId} FOR UPDATE`;
 
       // Lock all charge rows
       for (const cId of chargeIds) {
-        await tx.$queryRaw`SELECT 1 FROM charges WHERE id = ${cId} FOR UPDATE`;
+        await tx.$queryRaw`SELECT 1 FROM charges WHERE id = ${cId} AND org_id = ${orgId} FOR UPDATE`;
       }
 
       const payment = await tx.payment.findFirst({
@@ -433,7 +485,8 @@ export class PaymentsService {
     if (dto.rawPayerName !== undefined) dto.rawPayerName = sanitizeText(dto.rawPayerName) ?? undefined;
     if (dto.memo !== undefined) dto.memo = sanitizeText(dto.memo) ?? undefined;
 
-    const payment = await this.prisma.payment.findFirst({
+    const {payment,updated} = await serializable(this.prisma, async tx => {
+    const payment = await tx.payment.findFirst({
       where: { id: paymentId, orgId, deletedAt: null },
       include: {
         allocations: {
@@ -454,7 +507,13 @@ export class PaymentsService {
       }
     }
 
-    const updated = await this.prisma.payment.update({
+    if (dto.membershipId && !await tx.membership.findFirst({where:{id:dto.membershipId,orgId}})) {
+      throw new BadRequestException('Invalid member');
+    }
+    if (dto.amountCents !== undefined && (!Number.isSafeInteger(dto.amountCents) || dto.amountCents < 1)) {
+      throw new BadRequestException('A positive integer amount is required');
+    }
+    const updated = await tx.payment.update({
       where: { id: paymentId },
       data: {
         ...(dto.membershipId !== undefined && { membershipId: dto.membershipId }),
@@ -463,6 +522,9 @@ export class PaymentsService {
         ...(dto.rawPayerName !== undefined && { rawPayerName: dto.rawPayerName }),
         ...(dto.memo !== undefined && { memo: dto.memo }),
       },
+    });
+
+    return {payment,updated};
     });
 
     // Log audit entry for update
@@ -496,7 +558,7 @@ export class PaymentsService {
   }
 
   async delete(orgId: string, paymentId: string, actorId?: string, batch?: { batchId: string; batchDescription: string }) {
-    const { affectedChargeIds, paymentData } = await this.prisma.$transaction(async (tx) => {
+    const { affectedChargeIds, paymentData } = await serializable(this.prisma, async (tx) => {
       const payment = await tx.payment.findFirst({
         where: { id: paymentId, orgId, deletedAt: null },
         include: { allocations: { select: { chargeId: true } } },
@@ -601,7 +663,7 @@ export class PaymentsService {
   }
 
   async removeAllocation(orgId: string, allocationId: string, actorId?: string, batch?: { batchId: string; batchDescription: string }) {
-    const allocationData = await this.prisma.$transaction(async (tx) => {
+    const allocationData = await serializable(this.prisma, async (tx) => {
       const allocation = await tx.paymentAllocation.findFirst({
         where: { id: allocationId, orgId },
         include: {
@@ -763,7 +825,7 @@ export class PaymentsService {
     const finalMembershipId = membershipId;
 
     // Transaction: lock payment, read charges, create allocations, update statuses
-    const result = await this.prisma.$transaction(async (tx) => {
+    const result = await serializable(this.prisma, async (tx) => {
       // Lock the payment row
       await tx.$queryRaw`SELECT 1 FROM payments WHERE id = ${paymentId} FOR UPDATE`;
 
@@ -919,9 +981,9 @@ export class PaymentsService {
     chargeId: string,
     createdById: string,
   ) {
-    const result = await this.prisma.$transaction(async (tx) => {
+    const result = await serializable(this.prisma, async (tx) => {
       // Lock the charge row
-      await tx.$queryRaw`SELECT 1 FROM charges WHERE id = ${chargeId} FOR UPDATE`;
+      await tx.$queryRaw`SELECT 1 FROM charges WHERE id = ${chargeId} AND org_id = ${orgId} FOR UPDATE`;
 
       const charge = await tx.charge.findFirst({
         where: { id: chargeId, orgId, status: { not: 'VOID' } },
