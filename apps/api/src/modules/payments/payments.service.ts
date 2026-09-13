@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import { recordPaymentNotice } from '../notifications/payment-outbox';
 import { Prisma } from '@prisma/client';
 import { createHash } from 'crypto';
 import { serializable } from '../../prisma/serializable';
@@ -281,7 +282,7 @@ export class PaymentsService {
         }
       }
 
-      return tx.payment.create({
+      const created = await tx.payment.create({
         data: {
           orgId,
           membershipId: dto.membershipId,
@@ -293,14 +294,9 @@ export class PaymentsService {
           createdById,
         },
       });
-    });
-
-    // Audit log (best-effort, outside tx)
-    await this.auditService.logCreate(orgId, createdById, 'PAYMENT', payment.id, {
-      amountCents: payment.amountCents,
-      paidAt: payment.paidAt,
-      rawPayerName: payment.rawPayerName,
-      memo: payment.memo,
+      await tx.auditLog.create({data:{orgId,actorId:createdById,entityType:'PAYMENT',entityId:created.id,action:'CREATE',diffJson:{after:{amountCents:created.amountCents}},source:'manual-api'}});
+      await recordPaymentNotice(tx,orgId,created.id,created.rawPayerName || 'Someone',created.amountCents);
+      return created;
     });
 
     // Auto-allocate to matching charges (best-effort)
@@ -311,20 +307,11 @@ export class PaymentsService {
       // Allocation failure must not block payment creation
     }
 
-    try {
-      await this.notificationChannels.notifyPaymentReceived(
-        orgId,
-        payment.rawPayerName || 'Someone',
-        (payment.amountCents / 100).toFixed(2),
-      );
-    } catch {}
-
     return { ...payment, allocationResult };
   }
 
 
-  // Idempotent creation deliberately leaves allocation/notification as separate
-  // actions. The immutable response and audit row commit with the payment.
+  // Allocation remains explicit. Payment, audit, notices and replay result commit together.
   private async createIdempotent(orgId: string, actorId: string, dto: CreatePaymentDto, key: string) {
     if (typeof key !== 'string' || !/^[A-Za-z0-9._:-]{8,128}$/.test(key)) {
       throw new BadRequestException('Idempotency-Key must contain 8–128 URL-safe characters');
@@ -361,6 +348,7 @@ export class PaymentsService {
         const payment = await tx.payment.create({data:{...payload,paidAt:new Date(payload.paidAt+'T12:00:00Z'),orgId,createdById:actorId,source:'manual'}});
         await tx.auditLog.create({data:{orgId,actorId,entityType:'PAYMENT',entityId:payment.id,action:'CREATE',
           diffJson:{after:{amountCents:payment.amountCents,paidAt:payload.paidAt}},source:'idempotent-api'}});
+        await recordPaymentNotice(tx,orgId,payment.id,payment.rawPayerName || 'Someone',payment.amountCents);
         const response = JSON.parse(JSON.stringify({...payment,allocationResult:{allocated:false,reason:'Explicit allocation required'}}));
         const committedRequest = await tx.paymentRequest.create({data:{orgId,requestKey:key,fingerprint,response}});
         // Return PostgreSQL's JSON representation on the first call too, so

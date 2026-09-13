@@ -32,4 +32,9 @@ jobs:
       - run: pnpm --filter @ledgly/api exec prisma migrate deploy
       - run: pnpm --filter @ledgly/api exec tsc --noEmit
       - run: pnpm --filter @ledgly/api exec tsc -p tsconfig.reliability.json
-      - run: pnpm --filter @ledgly/api exec jest --runInBand payment-reliability.spec.ts durable-jobs.spec.ts
+      - run: pnpm --filter @ledgly/api exec jest --runInBand payment-reliability.spec.ts durable-jobs.spec.ts gmail-reliability.spec.ts
+      - name: Kill worker and restore database snapshot
+        working-directory: apps/api
+        env:
+          PG_CONTAINER: ${{ job.services.postgres.id }}
+        run: node scripts/recovery-drill.cjs

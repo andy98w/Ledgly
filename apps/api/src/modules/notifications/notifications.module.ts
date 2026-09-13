@@ -1,3 +1,4 @@
+import { OutboxWorkerService } from './outbox-worker.service';
 import { Module, Global } from '@nestjs/common';
 import { GroupMeModule } from '../groupme/groupme.module';
 import { NotificationsController } from './notifications.controller';
@@ -10,7 +11,7 @@ import { SlackController } from './slack.controller';
 @Module({
   imports: [GroupMeModule],
   controllers: [NotificationsController, DiscordController, SlackController],
-  providers: [NotificationsService, NotificationChannelsService],
+  providers: [OutboxWorkerService, NotificationsService, NotificationChannelsService],
   exports: [NotificationsService, NotificationChannelsService],
 })
 export class NotificationsModule {}

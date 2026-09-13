@@ -75,6 +75,7 @@ export class GmailPublicController {
 
 @Controller('organizations/:orgId/gmail')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
+@Roles('ADMIN', 'TREASURER')
 export class GmailController {
   constructor(private readonly gmailService: GmailService) {}
 
@@ -95,14 +96,15 @@ export class GmailController {
 
   @Delete('disconnect/:connectionId')
   @Roles('ADMIN', 'TREASURER')
-  async disconnect(@Param('connectionId') connectionId: string, @Req() req: any) {
+  async disconnect(@Param('orgId') orgId:string, @Param('connectionId') connectionId: string, @Req() req: any) {
+    await this.gmailService.assertOwned(orgId,connectionId,'connection');
     await this.gmailService.disconnect(connectionId, req.membership?.id);
     return { success: true };
   }
 
   @Post('sync')
   async sync(@Param('orgId') orgId: string) {
-    const result = await this.gmailService.syncEmails(orgId);
+    const result = await this.gmailService.requestSync(orgId);
     return result;
   }
 
@@ -135,14 +137,16 @@ export class GmailController {
 
   @Post('imports/:importId/ignore')
   @Roles('ADMIN', 'TREASURER')
-  async ignoreImport(@Param('importId') importId: string) {
+  async ignoreImport(@Param('orgId') orgId:string, @Param('importId') importId: string) {
+    await this.gmailService.assertOwned(orgId,importId,'import');
     await this.gmailService.ignoreImport(importId);
     return { success: true };
   }
 
   @Post('imports/:importId/restore')
   @Roles('ADMIN', 'TREASURER')
-  async restoreImport(@Param('importId') importId: string) {
+  async restoreImport(@Param('orgId') orgId:string, @Param('importId') importId: string) {
+    await this.gmailService.assertOwned(orgId,importId,'import');
     await this.gmailService.restoreImport(importId);
     return { success: true };
   }

@@ -1,8 +1,8 @@
 import { DurableJobsService, Job } from './durable-jobs.service';
 
 /** Handlers must make their effects idempotent; a lease is not exactly-once delivery. */
-export async function runOne(queue: DurableJobsService, handler: (job: Job) => Promise<void>) {
-  const job = await queue.claim();
+export async function runOne(queue: DurableJobsService, handler: (job: Job) => Promise<void>, kind = 'fixture') {
+  const job = await queue.claim(kind);
   if (!job) return 'idle';
   let lostLease = false;
   const heartbeat = setInterval(() => {

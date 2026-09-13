@@ -584,6 +584,7 @@ model Announcement {
 }
 
 model DurableJob {
+  kind String @default("fixture")
   id           String   @id
   orgId        String   @map("org_id")
   org          Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
@@ -598,5 +599,6 @@ model DurableJob {
   updatedAt    DateTime @default(now()) @map("updated_at") @db.Timestamptz
   @@unique([orgId, requestKey])
   @@index([status, availableAt, leaseUntil], map: "durable_jobs_claim")
+  @@index([kind, status, availableAt, leaseUntil], map: "durable_jobs_kind_claim")
   @@map("durable_jobs")
 }

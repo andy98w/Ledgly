@@ -1,3 +1,4 @@
+import { JobsModule } from './modules/jobs/jobs.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -30,6 +31,7 @@ import { AnnouncementsModule } from './modules/announcements/announcements.modul
     ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
     PrismaModule,
+    JobsModule,
     AuditModule,
     AuthModule,
     OrganizationsModule,

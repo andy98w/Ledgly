@@ -1,4 +1,5 @@
 import { ConflictException, Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -16,28 +17,28 @@ export interface Job {
 export class DurableJobsService {
   constructor(private readonly db: PrismaService) {}
 
-  async enqueue(orgId: string, key: string, payload: Record<string, unknown>) {
+  async enqueue(orgId: string, key: string, payload: Record<string, unknown>, kind = 'fixture', tx: Prisma.TransactionClient = this.db) {
     if (!/^[\w.:-]{8,128}$/.test(key)) throw new Error('Invalid job key');
     const encoded = JSON.stringify(payload);
     if (Buffer.byteLength(encoded) > 65536) throw new Error('Job payload too large');
-    const rows = await this.db.$queryRaw<{id: string}[]>`
-      INSERT INTO durable_jobs(id, org_id, request_key, payload)
-      VALUES (${randomUUID()}, ${orgId}, ${key}, ${encoded}::jsonb)
+    const rows = await tx.$queryRaw<{id: string}[]>`
+      INSERT INTO durable_jobs(id, org_id, request_key, payload, kind)
+      VALUES (${randomUUID()}, ${orgId}, ${key}, ${encoded}::jsonb, ${kind})
       ON CONFLICT (org_id, request_key) DO UPDATE SET request_key = EXCLUDED.request_key
-      WHERE durable_jobs.payload = EXCLUDED.payload
+      WHERE durable_jobs.payload = EXCLUDED.payload AND durable_jobs.kind = EXCLUDED.kind
       RETURNING id`;
     if (!rows.length) throw new ConflictException('Job key reused with different payload');
     return rows[0].id;
   }
 
-  async claim(): Promise<Job | null> {
+  async claim(kind = 'fixture'): Promise<Job | null> {
     // A crashed final attempt must become inspectable, not stay running forever.
     await this.db.$executeRaw`
       UPDATE durable_jobs SET status='failed', lease_token=NULL, lease_until=NULL, updated_at=now()
-      WHERE status='running' AND lease_until <= now() AND attempts >= 5`;
+      WHERE kind=${kind} AND status='running' AND lease_until <= now() AND attempts >= 5`;
     const rows = await this.db.$queryRaw<Job[]>`
       WITH candidate AS (
-        SELECT id FROM durable_jobs WHERE attempts < 5 AND
+        SELECT id FROM durable_jobs WHERE kind=${kind} AND attempts < 5 AND
         ((status='pending' AND available_at <= now()) OR (status='running' AND lease_until <= now()))
         ORDER BY available_at, created_at, id FOR UPDATE SKIP LOCKED LIMIT 1
       )
@@ -70,9 +71,9 @@ export class DurableJobsService {
       AND lease_token=${job.lease_token} AND lease_until > now()`) === 1;
   }
 
-  async replay(orgId: string, id: string) {
+  async replay(orgId: string, id: string, kind = 'fixture') {
     return (await this.db.$executeRaw`
       UPDATE durable_jobs SET status='pending', attempts=0, available_at=now(), updated_at=now()
-      WHERE id=${id} AND org_id=${orgId} AND status='failed'`) === 1;
+      WHERE id=${id} AND org_id=${orgId} AND kind=${kind} AND status='failed'`) === 1;
   }
 }

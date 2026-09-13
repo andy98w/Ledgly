@@ -49,7 +49,7 @@ export class GmailSchedulerService {
       for (const org of orgsWithGmail) {
         try {
           this.logger.log(`Syncing Gmail for org: ${org.name} (${org.id})`);
-          const result = await this.gmailService.syncEmails(org.id);
+          const result = await this.gmailService.requestSync(org.id);
           this.logger.log(
             `Synced org ${org.name}: ${result.imported} imported, ${result.skipped} skipped`,
           );

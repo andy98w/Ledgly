@@ -1,3 +1,4 @@
+import { GmailWorkerService } from './gmail-worker.service';
 import { Module, forwardRef } from '@nestjs/common';
 import { GmailController, GmailPublicController } from './gmail.controller';
 import { GmailService } from './gmail.service';
@@ -11,7 +12,7 @@ import { AuthModule } from '../auth/auth.module';
 @Module({
   imports: [forwardRef(() => ChargesModule), AuthModule],
   controllers: [GmailController, GmailPublicController],
-  providers: [GmailService, EmailParserService, PaymentMatcherService, ExpenseMatcherService, GmailSchedulerService],
+  providers: [GmailWorkerService, GmailService, EmailParserService, PaymentMatcherService, ExpenseMatcherService, GmailSchedulerService],
   exports: [GmailService],
 })
 export class GmailModule {}
