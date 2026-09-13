@@ -7,7 +7,7 @@ the same submission. A changed payload with the same key returns 409.
 Keys are scoped to an organization and this creation operation. The payment,
 audit record and replay response commit in one PostgreSQL transaction. Keyed
 creation deliberately leaves allocation to the explicit allocation endpoint;
-it does not send notifications. Existing unkeyed clients retain the old flow.
+it records in-app notices and per-channel outbox jobs atomically. Existing unkeyed clients retain the old flow.
 This is not an exactly-once guarantee for Gmail ingestion or email delivery.
 
 Payment allocation transactions use serializable isolation with four bounded
@@ -24,4 +24,4 @@ development database that contains real records.
 These changes require the new migration before keyed requests can be used.
 They have not been deployed to the public service. Request records currently
 have no retention policy; deleting them would end the replay guarantee for
-those keys. A shared notification outbox is separate future work.
+those keys. See `durable-jobs.md` for the implemented payment notification outbox and its rollout flags.

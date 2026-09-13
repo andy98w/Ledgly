@@ -1,3 +1,5 @@
+import { Reflector } from '@nestjs/core';
+import { RolesGuard } from '../../common/guards';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GmailService } from './gmail.service';
@@ -101,4 +103,34 @@ describe('Gmail ingestion and notification outbox',()=>{
   expect(await db.auditLog.count({where:{orgId:org,entityType:'JOB',action:'REPLAY'}})).toBe(1);
   await db.auditLog.deleteMany({where:{actorId:actor.id}});await db.membership.delete({where:{id:actor.id}});
  });
+ it('operators cannot access another organization or act as an ordinary member',async()=>{
+  const user=await db.user.create({data:{email:`${org}@example.invalid`}});
+  const membership=await db.membership.create({data:{orgId:org,userId:user.id,role:'MEMBER',status:'ACTIVE'}});
+  try {
+   const guard=new RolesGuard(new Reflector(),db);
+   const request:any={params:{orgId:org},user:{userId:user.id}};
+   const context:any={getHandler:()=>JobsController.prototype.list,getClass:()=>JobsController,switchToHttp:()=>({getRequest:()=>request})};
+   expect(await guard.canActivate(context)).toBe(false);
+   await db.membership.update({where:{id:membership.id},data:{role:'ADMIN'}});
+   delete request.membership;
+   expect(await guard.canActivate(context)).toBe(true);
+   request.params.orgId=other;
+   expect(await guard.canActivate(context)).toBe(false);
+  } finally {await db.membership.delete({where:{id:membership.id}});await db.user.delete({where:{id:user.id}});}
+ });
+ it('disabled delivery workers leave outbox jobs pending',async()=>{
+  await queue.enqueue(org,'disabled-notice-001',{channel:'slack',connectionId:'missing',text:'fixture'},'notification');
+  await new OutboxWorkerService(db,queue,config).tick();
+  expect(await db.durableJob.count({where:{orgId:org,status:'pending'}})).toBe(1);
+  expect(global.fetch).not.toHaveBeenCalled();
+ });
+ it('disconnecting a destination suppresses delayed delivery',async()=>{
+  const c=await db.slackConnection.create({data:{orgId:org,webhookUrl:'https://hooks.slack.com/services/fixture'}});
+  await queue.enqueue(org,'disconnected-notice-001',{channel:'slack',connectionId:c.id,text:'fixture'},'notification');
+  await db.slackConnection.update({where:{id:c.id},data:{isActive:false}});
+  const worker=new OutboxWorkerService(db,queue,config);
+  expect(await runOne(queue,j=>worker.deliver(j),'notification')).toBe('succeeded');
+  expect(global.fetch).not.toHaveBeenCalled();
+ });
+
 });

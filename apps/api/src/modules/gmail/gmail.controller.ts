@@ -36,7 +36,7 @@ export class GmailPublicController {
     @Res() res: Response,
   ) {
     const membership = await this.prisma.membership.findFirst({
-      where: { orgId, userId: req.user.id, status: 'ACTIVE', role: { in: ['OWNER', 'ADMIN'] } },
+      where: { orgId, userId: req.user.userId, status: 'ACTIVE', role: { in: ['OWNER', 'ADMIN'] } },
       select: { id: true },
     });
     if (!membership) {

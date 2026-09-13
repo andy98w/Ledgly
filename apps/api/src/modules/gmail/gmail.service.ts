@@ -225,7 +225,7 @@ export class GmailService {
         const key='gmail-page:'+createHash('sha256').update(connection.id+':'+next+':'+String(payload.scanId)).digest('hex');
         await this.jobs.enqueue(orgId,key,{connectionId:connection.id,pageToken:next,scanId:payload.scanId,query},'gmail-scan',tx);
       }
-      await tx.gmailConnection.update({where:{id:connection.id},data:{lastSyncAt:new Date()}});
+      if (!response.data.nextPageToken) await tx.gmailConnection.update({where:{id:connection.id},data:{lastSyncAt:new Date()}});
     });
   }
 
@@ -319,7 +319,7 @@ export class GmailService {
     tokenExpiresAt: Date;
     id: string;
   }): Promise<gmail_v1.Gmail> {
-    const client = new google.auth.OAuth2(this.configService.get('GOOGLE_CLIENT_ID'), this.configService.get('GOOGLE_CLIENT_SECRET'), this.configService.get('GOOGLE_REDIRECT_URI'));
+    const client = new google.auth.OAuth2({clientId:this.configService.get('GOOGLE_CLIENT_ID'),clientSecret:this.configService.get('GOOGLE_CLIENT_SECRET'),redirectUri:this.configService.get('GOOGLE_REDIRECT_URI'),transporterOptions:{timeout:15000}});
     client.setCredentials({
       access_token: connection.accessToken,
       refresh_token: connection.refreshToken,
@@ -450,7 +450,7 @@ export class GmailService {
         const imported = await tx.emailImport.findUniqueOrThrow({where:{gmailConnectionId_messageId:{gmailConnectionId:connection.id,messageId}}});
         const entityId = imported.paymentId || imported.expenseId;
         if (entityId) {
-          await tx.auditLog.create({data:{orgId:connection.orgId,entityType:imported.paymentId?'PAYMENT':'EXPENSE',entityId,action:'CREATE',source:'gmail_auto_import',diffJson:{after:{amountCents:parsed.amount,source:'gmail_auto_import'}}}});
+          await tx.auditLog.create({data:{orgId:connection.orgId,entityType:imported.paymentId?'PAYMENT':'EXPENSE',entityId,action:'CREATE',source:'gmail_auto_import',diffJson:{after:{amountCents:parsed.amount,paidAt:emailDate.toISOString(),rawPayerName:parsed.payerName,memo:parsed.memo,source:'gmail_auto_import'}},batchId:syncBatch?.batchId,batchDescription:syncBatch?.batchDescription}});
           if (imported.paymentId) await recordPaymentNotice(tx,connection.orgId,entityId,parsed.payerName || 'Someone',parsed.amount!);
         }
       }

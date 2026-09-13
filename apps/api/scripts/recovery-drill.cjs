@@ -48,6 +48,17 @@ async function main(){
   });
   const exited=new Promise(resolve=>worker.once('exit',resolve));worker.kill('SIGKILL');await exited;
  } finally {worker.kill('SIGKILL');}
+ const container=process.env.PG_CONTAINER;
+ if(!container || !/^[a-zA-Z0-9_-]+$/.test(container))throw new Error('Explicit CI container required');
+ assert.equal(spawnSync('docker',['stop',container]).status,0);
+ try {await assert.rejects(()=>q.claim('recovery-fixture'));}
+ finally {assert.equal(spawnSync('docker',['start',container]).status,0);}
+ let ready=false;
+ for(let attempt=0;attempt<20;attempt++){
+  if(spawnSync('docker',['exec',container,'pg_isready','-U','fixture'],{stdio:'ignore'}).status===0){ready=true;break;}
+  await new Promise(resolve=>setTimeout(resolve,500));
+ }
+ assert(ready,'Database did not recover');
  const before=await snapshot(db,org);assert.equal(before.payments,1);assert.equal(before.cents,2500);
  const started=Date.now();
  const dump=docker(['pg_dump','-U','fixture','-d','ledgly_test','-Fc']);
@@ -62,7 +73,7 @@ async function main(){
   await restored.durableJob.update({where:{id},data:{leaseUntil:new Date(0)}});
   assert.equal(await runOne(new DurableJobsService(restored),j=>effect(restored,j),'recovery-fixture'),'succeeded');
   assert.deepEqual(await snapshot(restored,org),before);
-  console.log(JSON.stringify({drill:'SIGKILL after payment commit, dump/restore, redelivery',passed:true,restored:before,restoreAndVerifyMs:Date.now()-started,scope:'synthetic CI fixture; not a production RTO/RPO guarantee'}));
+  console.log(JSON.stringify({drill:'SIGKILL after payment commit, dump/restore, redelivery',passed:true,databaseRestartVerified:true,restored:before,restoreAndVerifyMs:Date.now()-started,scope:'synthetic CI fixture; not a production RTO/RPO guarantee'}));
  } finally {await restored.$disconnect();await db.$disconnect();}
 }
 (process.argv.includes('--worker')?child():main()).catch(async e=>{console.error(e);await db.$disconnect();process.exit(1);});
