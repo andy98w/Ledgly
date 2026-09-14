@@ -49,9 +49,9 @@ export class GmailSchedulerService {
       for (const org of orgsWithGmail) {
         try {
           this.logger.log(`Syncing Gmail for org: ${org.name} (${org.id})`);
-          const result = await this.gmailService.syncEmails(org.id);
+          const result = await this.gmailService.requestSync(org.id);
           this.logger.log(
-            `Synced org ${org.name}: ${result.imported} imported, ${result.skipped} skipped`,
+            'queued' in result ? `Queued Gmail discovery for ${org.id}` : `Synced ${org.id}: ${result.imported} imported, ${result.skipped} skipped`,
           );
         } catch (error: any) {
           this.logger.error(`Failed to sync org ${org.name}: ${error.message}`);

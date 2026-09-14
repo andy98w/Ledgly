@@ -8,21 +8,38 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: fixture
+          POSTGRES_PASSWORD: fixture
+          POSTGRES_DB: ledgly_test
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      JWT_SECRET: disposable-ci-fixture-not-for-production
+      DATABASE_URL: postgresql://fixture:fixture@127.0.0.1:5432/ledgly_test
+      DIRECT_DATABASE_URL: postgresql://fixture:fixture@127.0.0.1:5432/ledgly_test
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        run: pnpm --filter api db:generate
+      - name: Build shared types
+        run: pnpm --filter @ledgly/shared build
       - name: Type check API
         run: pnpm --filter api exec tsc --noEmit
       - name: Type check Web
         run: pnpm --filter web exec tsc --noEmit
       - name: Lint
-        run: pnpm --filter api lint && pnpm --filter web lint
+        run: pnpm --filter api exec eslint 'src/**/*.ts' && pnpm --filter web lint
       - name: Test API
-        run: pnpm --filter api test -- --runInBand --passWithNoTests
+        run: |
+          pnpm --filter api exec prisma migrate deploy
+          pnpm --filter api exec jest --runInBand

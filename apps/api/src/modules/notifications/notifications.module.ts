@@ -1,5 +1,7 @@
+import { OutboxWorkerService } from './outbox-worker.service';
 import { Module, Global } from '@nestjs/common';
 import { GroupMeModule } from '../groupme/groupme.module';
+import { JobsModule } from '../jobs/jobs.module';
 import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
 import { NotificationChannelsService } from './notification-channels.service';
@@ -8,9 +10,9 @@ import { SlackController } from './slack.controller';
 
 @Global()
 @Module({
-  imports: [GroupMeModule],
+  imports: [GroupMeModule, JobsModule],
   controllers: [NotificationsController, DiscordController, SlackController],
-  providers: [NotificationsService, NotificationChannelsService],
+  providers: [OutboxWorkerService, NotificationsService, NotificationChannelsService],
   exports: [NotificationsService, NotificationChannelsService],
 })
 export class NotificationsModule {}

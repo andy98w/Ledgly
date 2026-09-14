@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false
+  },
+  "include": [
+    "src/modules/payments/payment-reliability.spec.ts",
+    "src/modules/jobs/durable-jobs.spec.ts",
+    "src/modules/gmail/gmail-reliability.spec.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}

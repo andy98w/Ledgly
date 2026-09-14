@@ -90,7 +90,7 @@ async function parseCommand(query: string): Promise<{ toolName: string; args: Re
   const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
   const allToolCalls: { toolName: string; args: Record<string, any> }[] = [];
-  let messages: any[] = [{ role: 'user', content: query }];
+  const messages: any[] = [{ role: 'user', content: query }];
 
   // Multi-turn: up to 3 rounds to let the model do lookups then act
   for (let round = 0; round < 3; round++) {

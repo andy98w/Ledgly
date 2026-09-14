@@ -953,7 +953,9 @@ export default function PaymentsPage() {
       { orgId: currentOrgId },
       {
         onSuccess: (data) => {
-          if (data.imported === 0) {
+          if (data.queued) {
+            toast({ title: 'Sync queued', description: 'Payment emails will be imported in the background. Refresh shortly to see new payments.' });
+          } else if (data.imported === 0) {
             toast({ title: 'All caught up!', description: 'No new payment emails found.' });
           } else {
             toast({ title: `${data.imported} payments imported` });

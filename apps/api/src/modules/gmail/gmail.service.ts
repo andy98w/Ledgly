@@ -1,4 +1,8 @@
 import { Injectable, Logger, UnauthorizedException, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { createHash } from 'crypto';
+import { DurableJobsService } from '../jobs/durable-jobs.service';
+import { recordPaymentNotice } from '../notifications/payment-outbox';
 import { ConfigService } from '@nestjs/config';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { google, gmail_v1, Auth } from 'googleapis';
@@ -56,6 +60,7 @@ export class GmailService {
     private readonly chargesService: ChargesService,
     private readonly auditService: AuditService,
     private readonly emailService: EmailService,
+    private readonly jobs: DurableJobsService,
   ) {
     this.oauth2Client = new google.auth.OAuth2(
       this.configService.get<string>('GOOGLE_CLIENT_ID'),
@@ -150,7 +155,7 @@ export class GmailService {
     }).catch((err) => this.logger.warn(`Audit log failed: ${err.message}`));
 
     // Auto-sync after connecting (fire-and-forget so redirect isn't blocked)
-    this.syncEmails(orgId).catch((err) => {
+    this.requestSync(orgId).catch((err) => {
       this.logger.warn(`Auto-sync after Gmail connect failed for org ${orgId}: ${err.message}`);
     });
 
@@ -183,6 +188,55 @@ export class GmailService {
     }).catch((err) => this.logger.warn(`Audit log failed: ${err.message}`));
   }
 
+  async assertOwned(orgId:string,id:string,kind:'connection'|'import') {
+    const found=kind==='connection'
+      ? await this.prisma.gmailConnection.findFirst({where:{id,orgId},select:{id:true}})
+      : await this.prisma.emailImport.findFirst({where:{id,orgId},select:{id:true}});
+    if(!found) throw new NotFoundException('Gmail record not found');
+  }
+
+  async requestSync(orgId: string) {
+    if (this.configService.get('DURABLE_GMAIL_ENABLED') !== 'true') return this.syncEmails(orgId);
+    const connections=await this.prisma.gmailConnection.findMany({where:{orgId,isActive:true},select:{id:true}});
+    if (!connections.length) throw new NotFoundException('No active Gmail connection');
+    const bucket=Math.floor(Date.now()/60000);
+    const jobIds=await Promise.all(connections.map(c=>this.jobs.enqueue(orgId,`gmail-scan:${c.id}:${bucket}`,{connectionId:c.id,scanId:String(bucket)},'gmail-scan')));
+    return {queued:true,jobIds,imported:0,skipped:0,autoConfirmed:0};
+  }
+
+  async runScan(orgId: string, payload: Record<string,unknown>) {
+    if (typeof payload.connectionId !== 'string') throw new Error('Invalid scan');
+    const connection=await this.prisma.gmailConnection.findFirst({where:{id:payload.connectionId,orgId,isActive:true}});
+    if (!connection) return;
+    const org=await this.prisma.organization.findUniqueOrThrow({where:{id:orgId}});
+    const query=typeof payload.query==='string'?payload.query:this.buildSearchQuery(org.enabledPaymentSources,org.gmailSyncAfter ?? undefined);
+    if (!query) return;
+    const gmail=await this.getGmailClient(connection);
+    const response=await gmail.users.messages.list({userId:'me',q:query,maxResults:50,pageToken:typeof payload.pageToken==='string'?payload.pageToken:undefined},{timeout:15000});
+    // One page commits with its continuation so crashes cannot lose later pages.
+    await this.prisma.$transaction(async tx=>{
+      for (const m of response.data.messages || []) {
+        if (!m.id) continue;
+        const key='gmail-msg:'+createHash('sha256').update(connection.id+':'+m.id).digest('hex');
+        await this.jobs.enqueue(orgId,key,{connectionId:connection.id,messageId:m.id},'gmail-message',tx);
+      }
+      if (response.data.nextPageToken) {
+        const next=response.data.nextPageToken;
+        const key='gmail-page:'+createHash('sha256').update(connection.id+':'+next+':'+String(payload.scanId)).digest('hex');
+        await this.jobs.enqueue(orgId,key,{connectionId:connection.id,pageToken:next,scanId:payload.scanId,query},'gmail-scan',tx);
+      }
+      if (!response.data.nextPageToken) await tx.gmailConnection.update({where:{id:connection.id},data:{lastSyncAt:new Date()}});
+    });
+  }
+
+  async runMessage(orgId: string, payload: Record<string,unknown>) {
+    if (typeof payload.connectionId !== 'string' || typeof payload.messageId !== 'string') throw new Error('Invalid Gmail message');
+    const c=await this.prisma.gmailConnection.findFirst({where:{id:payload.connectionId,orgId,isActive:true}});
+    if (!c) return;
+    const gmail=await this.getGmailClient(c);
+    await this.processMessage(gmail,c,payload.messageId);
+  }
+
   async syncEmails(orgId: string): Promise<{
     imported: number;
     skipped: number;
@@ -210,6 +264,7 @@ export class GmailService {
     const syncBatch = this.auditService.createBatchContext('Gmail auto-import');
     let imported = 0;
     let skipped = 0;
+    let failures = 0;
 
     for (const connection of connections) {
       try {
@@ -229,7 +284,7 @@ export class GmailService {
             else skipped++;
           } else {
             this.logger.error(`Failed to process email: ${result.reason}`);
-            skipped++;
+            failures++;
           }
         }
 
@@ -238,7 +293,8 @@ export class GmailService {
           data: { lastSyncAt: new Date() },
         });
       } catch (err: any) {
-        this.logger.error(`Failed to sync connection ${connection.email}: ${err.message}`);
+        failures++;
+        this.logger.error('Gmail connection sync failed');
 
         if (err.message?.includes('invalid_grant') || err.message?.includes('Token has been expired')) {
           this.notifyBrokenConnection(orgId, connection.email).catch(() => {});
@@ -253,6 +309,7 @@ export class GmailService {
       }).catch((err) => this.logger.warn(`Audit log failed: ${err.message}`));
     }
 
+    if (failures) throw new Error('Gmail sync incomplete; retry required');
     return { imported, skipped, autoConfirmed: imported };
   }
 
@@ -262,14 +319,15 @@ export class GmailService {
     tokenExpiresAt: Date;
     id: string;
   }): Promise<gmail_v1.Gmail> {
-    this.oauth2Client.setCredentials({
+    const client = new google.auth.OAuth2({clientId:this.configService.get('GOOGLE_CLIENT_ID'),clientSecret:this.configService.get('GOOGLE_CLIENT_SECRET'),redirectUri:this.configService.get('GOOGLE_REDIRECT_URI'),transporterOptions:{timeout:15000}});
+    client.setCredentials({
       access_token: connection.accessToken,
       refresh_token: connection.refreshToken,
       expiry_date: connection.tokenExpiresAt.getTime(),
     });
 
     if (new Date() >= connection.tokenExpiresAt) {
-      const { credentials } = await this.oauth2Client.refreshAccessToken();
+      const { credentials } = await client.refreshAccessToken();
 
       await this.prisma.gmailConnection.update({
         where: { id: connection.id },
@@ -280,7 +338,7 @@ export class GmailService {
       });
     }
 
-    return google.gmail({ version: 'v1', auth: this.oauth2Client });
+    return google.gmail({ version: 'v1', auth: client });
   }
 
   private buildSearchQuery(enabledSources: string[], syncAfter?: Date): string {
@@ -357,7 +415,7 @@ export class GmailService {
       userId: 'me',
       id: messageId,
       format: 'full',
-    });
+    }, {timeout:15000});
 
     const headers = message.data.payload?.headers || [];
     const from = headers.find((h) => h.name?.toLowerCase() === 'from')?.value || '';
@@ -377,11 +435,27 @@ export class GmailService {
     parsed.payerName = sanitizeText(parsed.payerName);
     parsed.memo = sanitizeText(parsed.memo);
 
-    if (parsed.direction === 'outgoing') {
-      return this.processOutgoingPayment(connection, messageId, message, from, subject, emailDate, parsed, syncBatch);
-    }
-
-    return this.processIncomingPayment(connection, messageId, message, from, subject, emailDate, parsed, syncBatch);
+    if (!parsed.amount || !Number.isSafeInteger(parsed.amount) || parsed.amount < 1 || parsed.amount > 99_999_999 || !Number.isFinite(emailDate.getTime())) return 'skipped';
+    return this.prisma.$transaction(async tx => {
+      // Serialize imports per organization, including outgoing duplicate matching.
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${connection.orgId}))::text`;
+      const active = await tx.gmailConnection.findFirst({where:{id:connection.id,orgId:connection.orgId,isActive:true}});
+      if (!active) return 'skipped';
+      const seen = await tx.emailImport.findUnique({where:{gmailConnectionId_messageId:{gmailConnectionId:connection.id,messageId}}});
+      if (seen) return 'skipped';
+      const result = parsed.direction === 'outgoing'
+        ? await this.processOutgoingPayment(connection,messageId,message,from,subject,emailDate,parsed,tx)
+        : await this.processIncomingPayment(connection,messageId,message,from,subject,emailDate,parsed,tx);
+      if (result === 'imported') {
+        const imported = await tx.emailImport.findUniqueOrThrow({where:{gmailConnectionId_messageId:{gmailConnectionId:connection.id,messageId}}});
+        const entityId = imported.paymentId || imported.expenseId;
+        if (entityId) {
+          await tx.auditLog.create({data:{orgId:connection.orgId,entityType:imported.paymentId?'PAYMENT':'EXPENSE',entityId,action:'CREATE',source:'gmail_auto_import',diffJson:{after:{amountCents:parsed.amount,paidAt:emailDate.toISOString(),rawPayerName:parsed.payerName,memo:parsed.memo,source:'gmail_auto_import'}},batchId:syncBatch?.batchId,batchDescription:syncBatch?.batchDescription}});
+          if (imported.paymentId) await recordPaymentNotice(tx,connection.orgId,entityId,parsed.payerName || 'Someone',parsed.amount!);
+        }
+      }
+      return result;
+    },{timeout:15000});
   }
 
   private async processOutgoingPayment(
@@ -400,13 +474,13 @@ export class GmailService {
       memo: string | null;
       transactionId: string | null;
     },
-    syncBatch?: import('../audit/audit.service').BatchContext,
+    tx: Prisma.TransactionClient,
   ): Promise<'imported' | 'skipped'> {
     if (!parsed.amount) {
       return 'skipped';
     }
 
-    const matchResult = await this.expenseMatcher.matchExpense(
+    const matchResult = await new ExpenseMatcherService(tx as PrismaService).matchExpense(
       connection.orgId,
       parsed.amount,
       emailDate,
@@ -415,7 +489,7 @@ export class GmailService {
     );
 
     if (matchResult.isDuplicate) {
-      await this.prisma.emailImport.create({
+      await tx.emailImport.create({
         data: {
           orgId: connection.orgId,
           gmailConnectionId: connection.id,
@@ -444,7 +518,7 @@ export class GmailService {
       return 'skipped';
     }
 
-    const adminMembership = await this.prisma.membership.findFirst({
+    const adminMembership = await tx.membership.findFirst({
       where: {
         orgId: connection.orgId,
         role: { in: ['ADMIN', 'TREASURER'] },
@@ -452,7 +526,7 @@ export class GmailService {
       },
     });
 
-    const expense = await this.prisma.expense.create({
+    const expense = await tx.expense.create({
       data: {
         orgId: connection.orgId,
         category: 'OTHER',
@@ -465,7 +539,7 @@ export class GmailService {
       },
     });
 
-    await this.prisma.emailImport.create({
+    await tx.emailImport.create({
       data: {
         orgId: connection.orgId,
         gmailConnectionId: connection.id,
@@ -486,12 +560,6 @@ export class GmailService {
         reviewedAt: new Date(),
       },
     });
-
-    await this.auditService.logCreate(connection.orgId, adminMembership?.id, 'EXPENSE', expense.id, {
-      amountCents: expense.amountCents,
-      title: expense.title,
-      source: 'gmail_auto_import',
-    }, syncBatch).catch((err) => this.logger.warn(`Audit log failed: ${err.message}`));
 
     this.logger.log(
       `Auto-created expense of ${parsed.amount} cents to ${parsed.payerName} from ${parsed.source}`,
@@ -516,13 +584,13 @@ export class GmailService {
       memo: string | null;
       transactionId: string | null;
     },
-    syncBatch?: import('../audit/audit.service').BatchContext,
+    tx: Prisma.TransactionClient,
   ): Promise<'imported' | 'skipped'> {
     if (!parsed.amount) {
       return 'skipped';
     }
 
-    const matchResult = await this.paymentMatcher.matchPayment(
+    const matchResult = await new PaymentMatcherService(tx as PrismaService).matchPayment(
       connection.orgId,
       parsed.payerName,
       parsed.payerEmail,
@@ -530,14 +598,14 @@ export class GmailService {
       parsed.amount,
     );
 
-    const externalId = `email:${messageId}`;
+    const externalId = `gmail:${connection.id}:${messageId}`;
 
-    const existingPayment = await this.prisma.payment.findFirst({
+    const existingPayment = await tx.payment.findFirst({
       where: { orgId: connection.orgId, externalId },
     });
 
     if (existingPayment) {
-      await this.prisma.emailImport.create({
+      await tx.emailImport.create({
         data: {
           orgId: connection.orgId,
           gmailConnectionId: connection.id,
@@ -563,7 +631,7 @@ export class GmailService {
     }
 
     // Always create payment — membershipId is nullable for unmatched payments
-    const { allocatedChargeIds } = await this.prisma.$transaction(async (tx) => {
+    await (async () => {
       const payment = await tx.payment.create({
         data: {
           orgId: connection.orgId,
@@ -579,10 +647,11 @@ export class GmailService {
 
       // Auto-allocate to matching charges when confidence is high enough
       const txAllocatedChargeIds: string[] = [];
+      if (matchResult.membershipId && !await tx.membership.findFirst({where:{id:matchResult.membershipId,orgId:connection.orgId,status:'ACTIVE'}})) throw new Error('Invalid matched member');
       if (matchResult.shouldAutoAllocate && matchResult.suggestedChargeIds.length > 0) {
         let remainingAmount = parsed.amount!;
 
-        for (const chargeId of matchResult.suggestedChargeIds) {
+        for (const chargeId of [...matchResult.suggestedChargeIds].sort()) {
           if (remainingAmount <= 0) break;
 
           await tx.$queryRaw`SELECT 1 FROM charges WHERE id = ${chargeId} FOR UPDATE`;
@@ -592,7 +661,7 @@ export class GmailService {
             include: { allocations: { select: { amountCents: true } } },
           });
 
-          if (!charge) continue;
+          if (!charge || charge.orgId !== connection.orgId || charge.membershipId !== matchResult.membershipId) continue;
 
           const allocatedCents = charge.allocations.reduce(
             (sum, a) => sum + a.amountCents,
@@ -648,25 +717,7 @@ export class GmailService {
       });
 
       return { allocatedChargeIds: txAllocatedChargeIds };
-    });
-
-    const adminMembership = await this.prisma.membership.findFirst({
-      where: { orgId: connection.orgId, role: { in: ['ADMIN', 'TREASURER'] }, status: 'ACTIVE' },
-      select: { id: true },
-    });
-
-    const autoPayment = await this.prisma.emailImport.findFirst({
-      where: { gmailConnectionId: connection.id, messageId },
-      select: { paymentId: true },
-    });
-    if (autoPayment?.paymentId) {
-      await this.auditService.logCreate(connection.orgId, adminMembership?.id, 'PAYMENT', autoPayment.paymentId, {
-        amountCents: parsed.amount,
-        paidAt: emailDate,
-        rawPayerName: parsed.payerName,
-        source: 'gmail_auto_import',
-      }, syncBatch).catch((err) => this.logger.warn(`Audit log failed: ${err.message}`));
-    }
+    })();
 
     this.logger.log(
       `Auto-created payment of ${parsed.amount} cents from ${parsed.payerName} (confidence: ${matchResult.confidence})`,

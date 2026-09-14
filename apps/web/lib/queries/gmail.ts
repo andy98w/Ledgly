@@ -40,6 +40,8 @@ export interface EmailImport {
 }
 
 export interface SyncResult {
+  queued?: boolean;
+  jobIds?: string[];
   imported: number;
   skipped: number;
   autoConfirmed: number;

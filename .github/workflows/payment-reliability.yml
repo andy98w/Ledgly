@@ -1,0 +1,40 @@
+name: Payment reliability
+on:
+  push:
+    branches: [main, codex/payment-reliability, codex/durable-payment-jobs]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: fixture
+          POSTGRES_PASSWORD: fixture
+          POSTGRES_DB: ledgly_test
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://fixture:fixture@127.0.0.1:5432/ledgly_test
+      DIRECT_DATABASE_URL: postgresql://fixture:fixture@127.0.0.1:5432/ledgly_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 20, cache: pnpm}
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @ledgly/api exec prisma generate
+      - run: pnpm --filter @ledgly/api exec prisma migrate deploy
+      - run: pnpm --filter @ledgly/api exec tsc --noEmit
+      - run: pnpm --filter @ledgly/api exec tsc -p tsconfig.reliability.json
+      - run: pnpm --filter @ledgly/api exec jest --runInBand payment-reliability.spec.ts durable-jobs.spec.ts gmail-reliability.spec.ts
+      - name: Kill worker and restore database snapshot
+        working-directory: apps/api
+        env:
+          PG_CONTAINER: ${{ job.services.postgres.id }}
+        run: node scripts/recovery-drill.cjs

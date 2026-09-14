@@ -781,7 +781,12 @@ export class ChargesService {
         data: { status: newStatus },
       });
 
-      // Audit log stays outside tx (best-effort, non-critical)
+      // A transactional status change must not leave audit from a rolled-back attempt.
+      if (tx) {
+        await tx.auditLog.create({data:{orgId:charge.orgId,actorId,entityType:'CHARGE',
+          entityId:chargeId,action:'UPDATE',diffJson:{before:{status:oldStatus},after:{status:newStatus}}}});
+        return;
+      }
       await this.auditService.logUpdate(
         charge.orgId,
         actorId,
